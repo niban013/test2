@@ -1,2 +1,208 @@
 
 https://codewithmukesh.com/blog/jquery-datatable-in-aspnet-core/
+
+<div id="userSelectBox"></div>
+
+<script>
+$(function () {
+    var store = new DevExpress.data.CustomStore({
+        key: "id",            // 主鍵欄位 (後端資料要有 id)
+        loadMode: "raw",      // raw = 回傳陣列, 不需要 { data:[], totalCount: } 包裝
+        load: function () {
+            // 這裡用 AJAX 撈資料
+            return $.ajax({
+                url: "/api/User/GetUsers", // 後端 API
+                type: "GET",
+                dataType: "json"
+            });
+        }
+    });
+
+    $("#userSelectBox").dxSelectBox({
+        dataSource: store,
+        valueExpr: "id",        // 後端回傳物件的 id 欄位
+        displayExpr: "name",    // 顯示用的文字欄位
+        placeholder: "請選擇使用者",
+        searchEnabled: true,    // 開啟搜尋
+        onValueChanged: function (e) {
+            console.log("選到的使用者 ID:", e.value);
+        }
+    });
+});
+</script>public class UserController : Controller
+{
+    // GET: /api/User/GetUsers
+    [HttpGet]
+    public JsonResult GetUsers()
+    {
+        var users = new List<object>
+        {
+            new { id = 1, name = "小明" },
+            new { id = 2, name = "小華" },
+            new { id = 3, name = "小美" }
+        };
+
+        return Json(users, JsonRequestBehavior.AllowGet);
+    }
+}
+var store = new DevExpress.data.CustomStore({
+    key: "id",
+    load: function (loadOptions) {
+        return $.ajax({
+            url: "/api/User/GetPagedUsers",
+            type: "GET",
+            data: {
+                skip: loadOptions.skip || 0,
+                take: loadOptions.take || 10,
+                search: loadOptions.searchValue || ""
+            }
+        });
+    }
+});
+<div id="userSelectBox"></div>
+
+<script>
+$(function () {
+    var store = new DevExpress.data.CustomStore({
+        key: "id",
+        load: function (loadOptions) {
+            return $.ajax({
+                url: "/api/User/GetPagedUsers",
+                type: "GET",
+                dataType: "json",
+                data: {
+                    skip: loadOptions.skip || 0,
+                    take: loadOptions.take || 10,
+                    search: loadOptions.searchValue || ""   // dxSelectBox 搜尋用
+                }
+            }).then(function (data) {
+                return {
+                    data: data.items,         // 真正的資料
+                    totalCount: data.total    // 總筆數 (給分頁用)
+                };
+            });
+        }
+    });
+
+    $("#userSelectBox").dxSelectBox({
+        dataSource: store,
+        valueExpr: "id",
+        displayExpr: "name",
+        searchEnabled: true,
+        showClearButton: true,
+        minSearchLength: 1,  // 至少輸入 1 個字才搜尋
+        pageSize: 10,        // 每頁 10 筆
+        onValueChanged: function (e) {
+            console.log("選到的使用者:", e.value);
+        }
+    });
+});
+</script>
+public class UserController : Controller
+{
+    // 模擬資料庫
+    private static readonly List<UserDto> Users = Enumerable.Range(1, 200)
+        .Select(i => new UserDto { Id = i, Name = "使用者" + i })
+        .ToList();
+
+    [HttpGet]
+    public JsonResult GetPagedUsers(int skip = 0, int take = 10, string search = "")
+    {
+        // 模擬搜尋
+        var query = Users.AsQueryable();
+        if (!string.IsNullOrEmpty(search))
+        {
+            query = query.Where(u => u.Name.Contains(search));
+        }
+
+        // 取出總筆數
+        var total = query.Count();
+
+        // 分頁
+        var items = query
+            .Skip(skip)
+            .Take(take)
+            .ToList();
+
+        return Json(new { items, total }, JsonRequestBehavior.AllowGet);
+    }
+}
+
+public class UserDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+<div id="userSelectBox"></div>
+
+<script>
+$(function () {
+    var store = new DevExpress.data.CustomStore({
+        key: "id",
+        load: function (loadOptions) {
+            // 顯示載入中
+            DevExpress.ui.notify("載入中...", "info", 1000);
+
+            return $.ajax({
+                url: "/api/User/GetPagedUsers",
+                type: "GET",
+                dataType: "json",
+                data: {
+                    skip: loadOptions.skip || 0,
+                    take: loadOptions.take || 10,
+                    search: loadOptions.searchValue || ""
+                }
+            }).then(function (data) {
+                return {
+                    data: data.items,
+                    totalCount: data.total
+                };
+            }).catch(function (err) {
+                console.error("載入失敗", err);
+                return { data: [], totalCount: 0 };
+            });
+        }
+    });
+
+    $("#userSelectBox").dxSelectBox({
+        dataSource: store,
+        valueExpr: "id",
+        displayExpr: "name",
+        searchEnabled: true,
+        showClearButton: true,
+        minSearchLength: 1,
+        pageSize: 10,
+        // dxSelectBox 內建 Loading Indicator
+        onLoading: function() {
+            $("#userSelectBox").addClass("loading");
+        },
+        onLoaded: function() {
+            $("#userSelectBox").removeClass("loading");
+        },
+        onValueChanged: function (e) {
+            console.log("選到的使用者:", e.value);
+        }
+    });
+});
+</script>
+
+<style>
+/* 自訂載入中樣式 */
+#userSelectBox.loading {
+    opacity: 0.6;
+    position: relative;
+}
+#userSelectBox.loading::after {
+    content: "⏳ 載入中...";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.9);
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+}
+</style>
+
+
