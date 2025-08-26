@@ -1,4 +1,19 @@
+$("#customerDatatable").on('click', '.img-click', function () {
+    var id = $(this).data('id');
+    alert("圖片被點擊, ID=" + id);
+}); 
 
+{
+      data: "firstName",
+      render: function (data, type, row) {
+          return `
+                  <img src="../img/enlarge.svg"
+                       class="img-click"
+                       data-id="${data}"
+                       style="width:24px; height:24px; cursor:pointer;" />
+                `;
+      }
+  }
 https://codewithmukesh.com/blog/jquery-datatable-in-aspnet-core/
 
 <div id="userSelectBox"></div>
