@@ -1,3 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DataTables Custom Cell Style</title>
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<!-- Bootstrap 5 CSS -->
+<!--<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/5.0.0-alpha1/css/bootstrap.min.css" integrity="sha384-r4NyP46KrjDleawBgD5tp8Y7UzmLA05oM1iAEQ17CSuDqnUK2+k9luXQOfXJCJ4I" crossorigin="anonymous">-->
+<!-- Font Awesome CSS -->
+<!--<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">-->
+  <style>
+/* 均分 Tab 寬度 */
+.nav-tabs.nav-justified.android-top > li > a {
+    text-align: center;
+    padding: 10px 0;
+    border: none;
+    color: #555;
+}
+.nav-tabs.nav-justified.android-top > li.active > a,
+.nav-tabs.nav-justified.android-top > li.active > a:focus,
+.nav-tabs.nav-justified.android-top > li.active > a:hover {
+    background: #337ab7;
+    color: white;
+}
+.tab-content {
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-top: none;
+}
+.icon {
+    display: block;
+    font-size: 20px;
+}
+    /* 全部 cell 無框線 */
+    .btn-label {
+	position: relative;
+	left: -12px;
+	display: inline-block;
+	padding: 6px 12px;
+	background: rgba(0, 0, 0, 0.15);
+	border-radius: 3px 0 0 3px;
+}
+
+.btn-labeled {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+ .btnx {
+	margin-bottom: -5px;
+}
+.btn {
+	margin-bottom: 10px;
+}
+table.dataTable,
+table.dataTable th,
+table.dataTable td {
+  border: none !important;
+}
+    /* 自訂 cell class */
+    .custom-cell {
+      background-color:#c5e1a5;
+      border-radius: 10px;
+      padding: 6px 12px;
+      cursor: pointer;
+      text-align: center;
+margin:-5px;
+    }
+table.dataTable>thead>tr>th, table.dataTable>thead>tr>td {
+    padding: 5px;
+   
+}
+.dataTable tbody tr:hover button.custom-btn {
+  background-color: #17a2b8 !important; /* 原本的 btn-info 顏色 */
+  color: #fff !important;
+}
+.custom-headercell {
+      background-color:#c5e1a5;
+      border-radius: 10px;
+     padding: 5px 5px 5px 5px;   /* 控制左右間距 */ 
+      cursor: pointer;
+      text-align: center;
+ 
+    }
+    .custom-cell:hover {
+      background-color: #c5e1a5;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <h2>
+            Cool Buttons With Labels</h2>
+        <div class="col-md-12">
+            <button type="button" class="btn btn-labeled btn-success">
+                <span class="btn-label"><i class="glyphicon glyphicon-ok"></i></span>Success</button>
+            <button type="button" class="btn btn-labeled btn-danger">
+                <span class="btn-label"><i class="glyphicon glyphicon-remove"></i></span>Cancel</button>
+            <br />
+            <button type="button" class="btn btn-labeled btn-warning">
+                <span class="btn-label"><i class="glyphicon glyphicon-bookmark"></i></span>Bookmark</button>
+            <button type="button" class="btn btn-labeled btn-primary">
+                <span class="btn-label"><i class="glyphicon glyphicon-camera"></i></span>Camera</button>
+            <br />
+            <button type="button" class="btn btn-labeled btn-default">
+                <span class="btn-label"><i class="glyphicon glyphicon-chevron-left"></i></span>Left</button>
+            <button type="button" class="btn btn-labeled btn-default">
+                <span class="btn-label"><i class="glyphicon glyphicon-chevron-right"></i></span>
+                Right</button>
+            <br />
+            <button type="button" class="btn btn-labeled btn-success">
+                <span class="btn-label"><i class="glyphicon glyphicon-thumbs-up"></i></span>Thumbs
+                Up</button>
+            <button type="button" class="btn btn-labeled btn-danger">
+                <span class="btn-label"><i class="glyphicon glyphicon-thumbs-down"></i></span>Thumbs
+                Down</button>
+            <br />
+            <button type="button" class="btn btn-labeled btn-info">
+                <span class="btn-label"><i class="glyphicon glyphicon-refresh"></i></span>Refresh</button>
+            <button type="button" class="btn btn-labeled btn-danger">
+                <span class="btn-label"><i class="glyphicon glyphicon-trash"></i></span>Trash</button>
+            <br />
+            <a class="btn btn-success btn-labeled" href="http://www.jquery2dotnet.com" role="button">
+                <span class="btn-label"><i class="glyphicon glyphicon-info-sign"></i></span>Info Web</a>
+        </div>
+    </div>
+</div>
+
+
+<div class="container">
+    <!-- 上方 Tab -->
+    <ul class="nav nav-tabs nav-justified android-top">
+        <li class="active">
+            <a data-toggle="tab" href="#home">
+                <span class="icon glyphicon glyphicon-home"></span>
+                Home
+            </a>
+        </li>
+        <li>
+            <a data-toggle="tab" href="#search">
+                <span class="icon glyphicon glyphicon-search"></span>
+                Search
+            </a>
+        </li>
+        <li>
+            <a data-toggle="tab" href="#profile">
+                <span class="icon glyphicon glyphicon-user"></span>
+                Profile
+            </a>
+        </li>
+    </ul>
+
+    <!-- Tab 內容 -->
+    <div class="tab-content">
+        <div id="home" class="tab-pane fade in active">
+             <table id="example" class="display" style="width:100%">
+    <thead>
+      <tr>
+        <th><div class="custom-headercell">Name</div></th>
+        <th><div class="custom-headercell">Position</div></th>
+        <th><div class="custom-headercell">Office</div></th>
+        <th><div class="custom-headercell">Action</div></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Tiger Nixon</td>
+        <td>System Architect</td>
+        <td>Edinburgh</td>
+        <td>View</td>
+      </tr>
+      <tr>
+        <td>Garrett Winters</td>
+        <td>Accountant</td>
+        <td>Tokyo</td>
+        <td>View</td>
+      </tr>
+    </tbody>
+  </table>
+        </div>
+        <div id="search" class="tab-pane fade">
+            <h3>🔍 Search Page</h3>
+            <p>這是 Search 的內容。</p>
+        </div>
+        <div id="profile" class="tab-pane fade">
+            <h3>👤 Profile Page</h3>
+            <p>這是 Profile 的內容。</p>
+        </div>
+    </div>
+</div>
+ 
+
+  
+
+  <!-- jQuery & DataTables -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script>
+    $(document).ready(function () {
+      let table = $('#example').DataTable({
+        columnDefs: [
+          {
+            targets: [3,2], // 第 4 欄 (Action)
+            render: function (data, type, row) {
+              return `<div class="custom-cell">${data}</div>`;
+            }
+          },{
+      targets: "_all",
+      orderable: false
+   },
+{
+            targets: [0], // 第 4 欄 (Action)
+            render: function (data, type, row) {
+              return `  <button type="button" class="btn btn-labeled btn-info custom-btn" style="margin-bottom: -5px;margin-top:-5px;">
+                <span class="btn-label"><i class="glyphicon glyphicon-refresh"></i></span>Refresh</button>`;
+            }
+          }
+        ]
+      });
+
+      // 🔹 監聽 cell 點擊事件
+      $('#example tbody').on('click', 'td .custom-cell', function () {
+        let rowData = table.row($(this).closest('tr')).data();
+        alert("你點擊了：" + rowData[0] + " 的 Action");
+      });
+
+  // 綁定 click 事件
+  $('#example').on('click', '.custom-btn', function () {
+    const rowData = $('#example').DataTable().row($(this).closest('tr')).data();
+    alert("You clicked info for: " + rowData[0]);
+  });
+    });
+  </script>
+</body>
+</html>
+
+
+
 $("#customerDatatable").on('click', '.img-click', function () {
     var id = $(this).data('id');
     alert("圖片被點擊, ID=" + id);
