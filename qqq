@@ -1,3 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>dxSelectBox 無限滾動示例</title>
+    <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/22.2.6/css/dx.light.css">
+ <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn3.devexpress.com/jslib/22.2.6/js/jszip.min.js"></script>
+    <script src="https://cdn3.devexpress.com/jslib/22.2.6/js/dx.all.js"></script>
+</head>
+<body>
+
+<h3>dxSelectBox 無限滾動 + 搜尋</h3>
+<div id="dxSelectBox"></div>
+
+<script>
+$(function() {
+    const totalData = Array.from({ length: 5000 }, (_, i) => ({ id: i + 1, name: "Item " + (i+1) }));
+    const batchSize = 100;
+
+    let loadedData = [];
+    let currentIndex = 0;
+    let currentSearch = "";
+
+    function loadNextBatch(search = "") {
+        let filtered = totalData;
+        if (search) filtered = totalData.filter(x => x.name.toLowerCase().includes(search.toLowerCase()));
+        const nextBatch = filtered.slice(currentIndex, currentIndex + batchSize);
+        loadedData = loadedData.concat(nextBatch);
+        currentIndex += batchSize;
+        return nextBatch.length > 0;
+    }
+
+    const selectBox = $("#dxSelectBox").dxSelectBox({
+        dataSource: loadedData,
+        displayExpr: "name",
+        valueExpr: "id",
+        searchEnabled: true,
+        showClearButton: true,
+        deferRendering: true,
+        dropDownOptions: {
+            height: 300,
+            onOpened: function(e) {
+                const scrollable = e.component._dropDown.$content().find(".dx-scrollable-content");
+                scrollable.off('scroll').on('scroll', function() {
+                    if (scrollable.scrollTop() + scrollable.innerHeight() >= scrollable[0].scrollHeight - 5) {
+                        if (loadNextBatch(currentSearch)) {
+                            e.component.option('dataSource', loadedData);
+                        }
+                    }
+                });
+            }
+        },
+        onValueChanged: function(e) {
+            e.component.close();
+        },
+        onInput: function(e) {
+            currentSearch = e.component.option('searchValue') || "";
+            loadedData = [];
+            currentIndex = 0;
+            loadNextBatch(currentSearch);
+            e.component.option('dataSource', loadedData);
+        }
+    }).dxSelectBox('instance');
+
+    // 初始載入第一批
+    loadNextBatch();
+    selectBox.option('dataSource', loadedData);
+});
+</script>
+
+</body>
+</html>
+
+
 // Controllers/EmployeeController.cs
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
