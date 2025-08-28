@@ -1,3 +1,77 @@
+// Controllers/EmployeeController.cs
+using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
+using System.Linq;
+
+public class Employee {
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeeController : ControllerBase
+{
+    // 模擬 5000 筆資料
+    private static List<Employee> employees = Enumerable.Range(1, 5000)
+        .Select(i => new Employee { Id = i, Name = "Employee " + i })
+        .ToList();
+
+    [HttpGet]
+    public IActionResult Get(string search = "", int skip = 0, int take = 50)
+    {
+        var query = employees.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(e => e.Name.Contains(search));
+
+        var result = query.Skip(skip).Take(take).ToList();
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public IActionResult GetById(int id)
+    {
+        var emp = employees.FirstOrDefault(e => e.Id == id);
+        if (emp == null) return NotFound();
+        return Ok(emp);
+    }
+}
+<div id="app">
+    <div id="dxSelectBox"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn3.devexpress.com/jslib/23.1.4/js/dx.all.js"></script>
+<link href="https://cdn3.devexpress.com/jslib/23.1.4/css/dx.light.css" rel="stylesheet" />
+
+<script>
+$("#dxSelectBox").dxSelectBox({
+    placeholder: "選擇員工",
+    displayExpr: "name",
+    valueExpr: "id",
+    searchEnabled: true,
+    minSearchLength: 2,
+    showClearButton: true,
+    pageSize: 50,          // 每次只載入 50 筆
+    searchTimeout: 300,    // 搜尋延遲 300ms
+    dataSource: new DevExpress.data.CustomStore({
+        key: "id",
+        load: function(loadOptions) {
+            return $.getJSON("/api/employee", {
+                search: loadOptions.searchValue,
+                skip: loadOptions.skip || 0,
+                take: loadOptions.take || 50
+            });
+        },
+        byKey: function(key) {
+            return $.getJSON("/api/employee/" + key);
+        }
+    })
+});
+</script>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
