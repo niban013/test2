@@ -1,3 +1,41 @@
+WITH RankedOrders AS (
+    SELECT
+        CustomerId,
+        OrderId,
+        OrderDate,
+        ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY OrderDate DESC) AS rn
+    FROM Orders
+)
+SELECT
+    CustomerId,
+    OrderId,
+    OrderDate
+FROM RankedOrders
+WHERE rn = 1;
+SELECT
+    c.CustomerId,
+    o.OrderId,
+    o.OrderDate
+FROM (
+    SELECT DISTINCT CustomerId
+    FROM Orders
+) c
+OUTER APPLY (
+    SELECT TOP 1 *
+    FROM Orders o
+    WHERE o.CustomerId = c.CustomerId
+    ORDER BY OrderDate DESC
+) o;
+
+SELECT o.*
+FROM Orders o
+INNER JOIN (
+    SELECT CustomerId, MAX(OrderDate) AS MaxDate
+    FROM Orders
+    GROUP BY CustomerId
+) t
+ON o.CustomerId = t.CustomerId AND o.OrderDate = t.MaxDate;
+
 <!DOCTYPE html>
 <html>
 <head>
