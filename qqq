@@ -1,3 +1,51 @@
+SELECT
+    o.CustomerId,
+    c.CustomerName,   -- 連結另一表
+    -- 狀態為 Completed 或 Shipped 的總金額
+    SUM(CASE WHEN o.Status IN ('Completed', 'Shipped') THEN o.Amount ELSE 0 END) AS CompletedShippedTotal,
+    -- 狀態為 Pending 的總金額
+    SUM(CASE WHEN o.Status = 'Pending' THEN o.Amount ELSE 0 END) AS PendingTotal,
+    -- 狀態為 Cancelled 或 Refunded 的總金額
+    SUM(CASE WHEN o.Status IN ('Cancelled', 'Refunded') THEN o.Amount ELSE 0 END) AS CancelledRefundedTotal,
+    -- 全部金額總和
+    SUM(o.Amount) AS TotalAmount
+FROM Orders o
+INNER JOIN Customers c ON o.CustomerId = c.CustomerId
+GROUP BY o.CustomerId, c.CustomerName
+ORDER BY o.CustomerId;
+
+
+SELECT
+    o.CustomerId,
+    MAX(c.CustomerName) AS CustomerName,  -- 取唯一名稱
+    SUM(CASE WHEN o.Status IN ('Completed', 'Shipped') THEN o.Amount ELSE 0 END) AS CompletedShippedTotal,
+    SUM(CASE WHEN o.Status = 'Pending' THEN o.Amount ELSE 0 END) AS PendingTotal,
+    SUM(CASE WHEN o.Status IN ('Cancelled', 'Refunded') THEN o.Amount ELSE 0 END) AS CancelledRefundedTotal,
+    SUM(o.Amount) AS TotalAmount
+FROM Orders o
+INNER JOIN Customers c ON o.CustomerId = c.CustomerId
+GROUP BY o.CustomerId
+ORDER BY o.CustomerId;
+
+SELECT
+    CustomerId,
+    -- 狀態為 Completed 或 Shipped 的總金額
+    SUM(CASE WHEN Status IN ('Completed', 'Shipped') THEN Amount ELSE 0 END) AS CompletedShippedTotal,
+    
+    -- 狀態為 Pending 的總金額
+    SUM(CASE WHEN Status = 'Pending' THEN Amount ELSE 0 END) AS PendingTotal,
+    
+    -- 狀態為 Cancelled 或 Refunded 的總金額
+    SUM(CASE WHEN Status IN ('Cancelled', 'Refunded') THEN Amount ELSE 0 END) AS CancelledRefundedTotal,
+    
+    -- 全部金額總和
+    SUM(Amount) AS TotalAmount
+FROM Orders
+GROUP BY CustomerId
+ORDER BY CustomerId;
+SUM(CASE WHEN Status IN ('Completed','Shipped') AND Amount > 100 THEN Amount ELSE 0 END) AS CompletedShippedOver100
+
+
 WITH RankedOrders AS (
     SELECT
         CustomerId,
