@@ -1,3 +1,68 @@
+<!-- 載入必要套件 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<button id="exportPdf">匯出所有 DataTable PDF (分頁)</button>
+
+<!-- 多個 DataTable -->
+<div>
+  <table id="datatable1" class="display dataTable" style="width:100%; border:1px solid #ccc;">
+    <thead>
+      <tr><th>姓名</th><th>年齡</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>小明</td><td>25</td></tr>
+      <tr><td>小華</td><td>30</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:30px;">
+  <table id="datatable2" class="display dataTable" style="width:100%; border:1px solid #ccc;">
+    <thead>
+      <tr><th>產品</th><th>價格</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>手機</td><td>$500</td></tr>
+      <tr><td>電腦</td><td>$1000</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+document.getElementById("exportPdf").addEventListener("click", async function () {
+    const elements = document.querySelectorAll(".dataTable"); // 自動抓取所有 DataTable
+    let pdfContent = [];
+
+    for (let i = 0; i < elements.length; i++) {
+        const element = elements[i];
+
+        // 把表格轉成圖片
+        const canvas = await html2canvas(element, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        // 每個表格變一頁
+        pdfContent.push({
+            image: imgData,
+            width: 500, // 可調整縮放比例
+            margin: [0, 40, 0, 40],
+            pageBreak: (i < elements.length - 1) ? 'after' : '' // 除了最後一頁都換頁
+        });
+    }
+
+    // 建立 PDF
+    const docDefinition = {
+        content: pdfContent,
+        pageSize: "A4",
+        pageOrientation: "portrait"
+    };
+
+    pdfMake.createPdf(docDefinition).download("all-datatables.pdf");
+});
+</script>
+
+
 $(document).ready(function () {
     //var lastSearchResults = []; // 暫存最近一次的搜尋結果
     //var lastSearchResults2 = []; // 暫存最近一次的搜尋結果
