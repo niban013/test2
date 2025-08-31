@@ -1,3 +1,243 @@
+$(document).ready(function () {
+    //var lastSearchResults = []; // 暫存最近一次的搜尋結果
+    //var lastSearchResults2 = []; // 暫存最近一次的搜尋結果
+    function createChildStore(parentId) {
+        lastSearchResults = []
+
+        //console.log(_obj.attr("id"))
+        return new DevExpress.data.CustomStore({
+            //reset: function () { lastSearchResults = []; },
+            key: "id",
+            loadMode: "processed",
+            load: function (loadOptions) {
+                // 這裡 loadOptions.searchValue 才是使用者輸入的字
+                //let searchValue = loadOptions.searchValue || "";
+                //return $.getJSON("/api/data2/GetProducts", { search: searchValue });
+                //let searchValue = loadOptions.searchValue || "";
+                let searchValue = loadOptions.searchValue || "";
+                if (parentId == 'cancel') {
+                    parentId =''
+                    return [];
+                }
+                if (parentId == 'dxSelectBox') {
+                    let aa = $("#dxSelectBox2").dxSelectBox("option", "text");
+                   console.log("aa:"+aa)
+                }
+                else {
+                    let bb = $("#dxSelectBox").dxSelectBox("option", "text");
+                    console.log("bb:" + bb)
+                }
+                if (searchValue) {
+                    // 🔹 輸入有值 → 打 API 並快取
+                    return $.getJSON("/api/data2/GetProducts", { search: searchValue })
+                        .then(data => {
+                            lastSearchResults = data; // 記住這次搜尋結果
+                            return data;
+                        });
+                } else {
+                    // 🔹 沒有輸入 → 回傳最近的快取 (避免重新拉整份)
+                    return lastSearchResults;
+                }
+            },
+            byKey: function (key) {
+                // 保證選到的值能正確顯示 (下拉關閉後仍能顯示文字)
+                //return $.getJSON("/api/data2/GetProducts").then(data => {
+                //    return data.find(item => item.Id === key);
+                //});
+                if (lastSearchResults.length > 0) {
+                    let match = lastSearchResults.find(x => x.Id === key);
+                    if (match) return match;
+                }
+                // 如果 cache 沒有，回去 API 撈單筆
+                return $.getJSON("/api/data2/GetProducts").then(data => {
+                    return data.find(item => item.Id === key);
+                });
+            }
+        });
+    }
+    function test(obj) { 
+        let _obj = obj 
+        //console.log(_obj.attr("id"))
+        const parent =_obj.dxSelectBox({
+            placeholder: "請輸入或選擇產品",
+            displayExpr: "name",
+            valueExpr: "id",
+            acceptCustomValue: true,      // 允許保留輸入值
+            showDropDownButton: true,     // 仍然能展開下拉清單
+            searchEnabled: true,         // 開啟輸入搜尋
+            minSearchLength: 1,          // 至少輸入 1 字才查
+            showClearButton: true,       // 可以清除
+            searchExpr: "name",          // 搜尋欄位
+            dataSource: createChildStore(_obj.attr("id")),
+            //onValueChanged: function (e) {
+            //    if (e.value === null) {
+            //        console.log("使用者點了清除按鈕！");
+            //        if (_obj.attr("id") == 'dxSelectBox') {  
+                      
+            //            //$("#dxSelectBox2").dxSelectBox("instance").option("value", null);      // 清空值
+            //            //$("#dxSelectBox2").dxSelectBox("instance").option("text", null);      // 清空值
+            //            //$("#dxSelectBox").dxSelectBox("instance").option("value", null);
+            //            //$("#dxSelectBox2").dxSelectBox("instance").store().clear;
+            //            //$("#dxSelectBox2").dxSelectBox("instance").reset();
+
+                       
+            //            //$("#dxSelectBox2").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+                       
+
+            //            //$("#dxSelectBox2").dxSelectBox("instance").getDataSource().reload();
+
+            //            //$("#dxSelectBox").dxSelectBox("instance").reset();
+            //            //$("#dxSelectBox").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+            //            //$("#dxSelectBox").dxSelectBox("instance").getDataSource().reload();
+            //        }
+            //        else {
+                        
+            //            //$("#dxSelectBox").dxSelectBox("instance").option("value", null);      // 清空值
+            //            //$("#dxSelectBox").dxSelectBox("instance").option("text", null);      // 清空值
+            //            //$("#dxSelectBox2").dxSelectBox("instance").option("value", null);      // 清空值
+                        
+            //            $("#dxSelectBox").dxSelectBox("instance").reset();
+            //            //$("#dxSelectBox").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+            //            /*$("#dxSelectBox").dxSelectBox("instance").option("dataSource", [])*/;
+            //            //$("#dxSelectBox").dxSelectBox("instance").option("dataSource", new DevExpress.data.ArrayStore({
+            //            //    key: "id",
+            //            //    data: []
+            //            //}));
+            //            $("#dxSelectBox").dxSelectBox("instance").getDataSource().reload();
+            //        }
+                   
+            //    } else {
+            //        console.log("選取值:", e.value);
+            //        // 當選擇值時，自動把 display 的文字填回去，保留輸入框的查詢字
+            //        if (e.component.option("selectedItem")) {
+            //            e.component.option("text", e.component.option("selectedItem").Name);
+            //        }
+            //        if (_obj.attr("id") != 'dxSelectBox') {
+            //            var text = $("#dxSelectBox2").dxSelectBox("option", "text"); 
+            //            console.log("顯示文字:", text);
+            //        }
+            //        else {
+            //            var text = $("#dxSelectBox2").dxSelectBox("option", "text");
+            //            console.log("顯示文字:", text);
+
+            //        }
+            //    }
+            //}
+        }).dxSelectBox("instance");
+        return parent
+    }
+    let a = test($("#dxSelectBox"))
+    let b = test($("#dxSelectBox2"))
+
+    a.option("onValueChanged", function (e) {
+        if (e.value === null) {
+            console.log("使用者點了清除按鈕！");
+                if (e.element.attr("id") == 'dxSelectBox') {
+
+                    //$("#dxSelectBox2").dxSelectBox("instance").option("value", null);      // 清空值
+                    //$("#dxSelectBox2").dxSelectBox("instance").option("text", null);      // 清空值
+                    //$("#dxSelectBox").dxSelectBox("instance").option("value", null);
+                    //$("#dxSelectBox2").dxSelectBox("instance").store().clear;
+                    //$("#dxSelectBox2").dxSelectBox("instance").reset();
+
+
+                    //$("#dxSelectBox2").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+
+
+                    //$("#dxSelectBox2").dxSelectBox("instance").getDataSource().reload();
+                    //$("#dxSelectBox2").dxSelectBox("instance").getDataSource().store().clear();
+                    $("#dxSelectBox2").dxSelectBox("instance").reset();
+                    //e.reset()
+                    $("#dxSelectBox2").dxSelectBox("instance").option("dataSource",createChildStore('cancel')); // 換掉舊 store
+                    $("#dxSelectBox2").dxSelectBox("instance").getDataSource().reload();
+                }
+                else {
+
+                    //$("#dxSelectBox").dxSelectBox("instance").option("value", null);      // 清空值
+                    //$("#dxSelectBox").dxSelectBox("instance").option("text", null);      // 清空值
+                    //$("#dxSelectBox2").dxSelectBox("instance").option("value", null);      // 清空值
+                    //$("#dxSelectBox2").dxSelectBox("instance").option("dataSource", createChildStore(currentParentId)); 
+                    $("#dxSelectBox").dxSelectBox("instance").reset();
+                    //$("#dxSelectBox").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+                    /*$("#dxSelectBox").dxSelectBox("instance").option("dataSource", [])*/;
+                    $("#dxSelectBox").dxSelectBox("instance").option("dataSource", createChildStore('cancel')); // 換掉舊 store
+                    $("#dxSelectBox").dxSelectBox("instance").getDataSource().reload();
+                }
+
+            } else {
+                console.log("選取值:", e.value);
+                // 當選擇值時，自動把 display 的文字填回去，保留輸入框的查詢字
+                if (e.component.option("selectedItem")) {
+                    e.component.option("text", e.component.option("selectedItem").Name);
+                }
+                if (e.element.attr("id") != 'dxSelectBox') {
+                    var text = $("#dxSelectBox2").dxSelectBox("option", "text");
+                    console.log("顯示文字:", text);
+                }
+                else {
+                    var text = $("#dxSelectBox2").dxSelectBox("option", "text");
+                    console.log("顯示文字:", text);
+
+                }
+            }
+    });
+    b.option("onValueChanged", function (e) {
+        if (e.value === null) {
+            console.log("使用者點了清除按鈕！");
+            if (e.element.attr("id") == 'dxSelectBox') {
+
+                //$("#dxSelectBox2").dxSelectBox("instance").option("value", null);      // 清空值
+                //$("#dxSelectBox2").dxSelectBox("instance").option("text", null);      // 清空值
+                //$("#dxSelectBox").dxSelectBox("instance").option("value", null);
+                //$("#dxSelectBox2").dxSelectBox("instance").store().clear;
+                //$("#dxSelectBox2").dxSelectBox("instance").reset();
+
+
+                //$("#dxSelectBox2").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+
+
+                //$("#dxSelectBox2").dxSelectBox("instance").getDataSource().reload();
+                //$("#dxSelectBox2").dxSelectBox("instance").getDataSource().store().clear();
+                $("#dxSelectBox2").dxSelectBox("instance").reset();
+                //e.reset()
+                $("#dxSelectBox2").dxSelectBox("instance").option("dataSource", createChildStore('cancel')); // 換掉舊 store
+                $("#dxSelectBox2").dxSelectBox("instance").getDataSource().reload();
+            }
+            else {
+
+                //$("#dxSelectBox").dxSelectBox("instance").option("value", null);      // 清空值
+                //$("#dxSelectBox").dxSelectBox("instance").option("text", null);      // 清空值
+                //$("#dxSelectBox2").dxSelectBox("instance").option("value", null);      // 清空值
+                //$("#dxSelectBox2").dxSelectBox("instance").option("dataSource", createChildStore(currentParentId)); 
+                $("#dxSelectBox").dxSelectBox("instance").reset();
+                    //$("#dxSelectBox").dxSelectBox("instance").option("dataSource"); // 換掉舊 store
+                    /*$("#dxSelectBox").dxSelectBox("instance").option("dataSource", [])*/;
+                $("#dxSelectBox").dxSelectBox("instance").option("dataSource", createChildStore('cancel')); // 換掉舊 store
+                $("#dxSelectBox").dxSelectBox("instance").getDataSource().reload();
+            }
+
+        } else {
+            console.log("選取值:", e.value);
+            // 當選擇值時，自動把 display 的文字填回去，保留輸入框的查詢字
+            if (e.component.option("selectedItem")) {
+                e.component.option("text", e.component.option("selectedItem").Name);
+            }
+            if (e.element.attr("id") != 'dxSelectBox') {
+                var text = $("#dxSelectBox2").dxSelectBox("option", "text");
+                console.log("顯示文字:", text);
+            }
+            else {
+                var text = $("#dxSelectBox2").dxSelectBox("option", "text");
+                console.log("顯示文字:", text);
+
+            }
+        }
+    });
+
+});
+  <div id="dxSelectBox"></div>
+ <div id="dxSelectBox2"></div>
+
 SELECT
     o.CustomerId,
     c.CustomerName,   -- 連結另一表
