@@ -1,3 +1,9 @@
+<a href="https://example.com/image-link" style="position: relative; display: inline-block;">
+  <img src="https://thumb.photo-ac.com/ac/ac7eb05cea09d918fa51b12f11191414_w.jpeg" alt="圖片描述" style="width: 100%;">
+  <div style="position: absolute; top: 200px; left: 200px; width: 400px; height: 200px; text-align: center; font-size: 30px; color: white;">
+    這是圖片中央的文字
+  </div>
+</a>
 <!-- 載入必要套件 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
