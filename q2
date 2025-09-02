@@ -1,0 +1,118 @@
+<html>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="./jquery.dataTables.min.css">
+	<style>
+/* 設置表格邊框 */
+table.dataTable {
+  border-collapse: collapse;  /* 確保邊框不會重疊 */
+  width: 100%;
+}
+
+/* 設置所有單元格的邊框 */
+table.dataTable td, table.dataTable th {
+  border: 1px solid #000  !important;  /* 設置黑色邊框 */
+}
+
+/* 可選：設置表頭的下邊框 */
+table.dataTable th {
+  border-bottom: 2px solid #333;  /* 自定義表頭的下邊框 */
+}
+
+/* 可選：為每行的下邊框添加顏色 */
+table.dataTable tbody tr {
+  border-bottom: 1px solid #ccc;
+}
+
+
+</style>
+</head>
+ 
+<body>
+    <table id="example" class="stripe hover cell-border order-column" cellspacing="0" width="90%">
+    <thead>
+        <tr>
+            <th>名前</th>
+            <th>電話</th>
+            <th>年齢</th>
+            <th>購入商品</th>
+     
+        </tr>
+    </thead>
+ <tfoot>
+        <tr>
+            <th colspan="4" style="text-align:left">
+                <!-- 預留一個容器來放自訂按鈕 -->
+                <div id="footer-buttons"></div>
+            </th>
+        </tr>
+    </tfoot>
+    </table>
+    <script type="text/javascript" charset="utf8" src="./jquery-3.4.1.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="./jquery.dataTables-1-10-20.min.js"></script>
+<script src="./dataTables.rowsGroup.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function (){
+    var table = $('#example').DataTable({
+        'language': {
+            "url": "//cdn.datatables.net/plug-ins/1.10.21/i18n/Japanese.json"
+        },
+        'data': [
+           ["山田","0000000","30","マンが"],
+           ["山田","0000000","30","肉"],
+           ["山田","0000000","30","魚"],
+           ["山田","0000000","30","タバコ"],
+           ["山田","0000001","30","皿"],
+           ["山田","0000001","20","人形"],
+           ["山田","0000001","30","ゲーム"],
+           ["佐藤","1111111","21","骨"],
+           ["佐藤","1111111","21","パッド"],
+           ["佐藤","1111111","21","ボール"],
+           ["マイケル","2222222","10","バッド"],
+           ["マイケル","2222222","10","刀"],
+           ["ヨーコ","3333333","40","お花"],
+        ],
+ 
+        'columnDefs': [
+           {
+              'targets': [0,1, 2, 3],
+              'orderable': false,
+              'searchable': false
+           }
+        ],
+paging:false,
+    info:false,
+        'rowsGroup':[0,1,2],
+        "pageLength": 100,
+initComplete: function () {
+            // 在 footer 內放自訂按鈕
+            $('#footer-buttons').append(`
+                <button id="btnExport">Export</button>
+                <button id="btnReload">Reload</button>
+            `);
+
+            // 綁定事件
+            $('#btnExport').on('click', function () {
+                alert("Export clicked! Rows: " + table.rows().count());
+            });
+
+            $('#btnReload').on('click', function () {
+                table.ajax.reload();
+                alert("Reload triggered!");
+            });
+        },
+     });   
+  });
+
+ $('#example tbody').on('click', '[id*=btnDetails]', function () {
+            var data = table.row($(this).parents('tr')).data();
+            var customerID = data[0];
+            var name = data[1];
+            var title = data[2];
+            var city = data[3];
+            alert("Customer ID : " + customerID + "\n" + "Name : " + name + "\n" + "Title : " + title + "\n" + "City : " + city);
+        });
+    </script>
+</body>
+
+</html>
