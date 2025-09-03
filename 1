@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DataTables Custom Cell Style</title>
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<!-- Bootstrap 5 CSS -->
+<!--<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/5.0.0-alpha1/css/bootstrap.min.css" integrity="sha384-r4NyP46KrjDleawBgD5tp8Y7UzmLA05oM1iAEQ17CSuDqnUK2+k9luXQOfXJCJ4I" crossorigin="anonymous">-->
+<!-- Font Awesome CSS -->
+<!--<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">-->
+  <style>
+/* 均分 Tab 寬度 */
+.nav-tabs.nav-justified.android-top > li > a {
+    text-align: center;
+    padding: 10px 0;
+    border: none;
+    color: #555;
+}
+.nav-tabs.nav-justified.android-top > li.active > a,
+.nav-tabs.nav-justified.android-top > li.active > a:focus,
+.nav-tabs.nav-justified.android-top > li.active > a:hover {
+    background: #337ab7;
+    color: white;
+}
+.tab-content {
+   /* padding: 15px;
+    border: 1px solid #ddd;
+    border-top: none;*/
+}
+.icon {
+    display: block;
+    font-size: 20px;
+}
+    /* 全部 cell 無框線 */
+    .btn-label {
+ /*	position: relative;
+	left: -12px;
+	display: inline-block;
+	padding: 6px 12px;
+	background: rgba(0, 0, 0, 0.15);
+	border-radius: 3px 0 0 3px; */
+}
+
+.btn-labeled {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+ .btnx {
+	margin-bottom: -5px;
+}
+.btn {
+	margin-bottom: 10px;
+}
+table.dataTable,
+table.dataTable th,
+table.dataTable td {
+  border: 10px /*none !important;*/
+}
+     
+    .custom-cell {
+      background-color:#c5e1a5;
+      border-radius: 10px;
+      padding: 6px 12px;
+      cursor: pointer;
+      text-align: center;
+margin:-5px; 
+    }
+table.dataTable>thead>tr>th, table.dataTable>thead>tr>td {
+    /* padding: 5px;*/
+   
+}
+.dataTable tbody tr:hover button.custom-btn {
+  background-color: #17a2b8 !important; /* 原本的 btn-info 顏色 */
+  color: #fff !important;
+}
+.custom-headercell {
+       background-color:#c5e1a5;
+      border-radius: 10px;
+     padding: 5px 5px 5px 5px;       
+      cursor: pointer;
+      text-align: center;
+  
+    }
+    .custom-cell:hover {
+      background-color: #c5e1a5;
+    }
+  </style>
+</head>
+<body>
+ 
+
+
+<div class="container"> 
+    <button id="exportPDF">匯出 PDF</button> 
+    <!-- Tab 內容 -->
+    <div class="tab-content">
+        <div id="home" class="tab-pane fade in active">
+            <table id="zexample" class="display wrap" style="width:100%">
+			<thead>
+			  <tr>
+				<th><div class="custom-headercell">Name</div></th>
+				<th><div class="custom-headercell">Position</div></th>
+				<th><div class="custom-headercell">Office</div></th>
+				<th><div class="custom-headercell">Action</div></th>
+			  </tr>
+			</thead>
+			<tbody>
+			  <tr>
+				<td>Tiger Nixon</td>
+				<td>System Architect</td>
+				<td>Edinburgh</td>
+				<td>View</td>
+			  </tr>
+			  <tr>
+				<td>Garrett Winters</td>
+				<td>Accountant</td>
+				<td>Tokyo</td>
+				<td>MCP Weather ServerチュートリアルをDocker+Clineでやってみる</td>
+			  </tr>
+			</tbody>
+		  </table>
+		  
+		  <table id="zexample2" class="display wrap" style="width:100%">
+			<thead>
+			  <tr>
+				<th><div class="custom-headercell">Name</div></th>
+				<th><div class="custom-headercell">Position</div></th>
+				<th><div class="custom-headercell">Office</div></th>
+				<th><div class="custom-headercell">Action</div></th>
+			  </tr>
+			</thead>
+			<tbody>
+			  <tr>
+				<td>Tiger Nixon</td>
+				<td>System Architect</td>
+				<td>Edinburgh</td>
+				<td>View</td>
+			  </tr>
+			  <tr>
+				<td>Garrett Winters</td>
+				<td>Accountant</td>
+				<td>Tokyo</td>
+				<td>MCP Weather ServerチュートリアルをDocker+Clineでやってみる</td>
+			  </tr>
+			</tbody>
+		  </table>
+        </div> 
+    </div>
+</div>
+ 
+ 
+
+  <!-- jQuery & DataTables -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script>
+   function setRowMaxHeight($row) {
+      let maxHeight = 0;
+
+      // 找出該列所有 td > div 的最大高度
+      $row.find('td > div').each(function() {
+        maxHeight = Math.max(maxHeight, $(this).outerHeight());
+      });
+
+      // 套用最大高度
+     // $row.find('td > div').css('height', maxHeight + 'px');
+      $row.find('td > div').css('min-height', maxHeight + 'px').css('height', '');
+      return maxHeight;
+    }
+    $(document).ready(function () {
+      let table = $('#zexample').DataTable({
+        columnDefs: [ 
+	        { targets: 0, width: "150px" },   // 第一欄 50px 
+            { targets: 3, width: "10%" },     // 第三欄 30% (可用百分比)
+			{
+              targets: [3,2], // 第 4 欄 (Action)
+                render: function (data, type, row) {
+                 return `<div class="custom-cell" style="white-space: normal !important;word-wrap: break-word;word-break: break-all;height: 100%;width: 100%;box-sizing: border-box;display: block;">${data}</div>`;
+               }
+            },
+		    {
+              targets: "_all",
+              orderable: false
+            },
+            {
+              targets: [0], // 第 4 欄 (Action)
+                render: function (data, type, row) {
+                  return `  <button type="button" class="btn btn-labeled btn-info custom-btn" style="margin-bottom: -5px;margin-top:-5px;">
+                  <span class="btn-label"><i class="glyphicon glyphicon-refresh"></i></span>Refresh</button>`;
+                  }
+            }
+        ]
+		,
+		drawCallback: function(settings) { 
+		  $('#zexample tbody tr').each(function() {
+            setRowMaxHeight($(this));
+          });
+		  
+		  // 每次重繪時處理每一列
+          /*  $('#example tbody tr').each(function() {
+            let $row = $(this);
+            let maxHeight = 0;
+
+            // 只取第 2、3 欄的 div 高度
+            $row.find('td:nth-child(2) > div, td:nth-child(3) > div').each(function() {
+              let h = $(this).outerHeight();
+              if (h > maxHeight) maxHeight = h;
+            });
+
+            // 套用最大高度到整列的 div
+            $row.find('td > div').css('height', maxHeight + 'px');
+          }); */
+        }
+      });
+      
+	  $('#exportPDF').on('click', async function() {
+   const tables = document.querySelectorAll('table[id^="zexample"]');
+  const content = [];
+
+  // PDF A4 寬度（pt）
+  const pdfPageWidth = 595;
+  const pageMargin = 40;
+
+  for (let i = 0; i < tables.length; i++) {
+    const table = tables[i];
+
+    // 先加表頭文字
+    content.push({
+      text: `表格 ${i + 1} - ${table.getAttribute('data-title') || table.id}`, // 可自訂文字
+      style: 'tableHeader',
+      margin: [0, 0, 0, 5]
+    });
+
+    // 將 table 轉成 canvas
+    const canvas = await html2canvas(table, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+
+    // 計算縮放比例
+    const tableWidth = canvas.width;
+    const availableWidth = pdfPageWidth - pageMargin * 2;
+    const scale = tableWidth > availableWidth ? availableWidth / tableWidth : undefined;
+
+    // 加入 table 圖片
+    content.push({
+      image: imgData,
+      width: scale ? tableWidth * scale : undefined
+    });
+
+    // 每個 table 分頁
+    if (i < tables.length - 1) {
+      content.push({ text: '', pageBreak: 'after' });
+    }
+  }
+
+  // pdfMake 產生 PDF
+  pdfMake.createPdf({
+    content: content,
+    styles: {
+      tableHeader: { fontSize: 14, bold: true, alignment: 'center' }
+    }
+  }).download('tables_with_header.pdf');
+});
+	  
+	  
+	  
+	   
+    });
+  </script>
+</body>
+</html>
