@@ -1,3 +1,23 @@
+  table.on('draw.dt', function() {
+    // 遍歷所有 row
+    table.rows().every(function() {
+        let $row = $(this.node());
+        setRowMaxHeight($row);
+		
+    });
+	// $('[data-toggle="tooltip"]').tooltip();
+});
+   createdRow: function(row, data, dataIndex) {
+        // 遍歷每個 cell
+        $('td', row).each(function(i, cell) {
+            $(cell)
+                .attr('data-toggle', 'tooltip')   // Bootstrap tooltip
+                .attr('title', $(cell).text());  // tooltip 內容
+        });
+
+        // 啟用 tooltip（createdRow 在渲染每列時呼叫）
+       $('[data-toggle="tooltip"]').tooltip();
+    }
 <!DOCTYPE html>
 <html lang="en">
 <head>
