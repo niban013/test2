@@ -1,3 +1,119 @@
+<system.web>
+  <trace enabled="true" pageOutput="true" requestLimit="50" localOnly="false"/>
+</system.web>
+
+protected void Application_AuthenticateRequest(object sender, EventArgs e)
+{
+    if (Context.User != null && Context.User.Identity.IsAuthenticated)
+    {
+        System.Diagnostics.Debug.WriteLine("CAS 驗證成功: " + Context.User.Identity.Name);
+    }
+}
+<?xml version="1.0"?>
+<configuration>
+  <system.web>
+    <!-- 使用 .NET 內建的 FormsAuthentication，CAS 模組會幫你處理 -->
+    <authentication mode="Forms">
+      <forms loginUrl="~/login.aspx" timeout="30"/>
+    </authentication>
+
+    <authorization>
+      <deny users="?"/>
+    </authorization>
+
+    <!-- CAS Authentication Module -->
+    <httpModules>
+      <add name="CasAuthenticationModule"
+           type="DotNetCasClient.CasAuthenticationModule, DotNetCasClient"/>
+    </httpModules>
+
+    <compilation debug="true" targetFramework="4.7.2"/>
+    <trace enabled="true" pageOutput="false" requestLimit="50" localOnly="false"/>
+  </system.web>
+
+  <system.webServer>
+    <modules>
+      <add name="CasAuthenticationModule"
+           type="DotNetCasClient.CasAuthenticationModule, DotNetCasClient"
+           preCondition="managedHandler"/>
+    </modules>
+  </system.webServer>
+
+  <!-- DotNetCasClient 設定 -->
+  <dotNetCasClient
+      casServerLoginUrl="https://your-cas-server.com/cas/login"
+      casServerUrlPrefix="https://your-cas-server.com/cas/"
+      serverName="https://your-app.example.com"
+      notAuthorizedUrl="~/NotAuthorized.aspx"
+      redirectAfterValidation="true"
+      renew="false"
+      singleSignOut="true"
+      gateway="false"
+      cookiesRequiredUrl="~/CookiesRequired.aspx"
+      loginCallbackUrl="~/LoginCallback.aspx" />
+</configuration>
+using System;
+using System.Web;
+
+public class Global : HttpApplication
+{
+    protected void Application_AuthenticateRequest(object sender, EventArgs e)
+    {
+        if (Context.User != null && Context.User.Identity.IsAuthenticated)
+        {
+            System.Diagnostics.Debug.WriteLine("CAS 驗證成功：" + Context.User.Identity.Name);
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("尚未驗證");
+        }
+    }
+}
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="Default.aspx.cs" Inherits="CasDemo.Default" %>
+<!DOCTYPE html>
+<html>
+<head runat="server">
+    <title>CAS 驗證測試</title>
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div>
+            <h2>CAS 驗證測試頁面</h2>
+            <asp:Label ID="lblUser" runat="server" Text=""></asp:Label>
+        </div>
+    </form>
+</body>
+</html>
+using System;
+
+namespace CasDemo
+{
+    public partial class Default : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            if (User != null && User.Identity.IsAuthenticated)
+            {
+                lblUser.Text = "登入成功，使用者：" + User.Identity.Name;
+            }
+            else
+            {
+                lblUser.Text = "尚未登入";
+            }
+        }
+    }
+}
+測試流程
+
+啟動專案 → 瀏覽 http://localhost:xxxx/
+
+因為 <authorization><deny users="?" /></authorization>，未登入會被導向 CAS Login
+
+成功登入後 → CAS 帶 ticket=ST-xxx 回來
+
+CAS Authentication Module 會自動驗證並建立 FormsAuthenticationTicket
+
+你在 HttpContext.User.Identity.Name 就能拿到使用者帳號
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
