@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>DataTables 多表格 Excel 匯出</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"> -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- FontAwesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- DataTables CSS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css">
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<!-- Bootstrap CSS (spinner) -->
+<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"> -->
+  <link rel="stylesheet" href="https://cdn3.devexpress.com/jslib/22.2.3/css/dx.light.css">
+  <script src="https://cdn3.devexpress.com/jslib/22.2.3/js/jquery.min.js"></script>
+  <script src="https://cdn3.devexpress.com/jslib/22.2.3/js/jszip.min.js"></script>
+  <script src="https://cdn3.devexpress.com/jslib/22.2.3/js/dx.all.js"></script>
+<!-- Bootstrap 4 -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <style>
+ .tooltip-dark {
+  position: relative;
+  cursor: pointer;
+}
+.tooltip-dark:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.tooltip-light {
+  position: relative;
+  cursor: help;
+}
+.tooltip-light:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #f9f9f9;
+  color: #333;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
+  white-space: nowrap;
+}
+.tooltip-color {
+  position: relative;
+  cursor: pointer;
+}
+.tooltip-color:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 130%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #42a5f5, #478ed1);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.table-container {
+  position: relative; /* 這裡很重要 */
+  margin-bottom: 40px;
+}
+
+/* overlay 背景 */
+.table-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+/* 方框 */
+.overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 30px;
+  background: rgba(255,255,255,0.9);
+  border: 2px solid #007bff;
+  border-radius: 10px;
+  color: #007bff;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+/* 旋轉圖示 */
+.spinner-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg);}
+  100% { transform: rotate(360deg);}
+}
+
+/* 文字依次跳動 */
+.overlay-text span {
+  display: inline-block;
+  animation: jump 1s infinite;
+  margin: 0 1px;
+}
+
+@keyframes jump {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+ .card-header {
+      background: linear-gradient(135deg, #007bff, #00c6ff);
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+    }
+</style>
+</head>
+
+<body class="p-4">
+     <div class="container-fluid form-group">
+   <div class="card  border border-dark">
+    <div class="card-header bg-primary text-white">
+      <i class="fas fa-edit mr-2"></i> DevExtreme 表單面板
+    </div>
+    <div class="card-body">
+      <form>
+        <!-- 第一列 -->
+        <div class="form-row mb-3">
+          <div class="col-md-4">
+            <label for="dxName">姓名</label>
+            <div id="dxName"></div>
+          </div>
+          <div class="col-md-4">
+            <label for="dxAge">年齡</label>
+            <div id="dxAge"></div>
+          </div>
+          <div class="col-md-4">
+            <label for="dxCity">城市</label>
+            <div id="dxCity"></div>
+          </div>
+        </div>
+
+        <!-- 第二列 -->
+        <div class="form-row">
+          <div class="col-md-4">
+            <label for="dxEmail">Email</label>
+            <div id="dxEmail"></div>
+          </div>
+         <div class="col-md-4">
+  <label for="dxStartDate">入職日期 (yyyymm)</label>
+  <div id="dxStartDate"></div>
+</div>
+          <div class="col-md-4">
+            <label for="dxDept">部門</label>
+            <div id="dxDept"></div>
+          </div>
+        </div>
+      </form>
+    </div>
+  <div class="card-footer text-center">
+  <button type="button" class="btn btn-success">送出</button>
+  <button type="reset" class="btn btn-secondary">重設</button>
+</div>
+  </div>
+    </div>
+ <!-- 自訂 overlay -->
+    <!-- <div class="table-overlay" id="overlay"> -->
+      <!-- <div class="spinner-icon"><i class="fas fa-circle-notch"></i></div> -->
+      <!-- <div>資料載入中，請稍候...</div> -->
+    <!-- </div> -->
+<h3>Table 1</h3>
+<div class="table-container">
+   <table id="zexample1" class="display" style="width:100%">
+  <thead>
+    <tr>
+      <th>姓名</th>
+      <th>年齡</th>
+      <th>城市</th>
+      <th>職稱</th>
+    </tr>
+  </thead>
+</table>
+  <div class="table-overlay" id="overlay1">
+    <div class="overlay-box">
+      <div class="spinner-icon"><i class="fas fa-circle-notch"></i></div>
+      <div id="overlay-text" class="overlay-text">Table 1 載入中...</div>
+    </div>
+  </div>
+</div>
+ 
+<h3 class="mt-4">Table 2</h3>
+ <!-- <div class="table-container"> -->
+<table id="zexample2" class="display" style="width:100%">
+  <thead>
+    <tr>
+      <th>部門代號</th>
+      <th>部門名稱</th>
+    </tr>
+  </thead>
+</table>
+
+<div class="mt-4">
+  <button id="exportExcel" class="btn btn-success">
+    <i class="bi bi-download"></i> 匯出 Excel
+  </button>
+</div> 
+ <h2>jQuery Modal 範例</h2>
+  <button id="openModal" class="btn btn-primary">開啟 Modal</button>
+
+  <!-- Modal 元件 -->
+  <div class="modal fade" id="myModal" tabindex="-1" aria-labelledby="exampleModalLabel" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="exampleModalLabel">提示訊息</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+        </div>
+        <div class="modal-body">
+          這是一個 Bootstrap Modal 的範例！
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+          <button type="button" class="btn btn-primary" id="confirmBtn">確認</button>
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+
+<script>
+
+
+// 將文字拆成 span 讓每個字依次跳動
+function splitTextToSpan(elId){
+  const el = document.getElementById(elId);
+  const text = el.textContent;
+  el.textContent = '';
+  text.split('').forEach((char, i)=>{
+    const span = document.createElement('span');
+    span.textContent = char;
+    span.style.animationDelay = `${i*0.1}s`;
+    el.appendChild(span);
+  });
+}
+splitTextToSpan('overlay-text');
+
+$(document).ready(function() {
+  // DxTextBox
+    $("#dxName").dxTextBox({ placeholder: "請輸入姓名" });
+    $("#dxAge").dxTextBox({ mode: "number", placeholder: "請輸入年齡" });
+    $("#dxEmail").dxTextBox({ mode: "email", placeholder: "請輸入 Email" });
+  // DxDateBox
+$("#dxStartDate").dxDateBox({
+    type: "date",
+    displayFormat: "yyyyMM",
+    pickerType: "rollers",
+    placeholder: "選擇入職年月"
+});
+
+    // DxSelectBox
+    $("#dxCity").dxSelectBox({
+      items: ["台北", "台中", "高雄"],
+      placeholder: "選擇城市"
+    });
+
+    $("#dxDept").dxSelectBox({
+      items: ["研發部", "設計部", "行銷部"],
+      placeholder: "選擇部門"
+    });
+
+
+
+
+
+
+
+
+  // 點擊按鈕開啟 modal
+      $("#openModal").click(function () {
+        $("#myModal").modal("show");
+      });
+
+      // 點擊確認按鈕事件
+      $("#confirmBtn").click(function () {
+        alert("你點了確認！");
+        $("#myModal").modal("hide"); // 關閉 modal
+      });
+  var overlay1 = $('#overlay1');
+  var overlay2 = $('#overlay2');
+  function showOverlay(overlay) {
+    overlay.show();
+    overlay.css('opacity', 1);
+  }
+
+  function hideOverlay(overlay) {
+    overlay.css('opacity', 0);
+    setTimeout(function(){ overlay.hide(); }, 500);
+  }
+
+  showOverlay(overlay1); // 頁面初始顯示 overlay
+  // Table 1 內嵌資料
+  let table1 = $('#zexample1').DataTable({
+  language: {
+    loadingRecords: "", // 載入資料時不顯示文字
+    zeroRecords: "" // 仍可自訂無資料訊息
+  },
+     scrollY: '300px',   // 固定高度
+    scrollCollapse: false, // 資料少於高度時是否收縮，false 可維持高度
+    <!-- data: [ -->
+      <!-- { name: "王小明", age: 28, city: "台北台北台北台北台北台北台北台北台北台北台北台北台北", title: "工程師工程師工程師工程師工程師工程師工程師工程師" }, -->
+      <!-- { name: "李小華", age: 34, city: "台中", title: "設計師" }, -->
+      <!-- { name: "張大同", age: 41, city: "高雄", title: "經理" } -->
+    <!-- ], -->
+	  <!-- ajax: { -->
+      <!-- url: 'http://localhost:8000/data1.json', -->
+      <!-- dataType: 'json', -->
+      <!-- dataSrc: '' // 因為 JSON 是陣列 -->
+    <!-- },  -->
+ajax: function(data, callback) {
+      // 模擬延遲 2 秒再發 AJAX
+      setTimeout(function() {
+        $.ajax({
+          url: 'http://localhost:8000/data1.json',   // ✅ 換成你的 API
+          type: 'GET',
+          success: function(res) {
+            // 假設回傳格式 { data: [...] }
+              callback({ data: res });
+			      // 取得 overlay，平滑淡出
+			 // 載入完成淡出 overlay
+            hideOverlay(overlay1); // 載入完成才隱藏 overlay
+          },
+          error: function() {
+            callback({ data: [] }); // 錯誤回空表
+		    hideOverlay(overlay1); // 載入完成才隱藏 overlay
+          }
+        });
+      }, 12000); // 2 秒延遲
+    },
+ 
+    columns: [
+      { data: 'name',export: false , createdCell: function(td, cellData) {
+        $(td).addClass("tooltip-light").attr("data-tooltip", "職業：" + cellData);
+      } },
+      { data: 'age',export: false },
+      { data: 'city',export: true},
+      { data: 'title',export: true }
+    ]
+  });
+
+  // Table 2 內嵌資料
+  let table2 = $('#zexample2').DataTable({
+    <!-- data: [ -->
+      <!-- { deptId: "D01", deptName: "研發部" }, -->
+      <!-- { deptId: "D02", deptName: "行銷部" }, -->
+      <!-- { deptId: "D03", deptName: "財務部" } -->
+    <!-- ], -->
+	  ajax: {
+      url: 'http://localhost:8000/data2.json',
+      dataType: 'json',
+      dataSrc: '' // 因為 JSON 是陣列
+    },
+    columns: [
+      { data: 'deptId' },
+      { data: 'deptName',export: true }
+    ]
+  });
+  function exportnodt(tableId){
+   $.ajax({
+        url: 'http://localhost:8000/data1.json',  // JSON 檔案路徑
+        type: 'GET',
+        dataType: 'json',
+        success: async function(data) {
+            let workbook = new ExcelJS.Workbook();
+			let ws = workbook.addWorksheet(tableId);
+			let headers = ''
+            ws.addRow(headers);
+			ws.getRow(1).eachCell(cell => {
+				cell.font = { bold: true };
+				cell.alignment = { horizontal: 'center', vertical: 'middle' };
+		    });
+			data.forEach(row => {
+			// row 本身是 array（若 dataSrc 用 array 格式）
+			   ws.addRow(Object.values(row));
+		    });
+			 // 自適應欄寬
+			  ws.columns.forEach(col => {
+				  col.width = 30; // 固定寬度
+				  col.eachCell(cell => {
+					cell.alignment = { vertical: 'middle' }; 
+				  });
+				});
+
+			  // 加格線
+			  ws.eachRow({ includeEmpty: false }, row => {
+				row.eachCell(cell => {
+				  cell.border = {
+					top: { style: 'thin' },
+					left: { style: 'thin' },
+					bottom: { style: 'thin' },
+					right: { style: 'thin' }
+				  };
+				});
+			  });
+			   // 下載 Excel
+				const buffer = await workbook.xlsx.writeBuffer();
+				saveAs(new Blob([buffer]), 'AllTables_Export.xlsx');
+        },
+        error: function(xhr, status, error) {
+          console.error('讀取 JSON 發生錯誤:', error);
+        }
+      });
+  }
+  //function exportdt()
+  
+  async function fetchData(ws,exportCols) {
+  try {
+        const data = await $.ajax({
+				url: 'http://localhost:8000/data2.json',  // JSON 檔案路徑
+				type: 'GET',
+				dataType: 'json' 
+			  }); 
+			  data.forEach(row => {
+			  // 只取要匯出的欄位值
+				const rowData = exportCols.map(c => row[c.data]);
+				ws.addRow(rowData);
+			  });  
+	  
+  } catch (err) {
+    console.error('AJAX 錯誤:', err);
+  }
+   return ws
+}
+
+function getAjaxUrl(table) {
+  let ajaxCfg = table.settings().init().ajax;
+  let url = typeof ajaxCfg === "string" ? ajaxCfg : ajaxCfg.url;
+
+  if (typeof ajaxCfg === "object" && ajaxCfg.data) {
+    let params = new URLSearchParams(ajaxCfg.data).toString();
+    if (params.length > 0) {
+      return url + "?" + params;
+    }
+  }
+  return url;
+}
+	async  function exportdt2(filename,tablekey){
+       try{
+	        const workbook = new ExcelJS.Workbook();
+			const tables = $('table[id^="'+tablekey+'"]');
+			// 先收集所有 ajax 請求 (用 DataTable 設定的 URL)
+			const requests = tables.map(function () {
+			  const table = $(this).DataTable();
+		      const url = getAjaxUrl(table)
+			  return $.ajax({ url  , dataType: "json" });
+			}).get();
+			 // 等待所有 ajax 完成
+			const results = await Promise.all(requests);
+
+			// 一張 table 對應一個 worksheet
+			tables.each(function (i) {
+			  const table = $(this).DataTable();
+			  const sheetName = $(this).attr("id"); // 用 table id 當 sheet 名稱
+			  const ws = workbook.addWorksheet(sheetName);
+
+			  const data = results[i];
+			  if (data.length === 0) return;
+			  
+              const tableInit = table.settings().init()
+              const exportCols = tableInit.columns.filter(c => c.export)
+			  if(exportCols.length == 0){
+			       throw new Error("table:「"+sheetName+"」沒有設定匯出欄任，columns-> 欄位設定export: true");
+			  }
+			  exportCols.map((col, idx) => {
+			    	//col.title ? col.title : $(table.column(idx).header()).text()
+				   let _idx = table.columns().indexes().filter(function (i) {
+					  return tableInit.columns[i].data === col.data;
+					})[0];
+					col.title = $(table.column(_idx).header()).text().trim(); // 把表頭文字寫回欄位設定
+			  });
+      //const exportCols2 = tableInit.columns.filter(c => c.export);
+  
+			 // const ths = $(`#${tableId} thead th`);
+			//	exportCols.forEach((c, idx) => {
+			//	  c.title = ths.eq(idx).text().trim(); // 把表頭文字寫回欄位設定
+			//  });
+  
+
+
+
+
+
+
+			  // 取 DataTable columns 設定的標題 (如果沒設就抓 th 的文字)
+			 // const settings = table.settings().init();
+			 // let headers = settings.columns.map((col, idx) =>
+			//	col.title ? col.title : $(table.column(idx).header()).text()
+			 // );
+
+			  // 加表頭
+			  const headerRow = ws.addRow(exportCols.map(c => c.title));
+			  headerRow.eachCell(cell => {
+				cell.font = { bold: true };
+				cell.alignment = { horizontal: "center", vertical: "middle" };
+			  });
+
+			  // 加資料
+			  data.forEach(row => {
+			    const rowData = exportCols.map(c => row[c.data]);
+				ws.addRow(rowData); // 用欄位名稱對應
+			  });
+
+			  // 自動欄寬
+			  ws.columns.forEach(col => {
+				let maxLength = 10;
+				col.eachCell({ includeEmpty: true }, cell => {
+				  const v = cell.value ? cell.value.toString() : "";
+				  maxLength = Math.max(maxLength, v.length);
+				});
+				col.width = maxLength + 2;
+			  });
+			});
+
+			// 匯出檔案
+			const buffer = await workbook.xlsx.writeBuffer();
+			saveAs(new Blob([buffer]), "DataTables_MultiSheet.xlsx");
+	   }
+	   catch (err) {
+		 console.error("匯出錯誤:", err);
+		alert("匯出失敗，請檢查 console");
+	   }
+	}
+  async function exportdt(filename,tablekey){
+     let workbook = new ExcelJS.Workbook();
+
+    $('table[id^="'+tablekey+'"]').each(function() {
+       let tableId = $(this).attr('id');
+       let dt = $(`#${tableId}`).DataTable();
+       let ws = workbook.addWorksheet(tableId); 
+	   const tableInit = dt.settings().init()
+       const exportCols = tableInit.columns.filter(c => c.export);
+  
+	   const ths = $(`#${tableId} thead th`);
+		exportCols.forEach((c, idx) => {
+		  c.title = ths.eq(idx).text().trim(); // 把表頭文字寫回欄位設定
+	  });
+  
+      ws.addRow(exportCols.map(c => c.title)); 
+	  // 表頭加粗 + 置中
+	  const headerRow = ws.getRow(1);
+	  headerRow.eachCell({ includeEmpty: true }, (cell) => {
+		cell.font = { bold: true };
+		cell.alignment = { horizontal: 'center', vertical: 'middle' };
+	  });
+ 
+	  if(tableInit.fulldata){
+	    ws= fetchData(ws,exportCols)
+	  }
+      else
+	  {
+		   const data = dt.rows({ search: 'applied' }).data().toArray();
+			 data.forEach(row => {
+		  // 只取要匯出的欄位值
+			const rowData = exportCols.map(c => row[c.data]);
+			ws.addRow(rowData);
+		  }); 
+	  }	  
+      
+      // 自適應欄寬
+	  ws.columns.forEach(col => {
+		  col.width = 30; // 固定寬度
+		  col.eachCell(cell => {
+			//cell.alignment = { vertical: 'middle' }; 
+		  });
+		});
+
+      // 加格線
+      ws.eachRow({ includeEmpty: false }, row => {
+        row.eachCell(cell => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+      });
+
+    });
+
+    // 下載 Excel
+    const buffer = await workbook.xlsx.writeBuffer();
+ //   saveAs(new Blob([buffer]), filename+'.xlsx');
+  }
+  // 匯出 Excel
+  $('#exportExcel').on('click', async function() { 
+      //exportnodt('zexample')
+    exportdt2('test','zexample')
+	//exportdt('test','zexample')
+  });
+
+});
+</script>
+</body>
+</html>
