@@ -1,3 +1,25 @@
+
+方法 2：用 Visual Studio Attach + Symbol Load
+
+如果你希望「邊跑 ASP.NET 專案邊看」，可以：
+
+把專案跑起來（IIS Express 或 IIS）。
+
+在 Visual Studio → Debug → Attach to Process，選擇 iisexpress.exe 或 w3wp.exe。
+
+開啟 Modules 視窗（Debug → Windows → Modules），找到 DotNetCasClient.dll。
+
+如果你有 PDB 檔（符號檔），就可以載入並設斷點。
+
+沒有 PDB 的話，你只能靠 反編譯工具看流程，再寫自己的 HttpModule 來 Debug。
+
+Debug 流程的觀察點
+
+Redirect 到 CAS Login：你會看到程式碼判斷 !IsAuthenticated → Response.Redirect(casLoginUrl + "?service=...")
+
+Ticket 驗證：裡面會有呼叫 CasAuthenticationService.ValidateTicket()
+
+User 建立：用 GenericPrincipal 或 FormsAuthentication.SetAuthCookie 來掛上登入資訊
 <system.web>
   <trace enabled="true" pageOutput="true" requestLimit="50" localOnly="false"/>
 </system.web>
