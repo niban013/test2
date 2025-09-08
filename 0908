@@ -1,3 +1,15 @@
+說明
+Global.asax
+Application_AcquireRequestState → 在 ASP.NET 取得 Session 之後觸發。
+
+檢查目前請求的檔案路徑：
+
+如果是 Login.aspx、Callback.aspx 或靜態資源 (.css, .js, .png...) → 放行。
+
+其他頁面如果 Session["User"] == null → 強制導向 Login.aspx。
+
+這樣就不用在每個 Page 的 Page_Load 都檢查 Session。
+
 <%@ Application Language="C#" %>
 
 <script runat="server">
