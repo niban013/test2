@@ -1,3 +1,39 @@
+<%@ Application Language="C#" %>
+
+<script runat="server">
+
+    void Application_AcquireRequestState(object sender, EventArgs e)
+    {
+        // 確保 Session 可用
+        if (Context.Handler is IRequiresSessionState || Context.Handler is IReadOnlySessionState)
+        {
+            var app = (HttpApplication)sender;
+            var context = app.Context;
+
+            string path = context.Request.Path.ToLower();
+
+            // 允許匿名存取的頁面 (Login, Callback, 靜態檔案)
+            if (path.Contains("login.aspx") || 
+                path.Contains("callback.aspx") ||
+                path.EndsWith(".css") ||
+                path.EndsWith(".js") ||
+                path.EndsWith(".png") ||
+                path.EndsWith(".jpg"))
+            {
+                return;
+            }
+
+            // 如果 Session["User"] 不存在 → 導向 Login
+            if (context.Session != null && context.Session["User"] == null)
+            {
+                context.Response.Redirect("~/Login.aspx");
+            }
+        }
+    }
+
+</script>
+
+
 using System;
 using System.Web;
 using System.Net;
