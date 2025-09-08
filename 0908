@@ -1,0 +1,170 @@
+using System;
+using System.Web;
+using System.Net;
+using System.Security.Principal;
+
+namespace MyApp.Security
+{
+    public class CasAuthenticationModule : IHttpModule
+    {
+        private const string CasLoginUrl = "https://cas.example.com/cas/login";
+        private const string CasValidateUrl = "https://cas.example.com/cas/serviceValidate";
+        private const string ServiceUrl = "https://localhost/MyApp/"; // 你的應用程式 URL
+
+        public void Init(HttpApplication context)
+        {
+            context.AuthenticateRequest += new EventHandler(OnAuthenticateRequest);
+        }
+
+        private void OnAuthenticateRequest(object sender, EventArgs e)
+        {
+            HttpApplication app = (HttpApplication)sender;
+            HttpContext ctx = app.Context;
+
+            // 如果已經登入過，跳過
+            if (ctx.User != null && ctx.User.Identity.IsAuthenticated)
+                return;
+
+            string ticket = ctx.Request.QueryString["ticket"];
+
+            if (string.IsNullOrEmpty(ticket))
+            {
+                // 沒有 ticket → 導向 CAS 登入
+                string loginUrl = $"{CasLoginUrl}?service={HttpUtility.UrlEncode(ServiceUrl)}";
+                ctx.Response.Redirect(loginUrl, true);
+            }
+            else
+            {
+                // 驗證 ticket
+                string validateUrl = $"{CasValidateUrl}?ticket={ticket}&service={HttpUtility.UrlEncode(ServiceUrl)}";
+                string responseXml;
+
+                using (WebClient client = new WebClient())
+                {
+                    responseXml = client.DownloadString(validateUrl);
+                }
+
+                if (responseXml.Contains("<cas:authenticationSuccess>"))
+                {
+                    string userId = ExtractCasUser(responseXml);
+
+                    // 🔹 這裡呼叫你的 User Repository，把 userId 轉換成 User Entity
+                    var userEntity = UserRepository.GetUserByAccount(userId);
+
+                    if (userEntity != null)
+                    {
+                        // 建立自訂 Identity
+                        var identity = new GenericIdentity(userEntity.Account, "CAS");
+                        var principal = new GenericPrincipal(identity, userEntity.Roles);
+
+                        ctx.User = principal;
+                        ctx.Items["CurrentUser"] = userEntity;  // 存在 Context，後續可直接取
+                        ctx.Session["User"] = userEntity;       // 也可以存進 Session
+                    }
+                    else
+                    {
+                        ctx.Response.StatusCode = 403;
+                        ctx.Response.Write("使用者不存在於系統");
+                        ctx.Response.End();
+                    }
+                }
+                else
+                {
+                    ctx.Response.StatusCode = 403;
+                    ctx.Response.Write("CAS Authentication Failed");
+                    ctx.Response.End();
+                }
+            }
+        }
+
+        private string ExtractCasUser(string xml)
+        {
+            int start = xml.IndexOf("<cas:user>") + "<cas:user>".Length;
+            int end = xml.IndexOf("</cas:user>");
+            return xml.Substring(start, end - start);
+        }
+
+        public void Dispose() { }
+    }
+
+    // 🔹 模擬資料庫的 UserRepository
+    public static class UserRepository
+    {
+        public static UserEntity GetUserByAccount(string account)
+        {
+            // 這裡可以改成查 DB / API
+            if (account == "johndoe")
+            {
+                return new UserEntity
+                {
+                    Account = "johndoe",
+                    DisplayName = "約翰·杜",
+                    Roles = new[] { "Admin", "User" },
+                    Department = "IT"
+                };
+            }
+            return null;
+        }
+    }
+
+    // 🔹 使用者實體
+    public class UserEntity
+    {
+        public string Account { get; set; }
+        public string DisplayName { get; set; }
+        public string[] Roles { get; set; }
+        public string Department { get; set; }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+public ActionResult CasCallback(string ticket)
+{
+    string serviceUrl = "https://localhost/MyApp/Login/CasCallback";
+    string validateUrl = $"https://cas.example.com/cas/serviceValidate?ticket={ticket}&service={HttpUtility.UrlEncode(serviceUrl)}";
+
+    string responseXml;
+    using (var client = new WebClient())
+    {
+        responseXml = client.DownloadString(validateUrl);
+    }
+
+    if (responseXml.Contains("<cas:authenticationSuccess>"))
+    {
+        string userId = ExtractCasUser(responseXml);
+
+        // 🔹 自行查系統資料庫，轉換成 UserEntity
+        var user = UserRepository.GetUserByAccount(userId);
+
+        if (user != null)
+        {
+            // 存入 Session，當作已登入
+            Session["User"] = user;
+            return RedirectToAction("Index", "Home");
+        }
+        else
+        {
+            return Content("使用者不存在於系統");
+        }
+    }
+    else
+    {
+        return Content("CAS 驗證失敗");
+    }
+}
+
+private string ExtractCasUser(string xml)
+{
+    int start = xml.IndexOf("<cas:user>") + "<cas:user>".Length;
+    int end = xml.IndexOf("</cas:user>");
+    return xml.Substring(start, end - start);
+}
+
