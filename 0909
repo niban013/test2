@@ -1,0 +1,82 @@
+using System;
+
+namespace TableauEmbedDemo
+{
+    public partial class Default : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            string server = System.Configuration.ConfigurationManager.AppSettings["TableauServer"];
+            string ticket = TableauHelper.GetTrustedTicket();
+
+            // Tableau Report Path (視圖路徑)
+            string viewUrl = "/views/SampleWorkbook/Dashboard1";
+
+            string iframeUrl = $"{server}/trusted/{ticket}{viewUrl}?:embed=y&:showVizHome=no";
+
+            ltIframe.Text = $"<iframe src='{iframeUrl}' width='1200' height='800'></iframe>";
+        }
+    }
+}
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="Default.aspx.cs" Inherits="TableauEmbedDemo.Default" %>
+
+<!DOCTYPE html>
+<html>
+<head runat="server">
+    <title>Tableau Trusted Ticket Example</title>
+</head>
+<body>
+    <form id="form1" runat="server">
+        <asp:Literal ID="ltIframe" runat="server"></asp:Literal>
+    </form>
+</body>
+</html>
+using System;
+using System.IO;
+using System.Net;
+using System.Text;
+using System.Web;
+
+public class TableauHelper
+{
+    public static string GetTrustedTicket()
+    {
+        string server = System.Configuration.ConfigurationManager.AppSettings["TableauServer"];
+        string user = System.Configuration.ConfigurationManager.AppSettings["TableauUser"];
+        string site = System.Configuration.ConfigurationManager.AppSettings["TableauSite"];
+
+        string url = $"{server}/trusted";
+
+        string postData = $"username={HttpUtility.UrlEncode(user)}";
+        if (!string.IsNullOrEmpty(site))
+        {
+            postData += $"&target_site={HttpUtility.UrlEncode(site)}";
+        }
+
+        byte[] data = Encoding.UTF8.GetBytes(postData);
+
+        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+        request.Method = "POST";
+        request.ContentType = "application/x-www-form-urlencoded";
+        request.ContentLength = data.Length;
+
+        using (Stream reqStream = request.GetRequestStream())
+        {
+            reqStream.Write(data, 0, data.Length);
+        }
+
+        string ticket;
+        using (WebResponse response = request.GetResponse())
+        using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+        {
+            ticket = reader.ReadToEnd();
+        }
+
+        return ticket.Trim();
+    }
+}
+<appSettings>
+  <add key="TableauServer" value="http://your-tableau-server" />
+  <add key="TableauUser" value="trusted_user" />
+  <add key="TableauSite" value="" /> <!-- 如果是 default site 就留空 -->
+</appSettings>
