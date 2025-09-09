@@ -1,4 +1,452 @@
 using System;
+using System.IO;
+using System.Net;
+using System.Text;
+using System.Web.Mvc;
+
+namespace YourNamespace.Controllers
+{
+    public class TableauController : Controller
+    {
+        private string tableauServer = "https://your-tableau-server";
+        private string tableauUser = "tableau_username";
+        private string site = ""; // default site
+        private string workbook = "YourWorkbook";
+        private string dashboard = "YourDashboard";
+
+        // 頁面顯示
+        public ActionResult Index()
+        {
+            string ticket = GetTrustedTicket(tableauServer, tableauUser, site);
+            if (string.IsNullOrEmpty(ticket))
+            {
+                ViewBag.IframeUrl = null;
+            }
+            else
+            {
+                ViewBag.IframeUrl = $"{tableauServer}/trusted/{ticket}/views/{workbook}/{dashboard}?:embed=y&:showVizHome=no";
+            }
+            return View();
+        }
+
+        // 後端 API 取得新 Ticket（給 JS 自動刷新使用）
+        public ContentResult GetNewTicket()
+        {
+            string ticket = GetTrustedTicket(tableauServer, tableauUser, site);
+            return Content(ticket ?? "-1");
+        }
+
+        private string GetTrustedTicket(string server, string username, string site)
+        {
+            try
+            {
+                string postData = $"username={username}";
+                if (!string.IsNullOrEmpty(site))
+                {
+                    postData += $"&target_site={site}";
+                }
+
+                byte[] data = Encoding.UTF8.GetBytes(postData);
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"{server}/trusted");
+                request.Method = "POST";
+                request.ContentType = "application/x-www-form-urlencoded";
+                request.ContentLength = data.Length;
+
+                using (Stream stream = request.GetRequestStream())
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                {
+                    string ticket = reader.ReadToEnd().Trim();
+                    return ticket != "-1" ? ticket : null;
+                }
+            }
+
+@{
+    ViewBag.Title = "Tableau Dashboard";
+}
+
+<h2>Tableau Dashboard (Trusted Ticket)</h2>
+
+@if (ViewBag.IframeUrl != null)
+{
+    <iframe id="tblIframe" src="@ViewBag.IframeUrl" style="width:100%; height:800px; border:none;"></iframe>
+}
+else
+{
+    <p>無法取得 Tableau Trusted Ticket，請檢查設定。</p>
+}
+
+<script>
+    // 自動刷新 Ticket (可選)
+    function refreshTicket() {
+        fetch('@Url.Action("GetNewTicket", "Tableau")')
+            .then(res => res.text())
+            .then(ticket => {
+                if (ticket !== "-1") {
+                    document.getElementById('tblIframe').src =
+                        "https://your-tableau-server/trusted/" + ticket + "/views/YourWorkbook/YourDashboard?:embed=y&:showVizHome=no";
+                }
+            });
+    }
+
+    // 每 25 秒刷新 Ticket
+    setInterval(refreshTicket, 25000);
+</script>
+Controller：
+
+Index 產生初始 Ticket，傳給 View。
+
+GetNewTicket 提供 API，讓 JavaScript 自動刷新 Ticket。
+
+View：
+
+iframe 直接嵌入 Tableau Dashboard。
+
+可選擇用 JS 定時刷新 Ticket，保持長時間觀看無需手動登入。
+
+安全性：
+
+Tableau Server 必須將 Web Server IP 設為 Trusted Host。
+
+Ticket 是一次性使用，刷新時請由後端生成。
+
+多 Dashboard：
+
+可以建立多個 iframe，每個 iframe 呼叫不同 workbook/dashboard，並各自生成 Ticket。
+
+------------------------------------------------
+
+
+using System;
+using System.IO;
+using System.Net;
+using System.Text;
+using System.Web.Mvc;
+using System.Collections.Generic;
+
+namespace YourNamespace.Controllers
+{
+    public class TableauController : Controller
+    {
+        // 定義多個 Dashboard 配置
+        private static List<DashboardConfig> dashboards = new List<DashboardConfig>
+        {
+            new DashboardConfig { Workbook = "Workbook1", Dashboard = "Dashboard1", User = "tableau_user1" },
+            new DashboardConfig { Workbook = "Workbook2", Dashboard = "Dashboard2", User = "tableau_user2" }
+        };
+
+        private string tableauServer = "https://your-tableau-server";
+        private string site = ""; // default site
+
+        // 頁面顯示
+        public ActionResult Index()
+        {
+            var iframeUrls = new List<string>();
+            foreach(var dash in dashboards)
+            {
+                string ticket = GetTrustedTicket(tableauServer, dash.User, site);
+                if(!string.IsNullOrEmpty(ticket))
+                {
+                    string url = $"{tableauServer}/trusted/{ticket}/views/{dash.Workbook}/{dash.Dashboard}?:embed=y&:showVizHome=no";
+                    iframeUrls.Add(url);
+                }
+                else
+                {
+                    iframeUrls.Add(null);
+                }
+            }
+
+            ViewBag.IframeUrls = iframeUrls;
+            return View();
+        }
+
+        // 後端 API 取得指定 Dashboard 新 Ticket
+        [HttpGet]
+        public ContentResult GetNewTicket(string workbook, string dashboard, string user)
+        {
+            string ticket = GetTrustedTicket(tableauServer, user, site);
+            return Content(ticket ?? "-1");
+        }
+
+        private string GetTrustedTicket(string server, string username, string site)
+        {
+            try
+            {
+                string postData = $"username={username}";
+                if (!string.IsNullOrEmpty(site))
+                    postData += $"&target_site={site}";
+
+                byte[] data = Encoding.UTF8.GetBytes(postData);
+
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"{server}/trusted");
+                request.Method = "POST";
+                request.ContentType = "application/x-www-form-urlencoded";
+                request.ContentLength = data.Length;
+
+                using (Stream stream = request.GetRequestStream())
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                {
+                    string ticket = reader.ReadToEnd().Trim();
+                    return ticket != "-1" ? ticket : null;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private class DashboardConfig
+        {
+            public string Workbook { get; set; }
+            public string Dashboard { get; set; }
+            public string User { get; set; }
+        }
+    }
+}
+@{
+    ViewBag.Title = "Tableau Multi Dashboard";
+    var iframeUrls = ViewBag.IframeUrls as List<string>;
+}
+
+<h2>Tableau Multiple Dashboards (Trusted Ticket)</h2>
+
+@for (int i = 0; i < iframeUrls.Count; i++)
+{
+    if (iframeUrls[i] != null)
+    {
+        <iframe id="tblIframe_@i" src="@iframeUrls[i]" style="width:100%; height:600px; border:none; margin-bottom:20px;"></iframe>
+    }
+    else
+    {
+        <p>Dashboard @i 無法取得 Ticket。</p>
+    }
+}
+
+<script>
+    var dashboards = [
+        { iframeId: "tblIframe_0", workbook: "Workbook1", dashboard: "Dashboard1", user: "tableau_user1" },
+        { iframeId: "tblIframe_1", workbook: "Workbook2", dashboard: "Dashboard2", user: "tableau_user2" }
+    ];
+
+    function refreshTickets() {
+        dashboards.forEach(function(dash){
+            fetch('@Url.Action("GetNewTicket","Tableau")?workbook=' + dash.workbook + '&dashboard=' + dash.dashboard + '&user=' + dash.user)
+            .then(res => res.text())
+            .then(ticket => {
+                if(ticket !== "-1"){
+                    document.getElementById(dash.iframeId).src =
+                        "https://your-tableau-server/trusted/" + ticket + "/views/" + dash.workbook + "/" + dash.dashboard + "?:embed=y&:showVizHome=no";
+                }
+            });
+        });
+    }
+
+    // 每 25 秒刷新 Ticket
+    setInterval(refreshTickets, 25000);
+</script>
+
+@{
+    ViewBag.Title = "Tableau Multi Dashboard with Loading Overlay";
+    var iframeUrls = ViewBag.IframeUrls as List<string>;
+}
+
+<h2>Tableau Multiple Dashboards (Trusted Ticket + Loading Overlay)</h2>
+
+@for (int i = 0; i < iframeUrls.Count; i++)
+{
+    if (iframeUrls[i] != null)
+    {
+        <div class="dashboard-wrapper" style="position:relative; margin-bottom:20px;">
+            <div class="overlay" id="overlay_@i">
+                <div class="overlay-content">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <span>Dashboard @i 載入中...</span>
+                </div>
+            </div>
+            <iframe id="tblIframe_@i" src="@iframeUrls[i]" style="width:100%; height:600px; border:none;"></iframe>
+        </div>
+    }
+    else
+    {
+        <p>Dashboard @i 無法取得 Ticket。</p>
+    }
+}
+
+<!-- FontAwesome CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-p8R1p+bJtT3C+HdPytj5f0n9c/0Xk6q7JtYXxHhO7v1+G5jkfK9E0m8z+V7qMz5v9Nk2vxHpZPOdV3P8mP/1PQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+<style>
+.dashboard-wrapper { position: relative; }
+.overlay {
+    position: absolute;
+    top:0; left:0; width:100%; height:100%;
+    background: rgba(255,255,255,0.8);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index:10;
+    font-size:1.2em;
+}
+.overlay-content { 
+    display:flex; 
+    align-items:center; 
+    gap:10px; 
+}
+</style>
+
+<script>
+var dashboards = [
+    { iframeId: "tblIframe_0", overlayId: "overlay_0", workbook: "Workbook1", dashboard: "Dashboard1", user: "tableau_user1" },
+    { iframeId: "tblIframe_1", overlayId: "overlay_1", workbook: "Workbook2", dashboard: "Dashboard2", user: "tableau_user2" }
+];
+
+function refreshTickets() {
+    dashboards.forEach(function(dash){
+        // 顯示 overlay
+        document.getElementById(dash.overlayId).style.display = "flex";
+
+        fetch('@Url.Action("GetNewTicket","Tableau")?workbook=' + dash.workbook + '&dashboard=' + dash.dashboard + '&user=' + dash.user)
+        .then(res => res.text())
+        .then(ticket => {
+            if(ticket !== "-1"){
+                var iframe = document.getElementById(dash.iframeId);
+                iframe.src = "https://your-tableau-server/trusted/" + ticket + "/views/" + dash.workbook + "/" + dash.dashboard + "?:embed=y&:showVizHome=no";
+
+                // 當 iframe 載入完成時，隱藏 overlay
+                iframe.onload = function() {
+                    document.getElementById(dash.overlayId).style.display = "none";
+                };
+            }
+        });
+    });
+}
+
+// 初次刷新 overlay 隱藏
+window.onload = function() {
+    dashboards.forEach(function(dash){
+        var iframe = document.getElementById(dash.iframeId);
+        var overlay = document.getElementById(dash.overlayId);
+        overlay.style.display = "flex";
+        iframe.onload = function() { overlay.style.display = "none"; };
+    });
+};
+
+// 每 25 秒刷新 Ticket
+setInterval(refreshTickets, 25000);
+</script>
+
+
+
+
+
+-----------------------
+假設條件
+
+公司內部 Web Server（例如 IIS）可存取 Tableau Server。
+
+已設定 Tableau Server Trusted Hosts，包含 Web Server IP。
+
+使用者帳號在 Tableau Server 已存在，且有權限觀看 Dashboard。
+<%@ Page Language="C#" AutoEventWireup="true" CodeFile="TableauEmbed.aspx.cs" Inherits="TableauEmbed" %>
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="utf-8" />
+    <title>Tableau Trusted Ticket Example</title>
+    <style>
+        body { font-family: Arial; }
+        iframe { width: 100%; height: 800px; border: none; }
+    </style>
+</head>
+<body>
+    <h2>Tableau Dashboard (Trusted Ticket)</h2>
+    <asp:Literal ID="ltrTableau" runat="server"></asp:Literal>
+</body>
+</html>
+
+WebForm 頁面名稱：TableauEmbed.aspx
+
+using System;
+using System.IO;
+using System.Net;
+using System.Web;
+
+public partial class TableauEmbed : System.Web.UI.Page
+{
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        string tableauServer = "https://your-tableau-server"; // Tableau Server URL
+        string tableauUser = "tableau_username";             // Tableau Server 帳號
+        string site = "";                                     // default site 可留空
+        string workbook = "YourWorkbook";
+        string dashboard = "YourDashboard";
+
+        // 取得 Trusted Ticket
+        string ticket = GetTrustedTicket(tableauServer, tableauUser, site);
+
+        if (!string.IsNullOrEmpty(ticket))
+        {
+            // 組成 iframe URL
+            string url = $"{tableauServer}/trusted/{ticket}/views/{workbook}/{dashboard}?:embed=y&:showVizHome=no";
+            ltrTableau.Text = $"<iframe src='{url}'></iframe>";
+        }
+        else
+        {
+            ltrTableau.Text = "<p>無法取得 Tableau Trusted Ticket，請檢查設定。</p>";
+        }
+    }
+
+    private string GetTrustedTicket(string server, string username, string site)
+    {
+        try
+        {
+            string postData = $"username={username}";
+            if (!string.IsNullOrEmpty(site))
+            {
+                postData += $"&target_site={site}";
+            }
+
+            byte[] data = System.Text.Encoding.UTF8.GetBytes(postData);
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create($"{server}/trusted");
+            request.Method = "POST";
+            request.ContentType = "application/x-www-form-urlencoded";
+            request.ContentLength = data.Length;
+
+            using (Stream stream = request.GetRequestStream())
+            {
+                stream.Write(data, 0, data.Length);
+            }
+
+            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+            {
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                {
+                    string ticket = reader.ReadToEnd().Trim();
+                    // Ticket 失敗會回傳 "-1"
+                    return ticket != "-1" ? ticket : null;
+                }
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+
+using System;
 
 namespace TableauEmbedDemo
 {
