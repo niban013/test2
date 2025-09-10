@@ -1,0 +1,143 @@
+public class DemoController : Controller
+{
+    [HttpPost]
+    public ActionResult SavePersonJob(PersonJobViewModel vm)
+    {
+        if (vm == null)
+        {
+            return Json(new { ok = false, msg = "沒有資料" });
+        }
+
+        // 可以直接使用 vm.Obj1 / vm.Obj2
+        string name = vm.Obj1?.Name;
+        string title = vm.Obj2?.Title;
+
+        return Json(new { ok = true, name, title });
+    }
+}
+var payload = {
+  Obj1: { Name: "王小明", Age: 28 },
+  Obj2: { Title: "工程師", Dept: "研發" }
+};
+
+$.ajax({
+  url: '/Demo/SavePersonJob',
+  type: 'POST',
+  contentType: 'application/json; charset=utf-8',
+  data: JSON.stringify(payload),
+  success: function (res) {
+    console.log(res);
+  }
+});
+
+
+
+var payload = {
+  Obj1: { Name: "王小明", Age: 28 },
+  Obj2: ["工程師", "經理", "講師"] // 單純字串陣列
+};
+
+$.ajax({
+  url: '/Demo/SavePersonJob',
+  type: 'POST',
+  contentType: 'application/json; charset=utf-8',
+  data: JSON.stringify(payload),
+  success: function (res) {
+    console.log("伺服器回應:", res);
+  }
+});
+public class DemoController : Controller
+{
+    [HttpPost]
+    public ActionResult SavePersonJob(PersonJobViewModel vm)
+    {
+        if (vm == null)
+        {
+            return Json(new { ok = false, msg = "沒有資料" });
+        }
+
+        string name = vm.Obj1?.Name;
+        int age = vm.Obj1?.Age ?? 0;
+        int count = vm.Obj2?.Count ?? 0;
+
+        return Json(new
+        {
+            ok = true,
+            person = new { name, age },
+            jobs = vm.Obj2,
+            jobCount = count
+        });
+    }
+}
+public class Person
+{
+    public string Name { get; set; }
+    public int Age { get; set; }
+}
+
+public class PersonJobViewModel
+{
+    public Person Obj1 { get; set; }
+
+    // Obj2 是單純字串陣列
+    public List<string> Obj2 { get; set; }
+}
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Linq;
+
+class Program
+{
+    static void Main()
+    {
+        // 使用者需求的欄位
+        var requestedColumns = new[] { "工程師", "經理", "講師" };
+
+        // 資料庫實際存在的欄位白名單 (避免 SQL Injection)
+        var allowedColumns = new HashSet<string> { "工程師", "經理", "講師", "助理", "專案經理" };
+
+        // 過濾出合法的欄位
+        var safeColumns = requestedColumns.Where(c => allowedColumns.Contains(c)).ToList();
+
+        if (!safeColumns.Any())
+        {
+            Console.WriteLine("沒有合法欄位可以查詢");
+            return;
+        }
+
+        string columnList = string.Join(",", safeColumns);
+
+        // 動態 SQL
+        string sql = $"SELECT {columnList} FROM Jobs";
+
+        Console.WriteLine("執行 SQL: " + sql);
+
+        using (var conn = new SqlConnection("YourConnectionString"))
+        using (var cmd = new SqlCommand(sql, conn))
+        {
+            conn.Open();
+            using (var reader = cmd.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    foreach (var col in safeColumns)
+                    {
+                        Console.Write($"{col}:{reader[col]} ");
+                    }
+                    Console.WriteLine();
+                }
+            }
+        }
+    }
+}
+var requestedColumns = new[] { "Name", "Age" };
+
+// 定義允許的欄位清單
+var allowedColumns = new HashSet<string> { "Name", "Age", "City", "JobTitle" };
+
+var safeColumns = requestedColumns.Where(c => allowedColumns.Contains(c)).ToList();
+string columnList = string.Join(",", safeColumns);
+
+string sql = $"SELECT {columnList} FROM Employees";
+
