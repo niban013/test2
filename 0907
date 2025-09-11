@@ -1,3 +1,28 @@
+const requests = $('#table1, #table2').map(function () {
+    const table = $(this).DataTable();
+    const ajax = table.settings().init().ajax;
+
+    let payload = {};
+    if (typeof ajax.data === "function") {
+        ajax.data(payload);   // 呼叫 function 先取得 DataTables 原本要傳的參數
+    } else if (typeof ajax.data === "object") {
+        payload = $.extend({}, ajax.data); // 複製原本設定
+    }
+
+    // ✅ 修改原本參數
+    payload.city = "高雄";
+
+    // ✅ 額外加新參數
+    payload.extraParam1 = "新參數1";
+    payload.extraParam2 = 12345;
+
+    return $.ajax({
+        url: ajax.url,
+        type: ajax.type || "GET",
+        data: payload,
+        dataType: "json"
+    });
+}).get();
 
 方法 2：用 Visual Studio Attach + Symbol Load
 
