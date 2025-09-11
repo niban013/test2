@@ -1,3 +1,178 @@
+在 Tableau Desktop 設定資料來源帳號
+
+開啟 Tableau Desktop，打開你的工作簿。
+
+連線到資料來源 (例如 SQL Server、Oracle、MySQL 等)。
+
+在資料來源連線視窗中，選擇 使用者名稱 / 密碼：
+
+輸入可以存取資料庫的帳號密碼（建議使用讀取權限的帳號）。
+
+確認可以成功連線。
+
+2️⃣ 發佈到 Tableau Server
+
+點選 Server → Publish Workbook。
+
+選擇目標專案(Project)。
+
+在發佈對話框中，找到 Data Sources 區塊。
+
+對你的資料來源點選 Edit。
+
+在 Authentication 或 Connection 設定中選擇：
+
+Embedded password（或 Use Embedded Credentials）
+
+這樣帳號密碼會內嵌在工作簿裡，Server 在使用者訪問時會自動使用。
+
+
+3️⃣ 發佈選項
+
+Show sheets as tabs → 勾選或取消依需求。
+
+Permissions → 設定誰能存取：
+
+Guest: 如果你打算給 Guest 看，確保專案/工作簿允許 Guest View 權限。
+
+4️⃣ 驗證 Guest 是否能存取
+
+打開瀏覽器，使用 Guest 身份訪問該專案/工作簿。
+
+如果一切設定正確：
+
+報表會直接載入資料，不需要登入資料庫帳號。
+
+Guest 無法修改資料，只有檢視權限。
+
+🔹 注意事項
+
+不要用 Prompt User，否則 Guest 無法輸入資料庫帳號。
+
+僅授權 Guest 權限，避免敏感資料被外部使用者看到。
+
+如果資料來源有 Row-Level Security，需要額外設定 Guest 群組對應的過濾條件。
+--------
+🔹 設定方式
+
+啟用 Guest 使用者
+
+系統管理員要在 Tableau Server 設定中開啟「允許使用 Guest」。
+
+Guest 使用者會出現在 Users 清單裡（但不可登入，只能被分配權限）。
+
+設定專案/工作簿/檢視的權限
+
+到目標 專案(Project) → 權限(Permissions)
+
+找到 Guest 使用者 → 只給予「檢視(View)」的權限。
+
+其他專案或報表，對 Guest 設定為「無存取」(Deny)。
+
+嵌入 <tableau-viz> 時
+
+當使用者訪問含有 <tableau-viz> 的頁面時，會以 Guest 身份去存取 Tableau Server。
+
+如果該報表允許 Guest → 可以顯示。
+
+如果沒權限 → 會顯示「存取被拒」訊息。
+
+🔹 重點
+
+Guest 是全伺服器共享的一個帳號，所以權限是統一的，不會依使用者不同而改變。
+
+你可以利用「專案層級」權限，把 Guest 鎖定在某幾個專案。
+
+其他專案即使內部員工能看，Guest 也完全無法看。
+
+✅ 這樣就能做到：
+
+公開某些專案 (Guest 可看)
+
+其他專案仍然需要登入帳號
+
+
+設定 Guest 之後，報表的資料連線 (data source connection) 本身 不會改變，但是會受到「使用者驗證方式」影響：
+
+🔹 Tableau 中資料連線常見方式
+
+嵌入帳號密碼 (Embedded Credentials)
+
+發布報表到 Server 時，選擇「嵌入帳號密碼」。
+
+不論是內部使用者還是 Guest，資料都是透過這個帳號去查詢。
+
+✅ Guest 一樣可以存取，因為報表層級已經綁定了登入資訊。
+
+需要使用者提供憑證 (Prompt User)
+
+報表需要使用者自己輸入資料庫帳號密碼。
+
+❌ Guest 沒有輸入資料庫憑證的機制，會直接無法載入。
+
+使用 Tableau Server 的「服務帳號 / OAuth / SSO」
+
+例如用 Service Account 或 OAuth token 存取資料。
+
+✅ Guest 依舊可以透過這種方式存取，因為憑證已經由 Server 管理。
+
+🔹 結論
+
+只要資料連線設定為「嵌入憑證」或「由 Server 管理」 → Guest 可以正常讀取，不會受影響。
+
+如果需要個別使用者輸入憑證 → Guest 無法使用，會報錯或顯示無資料。
+
+👉 建議：
+如果你要開放 Guest 使用，所有要給 Guest 看的報表，資料來源都要設定「嵌入憑證」，這樣才不會讓訪客卡在登入畫面。
+✅ 適合 Guest 的資料連線設定
+
+嵌入帳號密碼 (Embedded Credentials)
+
+發布報表時，在「資料來源」設定裡勾選「嵌入憑證」。
+
+連線使用發佈者提供的帳號，Guest 直接繼承使用。
+
+✔ 最常見做法，簡單可靠。
+
+Tableau Server 管理的帳號 (例如 Service Account / Kerberos Delegation)
+
+由 Tableau Server 代為存取資料庫，不需要使用者輸入憑證。
+
+Guest 一樣透過 Tableau Server 的身份連線。
+
+OAuth / SSO Token (已授權並綁定到資料來源)
+
+如果發佈者在 Tableau Server 上設定 OAuth，並選擇「嵌入 OAuth 憑證」。
+
+Guest 照樣能使用，不需要重新登入。
+
+❌ 不適合 Guest 的資料連線設定
+
+Prompt User (每次載入要使用者輸入帳號密碼)
+
+Guest 沒有登入機制，無法輸入憑證。
+
+→ 報表會載入失敗或顯示「無法存取資料」。
+
+Row-Level Security (RLS) 依使用者帳號判斷資料
+
+如果用 USERNAME() 或 ISMEMBEROF() 判斷角色，Guest 會被視為一個匿名使用者。
+
+除非特別允許 Guest 群組，否則會看不到資料。
+
+僅支援已登入使用者的外部服務 (例如個別雲端帳號 BigQuery / Snowflake)
+
+如果沒有嵌入 Service Account，而是要求使用者 OAuth 登入自己的帳號。
+
+Guest 沒有帳號，會完全失效。
+
+🔹 建議做法
+
+發佈到 Guest 可用的專案 → 確保資料來源全部設定成「嵌入憑證」。
+
+如果有 RLS → 建立一個「Guest 群組」，讓它有特定的資料範圍。
+
+避免 Prompt User → 改為「嵌入憑證」或「由 Server 管理」。
 const requests = $('#table1, #table2').map(function () {
     const table = $(this).DataTable();
     const ajax = table.settings().init().ajax;
