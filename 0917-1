@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tableau + jQuery Tabs</title>
+  <!-- jQuery + jQuery UI -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+
+  <!-- Tableau Embedding API -->
+  <script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js"></script>
+
+  <style>
+   
+    #tabs { width: 90%; margin: 20px auto; }
+   html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden; /* 移除捲軸 */
+    }
+    tableau-viz {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Tableau-viz + jQuery Tabs</h2>
+
+  <!-- jQuery Tabs -->
+  <div id="tabs">
+    <ul>
+      <li><a href="#tab1">Storms</a></li>
+      <li><a href="#tab2">Obesity</a></li>
+      <li><a href="#tab3">Population</a></li>
+    </ul>
+
+    <div id="tab1">
+      <tableau-viz
+        src="https://public.tableau.com/views/RegionalSampleWorkbook/Storms"
+        toolbar="top"
+        hide-tabs="true">
+      </tableau-viz>
+    </div>
+
+    <div id="tab2">
+      <tableau-viz
+        src="https://public.tableau.com/views/RegionalSampleWorkbook/Obesity"
+        toolbar="top"
+        hide-tabs="true">
+      </tableau-viz>
+    </div>
+
+    <div id="tab3">
+   <tableau-viz
+      id="fullScreenViz"
+      src="https://public.tableau.com/views/RegionalSampleWorkbook/Storms"
+      toolbar="top"
+      hide-tabs="false">
+  </tableau-viz>
+    </div>
+  </div>
+
+  <script>
+    $(function() {
+      $("#tabs").tabs();
+    });
+  </script>
+
+</body>
+</html>
