@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>動態 Tab + Tableau-viz 完整範例</title>
+  <!-- jQuery + jQuery UI -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+
+  <!-- Tableau Embedding API -->
+  <script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      font-family: Arial, sans-serif;
+    }
+
+    .controls {
+      margin: 20px;
+      text-align: center;
+    }
+    input[type="text"] {
+      width: 500px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      background: #007acc;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+    button:hover { background: #005f99; }
+
+    #tabs {
+      width: 95%;
+      height: calc(100vh - 150px); /* 上方控制區 + 底部留空 */
+      margin: 0 auto 20px auto;
+    }
+	
+    /* Tabs 列 */
+    #tabs .ui-tabs-nav {
+      background: #ffffff;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 8px 8px 0 0;
+    }
+	 /* 每個 tab 標籤 */
+    #tabs .ui-tabs-nav li {
+      list-style: none;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+	/* Tab 文字 */
+    #tabs .ui-tabs-nav a {
+      display: block;
+      padding: 8px 18px;
+      color: #555;
+      text-decoration: none;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    /* Hover 效果 */
+    #tabs .ui-tabs-nav a:hover {
+      background: #f0f8ff;
+      color: #0078d7;
+    }
+#tabs .ui-tabs-active a {
+      background: #0078d7;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0, 120, 215, 0.3);
+    }
+    /* tabpanel 容器 */
+    #tabs > div {
+      position: relative;  /* 讓 tableau-viz 的 iframe 相對於 tabpanel */
+      height: 100%;
+      overflow: hidden;    /* 防止超出 */
+    }
+
+    tableau-viz {
+      width: 100%;
+      height: calc(100vh - 230px) !important;
+      display: block;
+      box-sizing: border-box;
+      border: 0px solid #ccc;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<h2 style="text-align:center">動態新增 Tableau 報表（iframe 不超出版）</h2>
+
+<div class="controls">
+  <input type="text" id="reportUrl" placeholder="輸入 Tableau 報表 URL，例如：https://public.tableau.com/views/RegionalSampleWorkbook/Storms">
+  <button id="addBtn">➕ 新增報表 Tab</button>
+</div>
+
+<!-- Tabs 容器 -->
+<div id="tabs">
+  <ul>
+    <li><a href="#tab-placeholder">歡迎</a></li>
+  </ul>
+  <div id="tab-placeholder">
+    <p style="text-align:center; margin-top:50px; font-size:18px;">
+      請在上方輸入 Tableau 報表 URL，點擊「新增報表 Tab」以新增報表。
+    </p>
+  </div>
+</div>
+
+<script>
+$(function() {
+  $("#tabs").tabs();
+  let tabIndex = 1;
+  const bottomMargin = 50;
+
+  function resizeViz() {
+    const tabsOffsetTop = $("#tabs").offset().top;
+    const windowHeight = $(window).height();
+    const newHeight = windowHeight - tabsOffsetTop - bottomMargin;
+
+    $("#tabs > div").each(function() {
+      $(this).height(newHeight);
+
+      const viz = $(this).find("tableau-viz");
+      viz.height(newHeight);
+
+      // 調整內部 iframe，確保完全在 tabpanel
+      const iframe = viz.find("iframe");
+      if (iframe.length) {
+        iframe.height(newHeight);
+        iframe.width("100%");
+      }
+    });
+  }
+
+  $(window).on("resize", resizeViz);
+  $(document).ready(resizeViz);
+
+  $("#addBtn").on("click", function() {
+    const url = $("#reportUrl").val().trim();
+    if (!url) { alert("請輸入 Tableau 報表 URL"); return; }
+
+    const newTabId = "tab" + tabIndex;
+    const tabTitle = "Tab " + tabIndex;
+
+    // 新增 tab 標題
+    $("#tabs ul").append(`<li><a href="#${newTabId}">${tabTitle}</a></li>`);
+
+    // 新增 tab 內容
+    $("#tabs").append(`
+      <div id="${newTabId}">
+        <tableau-viz
+          src="${url}"
+          toolbar="top"
+          hide-tabs="true"
+          width="100%"
+          height="100%">
+        </tableau-viz>
+      </div>
+    `);
+
+    // 移除初始佔位 tab
+    const firstTabHref = $("#tabs ul li:first-child a").attr("href");
+    if (firstTabHref === "#tab-placeholder") {
+      $("#tabs ul li:first-child").remove();
+      $("#tab-placeholder").remove();
+    }
+
+    $("#tabs").tabs("refresh");
+    $("#tabs").tabs("option", "active", -1);
+
+    resizeViz();
+
+    tabIndex++;
+    $("#reportUrl").val("");
+  });
+});
+</script>
+
+</body>
+</html>
