@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>雙向連動選單與訊息</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  display: flex;
+  height: 100vh;
+}
+
+/* 左側選單 */
+#sidebar {
+  width: 250px;
+  background: #2C3E50;
+  color: #ecf0f1;
+  overflow-y: auto;
+  padding-top: 20px;
+}
+
+/* 右側內容 */
+#contentContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ecf0f1;
+  padding: 10px;
+}
+
+/* 上方訊息 */
+#message {
+  background: #fff3cd;
+  color: #856404;
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  border: 1px solid #ffeeba;
+  cursor: pointer;
+}
+
+/* iframe */
+#contentFrame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+}
+
+/* 選單 */
+.menu, .menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu li {
+  position: relative;
+}
+
+.menu li > a, 
+.menu li > span {
+  display: block;
+  padding: 12px 20px;
+  color: #ecf0f1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* 層級縮排 */
+.menu ul li > a,
+.menu ul li > span {
+  padding-left: calc(20px + 20px * var(--level));
+}
+
+.menu li > a:hover,
+.menu li > span:hover {
+  background: #34495E;
+}
+
+/* 子選單隱藏 */
+.menu li ul {
+  display: none;
+  background: #34495E;
+}
+
+/* 展開樣式 */
+.menu li.open > ul {
+  display: block;
+}
+
+/* 當前節點高亮 */
+.menu li.selected > a,
+.menu li.selected > span {
+  background: #e67e22 !important;
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <ul id="menu" class="menu"></ul>
+</div>
+
+<div id="contentContainer">
+  <div id="message">請點擊左側選單或上方訊息</div>
+  <iframe id="contentFrame" src=""></iframe>
+</div>
+
+<script>
+// 🔹 範例資料
+const menuData = [
+  { name: "首頁", url: "index.html" },
+  { 
+    name: "報表", 
+    children: [
+      { name: "銷售報表", url: "sales.html" },
+      { 
+        name: "財務報表", 
+        children: [
+          { name: "年度報表", url: "year.html" },
+          { 
+            name: "季度報表", 
+            children: [
+              { name: "Q1", url: "q1.html" },
+              { name: "Q2", url: "q2.html" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  { 
+    name: "設定", 
+    children: [
+      { name: "使用者管理", url: "users.html" },
+      { name: "系統參數", url: "system.html" }
+    ]
+  }
+];
+
+// 🔹 用來存節點對應 path 的 Map
+const pathMap = new Map();
+
+// 🔹 遞迴生成選單
+function buildMenu(data, parentUl, path=[], level=0) {
+  data.forEach(item => {
+    const li = $("<li>");
+    
+    if (item.url) {
+      const a = $("<a>").attr("href", "#").text(item.name);
+      a.css("--level", level);
+      li.append(a);
+
+      const fullPath = path.concat(item.name).join(" > ");
+      pathMap.set(fullPath, li); // 記錄 path 對應節點
+
+      // 點擊左側選單
+      a.on("click", function(e){
+        e.preventDefault();
+        selectNode(fullPath, item.url);
+      });
+
+    } else {
+      const span = $("<span>").text(item.name);
+      span.css("--level", level);
+      li.append(span);
+    }
+
+    if (item.children && item.children.length > 0) {
+      const childUl = $("<ul>");
+      buildMenu(item.children, childUl, path.concat(item.name), level + 1);
+      li.append(childUl);
+
+      // 點擊展開/收合，單一開啟
+      li.children("span, a").first().on("click", function(e){
+        e.preventDefault();
+        li.siblings(".open").removeClass("open");
+        li.toggleClass("open");
+      });
+    }
+
+    parentUl.append(li);
+  });
+}
+
+// 🔹 選擇節點（左側 + 上方 + iframe）
+function selectNode(fullPath, url) {
+  // 更新上方訊息
+  $("#message").text(fullPath);
+
+  // iframe 載入 URL
+  if(url) $("#contentFrame").attr("src", url);
+
+  // 清除所有選中
+  $("#menu li").removeClass("selected");
+
+  // 標記當前節點
+  const li = pathMap.get(fullPath);
+  if(li) {
+    li.addClass("selected");
+    // 展開父節點
+    li.parents("li").addClass("open");
+    // 收起同層其他節點
+    li.siblings("li").removeClass("open");
+  }
+}
+
+$(document).ready(function(){
+  buildMenu(menuData, $("#menu"));
+
+  // 點擊上方訊息也能觸發選單
+  $("#message").on("click", function(){
+    const currentPath = $(this).text();
+    const li = pathMap.get(currentPath);
+    if(li) {
+      // 取得 URL
+      const url = li.children("a").attr("href") || "";
+      selectNode(currentPath, url === "#" ? "" : url);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
