@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>jQuery 樹狀選單 + 右側 Panel</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; }
+        .tree {
+            width: 280px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .tree ul { list-style: none; padding-left: 18px; margin: 0; }
+        .tree li { cursor: pointer; margin: 4px 0; }
+        .tree li span { display: inline-block; padding: 4px 6px; user-select: none; }
+        .tree .has-children > span::before {
+            content: "▶";
+            display: inline-block;
+            margin-right: 6px;
+            transition: transform 0.18s;
+        }
+        .tree .expanded > span::before { transform: rotate(90deg); }
+        .tree span.selected { background: #e8f0ff; border-radius: 3px; }
+
+        /* 右側資訊 Panel */
+        .panel {
+            flex: 1;
+            border: 1px solid #ccc;
+            margin-left: 10px;
+            padding: 10px;
+        }
+        .panel h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 左側樹狀選單 -->
+    <div id="treeMenu" class="tree"></div>
+
+    <!-- 右側 Panel -->
+    <div id="infoPanel" class="panel">
+        <h3>節點資訊</h3>
+        <div id="panelContent">請點選左側節點</div>
+    </div>
+
+    <script>
+        // 範例 JSON
+        var treeData = [
+            {
+                "text": "年度報表",
+                "children": [
+                    {
+                        "text": "2004年",
+                        "children": [
+                            { "text": "Q1", "data": { year: 2004, quarter: "Q1", value: 123 } },
+                            { "text": "Q2", "data": { year: 2004, quarter: "Q2", value: 456 } }
+                        ]
+                    },
+                    {
+                        "text": "2024年",
+                        "children": [
+                            { "text": "Q1", "data": { year: 2024, quarter: "Q1", value: 789 } },
+                            { "text": "Q2", "data": { year: 2024, quarter: "Q2", value: 999 } }
+                        ]
+                    }
+                ]
+            },
+            {
+                "text": "客戶資料",
+                "children": [
+                    { "text": "北區", "data": { region: "北區", customers: 120 } },
+                    { "text": "南區", "data": { region: "南區", customers: 85 } }
+                ]
+            }
+        ];
+
+        $(function () {
+            // 遞迴建立樹
+            function buildTree($container, nodes) {
+                var $ul = $("<ul>");
+                nodes.forEach(function (node) {
+                    var $li = $("<li>");
+                    var $span = $("<span>").text(node.text);
+                    $li.append($span);
+
+                    if (node.data) {
+                        $li.data("nodeData", node.data); // 把資料掛在 li 上
+                    }
+
+                    if (node.children && node.children.length > 0) {
+                        $li.addClass("has-children");
+                        buildTree($li, node.children);      // 對 li 建子 ul
+                        $li.children("ul").hide();         // 預設收合
+                    }
+
+                    $ul.append($li);
+                });
+                $container.append($ul);
+            }
+
+            buildTree($("#treeMenu"), treeData);
+
+            // Helper：取得第一層節點
+            function getTopLevelLi($li) {
+                var $anc = $li.parents("li");
+                if ($anc.length === 0) return $li;
+                return $anc.last();
+            }
+
+            // 點擊展開/收合
+            $("#treeMenu").on("click", "li.has-children > span", function (e) {
+                e.stopPropagation();
+                var $li = $(this).closest("li");
+                var $top = getTopLevelLi($li);
+
+                // 關閉其他第一層展開
+                $("#treeMenu li.expanded").each(function () {
+                    var $other = $(this);
+                    var $otherTop = getTopLevelLi($other);
+                    if (!$otherTop.is($top)) {
+                        $other.removeClass("expanded").children("ul").slideUp();
+                    }
+                });
+
+                // 關閉同層兄弟
+                $li.siblings(".has-children").removeClass("expanded").children("ul").slideUp();
+
+                // 切換自己
+                if ($li.hasClass("expanded")) {
+                    $li.removeClass("expanded").children("ul").slideUp();
+                } else {
+                    $li.addClass("expanded").children("ul").slideDown();
+                }
+            });
+
+            // 點擊「葉子節點」
+            $("#treeMenu").on("click", "li:not(.has-children) > span", function (e) {
+                e.stopPropagation();
+
+                // 樹選取樣式
+                $("#treeMenu span.selected").removeClass("selected");
+                $(this).addClass("selected");
+
+                // 顯示右側面板資料
+                var nodeData = $(this).parent().data("nodeData") || {};
+                var html = "<pre>" + JSON.stringify(nodeData, null, 2) + "</pre>";
+                $("#panelContent").html(html);
+            });
+        });
+    </script>
+
+</body>
+</html>
