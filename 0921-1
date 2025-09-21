@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>美化 Tabs + Icon 箭頭 + 預設頁面</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+<style>
+body { font-family: "Segoe UI", Arial, sans-serif; background:#f5f5f5; }
+
+.tab-wrapper {
+  position: relative;
+  width: 800px;
+  margin: 50px auto;
+  border-radius: 12px;
+  background: #fff;
+  padding-top: 50px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.tab-nav-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.tab-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 0;
+  padding: 0 50px; /* 左右箭頭空間 */
+  list-style: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.tab-nav::-webkit-scrollbar { display: none; }
+.tab-nav li { flex:0 0 auto; margin-right:15px; }
+.tab-nav li a {
+  display:block;
+  padding:12px 25px;
+  background: linear-gradient(135deg, #f0f0f0, #e8e8e8);
+  border-radius:6px 6px 0 0;
+  text-decoration:none;
+  color:#333;
+  font-weight:500;
+  box-shadow:0 2px 5px rgba(0,0,0,0.05);
+  transition:all 0.3s;
+}
+.tab-nav li a:hover { background: linear-gradient(135deg, #d0e6ff, #a8d0ff); }
+.tab-nav li.active a { background: linear-gradient(135deg, #4e73df, #1cc88a); color:#fff; font-weight:600; box-shadow:0 4px 8px rgba(0,0,0,0.2); }
+
+.scroll-btn {
+  position: absolute;
+  top: 0;
+  width: 40px;
+  height: 100%;
+  background: rgba(255,255,255,0.9);
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius:0 0 6px 6px;
+}
+.scroll-left { left: 0; }
+.scroll-right { right: 0; }
+
+.tab-content { padding:25px; min-height:180px; background:#fff; border-top:none; border-radius:0 0 12px 12px; }
+
+.tab-pane.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap:15px; margin-top:20px; }
+
+.card {
+  background: #fff;
+  border-radius:12px;
+  padding:20px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.1);
+  display:flex; flex-direction:column;
+  justify-content:flex-start;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover { transform:translateY(-5px); box-shadow:0 6px 12px rgba(0,0,0,0.15); }
+.card h3 { margin:0 0 10px; font-size:1.2em; color:#333; }
+.card p { color:#555; font-size:0.95em; }
+.card button { margin-top:10px; padding:8px 12px; border:none; border-radius:6px; background:#0078D7; color:#fff; font-size:0.9em; cursor:pointer; transition:background 0.2s; }
+.card button:hover { background:#005a9e; }
+
+.accordion { max-height:0; overflow:hidden; transition:max-height 0.3s ease, padding 0.3s ease; background:#f9f9f9; border-radius:8px; margin-top:10px; padding:0 10px; }
+.accordion.open { padding:10px; max-height:200px; }
+
+.grid-placeholder { visibility:hidden; }
+</style>
+</head>
+<body>
+
+<div class="tab-wrapper">
+  <div class="tab-nav-container">
+    <button class="scroll-btn scroll-left"><i class="fas fa-chevron-left"></i></button>
+    <ul class="tab-nav">
+      <!-- 預設 tab -->
+      <li class="active"><a href="#tab0">請新增 Tab</a></li>
+    </ul>
+    <button class="scroll-btn scroll-right"><i class="fas fa-chevron-right"></i></button>
+  </div>
+
+  <div class="tab-content">
+    <!-- 預設內容 -->
+    <div id="tab0" class="tab-pane grid">請新增 Tab</div>
+  </div>
+</div>
+
+<button id="add-tab-btn" style="margin:20px auto; display:block;">新增 Tab</button>
+<button id="add-card-btn" style="margin:20px auto; display:block;">新增卡片</button>
+
+<script>
+$(function(){
+  var $nav = $(".tab-nav");
+  var $content = $(".tab-content");
+  var tabCount = 0;
+  var cardCount = 0;
+
+  function updateArrows(){
+    var scrollLeft = $nav.scrollLeft();
+    var maxScroll = $nav[0].scrollWidth - $nav.outerWidth();
+    $(".scroll-left").toggle(scrollLeft > 0);
+    $(".scroll-right").toggle(scrollLeft < maxScroll - 1);
+  }
+
+  $(".scroll-left").click(function(){ $nav.animate({scrollLeft:'-=150'},200,updateArrows); });
+  $(".scroll-right").click(function(){ $nav.animate({scrollLeft:'+=150'},200,updateArrows); });
+  $nav.on("scroll", updateArrows);
+  updateArrows();
+
+  function activateTab(id){
+    $nav.find("li").removeClass("active");
+    $nav.find("a[href='"+id+"']").parent().addClass("active");
+    $content.children().hide();
+    $(id).fadeIn(200);
+
+    var $li = $nav.find("a[href='"+id+"']").parent();
+    var liPos = $li.position().left;
+    var liWidth = $li.outerWidth();
+    var navWidth = $nav.outerWidth();
+    var newScroll = liPos + $nav.scrollLeft() - (navWidth/2 - liWidth/2);
+    $nav.animate({scrollLeft: newScroll}, 300, updateArrows);
+  }
+
+  $nav.on("click", "a", function(e){
+    e.preventDefault();
+    activateTab($(this).attr("href"));
+  });
+
+  $("#add-tab-btn").click(function(){
+    tabCount++;
+    var newId = "tab"+tabCount;
+
+    // 刪除預設 tab 和內容
+    if($('#tab0').length){
+      $('#tab0').remove();
+      $nav.find('li').remove();
+    }
+
+    $nav.append('<li><a href="#'+newId+'">Tab '+tabCount+'</a></li>');
+    $content.append('<div id="'+newId+'" class="tab-pane grid" style="display:none;"></div>');
+    activateTab('#'+newId);
+  });
+
+  function updatePlaceholders($grid){
+    $grid.find('.grid-placeholder').remove();
+    var total = $grid.children('.card').length;
+    var remainder = total % 5;
+    if(remainder>0){
+      for(var i=0;i<5-remainder;i++){
+        $grid.append('<div class="grid-placeholder"></div>');
+      }
+    }
+  }
+
+  $("#add-card-btn").click(function(){
+    var $activeTab = $content.children('.tab-pane:visible');
+    if(!$activeTab.length) return;
+    cardCount++;
+    var newCard = `
+      <div class="card">
+        <h3>卡片 ${cardCount}</h3>
+        <p>這是第 ${cardCount} 張卡片。</p>
+        <button class="accordion-toggle">更多資訊</button>
+        <div class="accordion"><p>詳細內容 ${cardCount}</p></div>
+      </div>
+    `;
+    $activeTab.append(newCard);
+    updatePlaceholders($activeTab);
+  });
+
+  // Accordion toggle
+  $content.on('click','.accordion-toggle',function(){
+    $(this).next('.accordion').toggleClass('open');
+  });
+
+});
+</script>
+
+</body>
+</html>
