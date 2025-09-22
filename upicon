@@ -1,0 +1,63 @@
+<input type="file" id="fileUpload" accept="image/*" />
+<button id="btnUpload">上傳</button>
+<div id="preview"></div>
+<div id="result"></div>
+[HttpPost("upload")]
+public async Task<IActionResult> Upload(IFormFile file)
+{
+    if (file == null || file.Length == 0)
+        return BadRequest("沒有檔案");
+
+    var path = Path.Combine("wwwroot/uploads", file.FileName);
+
+    using (var stream = new FileStream(path, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
+    }
+
+    return Ok(new { filePath = "/uploads/" + file.FileName });
+}
+
+$(document).ready(function () {
+    let selectedFile = null;
+
+    // 即時預覽
+    $("#fileUpload").on("change", function () {
+        selectedFile = this.files[0];
+        if (selectedFile) {
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                $("#preview").html(
+                    '<img src="' + e.target.result + '" style="max-width:200px; border:1px solid #ccc; border-radius:8px; padding:4px;">'
+                );
+            };
+            reader.readAsDataURL(selectedFile);
+        }
+    });
+
+    // 上傳到後端
+    $("#btnUpload").on("click", function () {
+        if (!selectedFile) {
+            alert("請先選擇圖片");
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append("file", selectedFile);
+
+        $.ajax({
+            url: "/upload",   // 🚨 改成你的後端 API 路徑
+            type: "POST",
+            data: formData,
+            contentType: false,
+            processData: false,
+            success: function (res) {
+                $("#result").html("<p style='color:green'>上傳成功！伺服器回應: " + res + "</p>");
+            },
+            error: function (err) {
+                $("#result").html("<p style='color:red'>上傳失敗！</p>");
+                console.error(err);
+            }
+        });
+    });
+});
