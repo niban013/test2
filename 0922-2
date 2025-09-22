@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>jQuery 動態產生內容並列印範例</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#f4f6f8; padding:20px; }
+  .controls { margin-bottom: 12px; display:flex; gap:8px; flex-wrap:wrap;}
+  button { padding:8px 12px; border-radius:6px; border:1px solid #bbb; background:#fff; cursor:pointer; }
+  button.primary { background:#1976d2; color:#fff; border-color:#135cb0; }
+  button.warn { background:#f57c00; color:#fff; border-color:#c25d00; }
+
+  /* 頁面內容樣式 */
+  #container { max-width:1100px; margin:0 auto; }
+  #printable { background:#fff; padding:18px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+  h1 { margin:0 0 14px; font-size:20px; }
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:12px; }
+  .card { border-radius:10px; overflow:hidden; background:#fff; border:1px solid #e6e9ee; }
+  .card .thumb { height:120px; object-fit:cover; width:100%; display:block; }
+  .card .body { padding:12px; }
+  .meta { color:#666; font-size:0.9rem; margin-top:6px; }
+
+  table { width:100%; border-collapse:collapse; margin-top:12px; }
+  th, td { text-align:left; padding:8px; border-bottom:1px solid #eee; }
+  th { background:#fafafa; }
+
+  /* 列印時樣式 */
+  @media print {
+    body { background: #fff; }
+    .controls, .no-print { display:none !important; } /* 隱藏按鈕 */
+    #container { max-width:100%; margin:0; box-shadow:none; border-radius:0; }
+    #printable { box-shadow:none; border-radius:0; padding:0; }
+    /* 微調頁首 */
+    h1 { font-size:18px; margin:0 0 10px; }
+  }
+</style>
+</head>
+<body>
+  <div id="container">
+    <div class="controls no-print">
+      <button id="btnGenerate">重新產生內容</button>
+      <button id="btnPrint" class="primary">直接列印此頁</button>
+      <button id="btnPopupPrint" class="primary">彈出列印視窗（乾淨版）</button>
+      <button id="btnExportPdf">說明：另存為 PDF（使用列印對話）</button>
+    </div>
+
+    <!-- 要列印的區域（只列印 #printable ）-->
+    <div id="printable" aria-label="列印區域">
+      <h1>範例報表：產品清單</h1>
+      <p class="meta">建立時間：<span id="createdAt"></span></p>
+
+      <div class="card-grid" id="cardGrid">
+        <!-- jQuery 會動態放卡片 -->
+      </div>
+
+      <h2 style="font-size:16px; margin-top:8px;">明細表格</h2>
+      <table id="dataTbl" aria-describedby="明細表">
+        <thead>
+          <tr><th>#</th><th>名稱</th><th>類別</th><th>價格</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+$(function(){
+  // 範例 JSON 資料
+  const sampleData = [
+    { id: 1, title: "相機 A1", category: "攝影", price: 2990, img: "https://picsum.photos/seed/a1/400/240" },
+    { id: 2, title: "耳機 B2", category: "音響", price: 1390, img: "https://picsum.photos/seed/b2/400/240" },
+    { id: 3, title: "筆電 C3", category: "電腦", price: 45900, img: "https://picsum.photos/seed/c3/400/240" },
+    { id: 4, title: "滑鼠 D4", category: "週邊", price: 490, img: "https://picsum.photos/seed/d4/400/240" },
+    { id: 5, title: "麥克風 E5", category: "音效", price: 2190, img: "https://picsum.photos/seed/e5/400/240" }
+  ];
+
+  function render(data){
+    // 更新建立時間
+    $('#createdAt').text((new Date()).toLocaleString());
+
+    // 卡片區
+    const $grid = $('#cardGrid').empty();
+    data.forEach(item => {
+      const $c = $(`
+        <article class="card" role="article">
+          <img class="thumb" src="${item.img}" alt="${escapeHtml(item.title)}" />
+          <div class="body">
+            <strong>${escapeHtml(item.title)}</strong>
+            <div class="meta">${escapeHtml(item.category)} • NT$ ${numberWithCommas(item.price)}</div>
+          </div>
+        </article>
+      `);
+      $grid.append($c);
+    });
+
+    // 表格區
+    const $tb = $('#dataTbl tbody').empty();
+    data.forEach((item, idx) => {
+      const $tr = $('<tr/>').append(
+        $('<td/>').text(idx+1),
+        $('<td/>').text(item.title),
+        $('<td/>').text(item.category),
+        $('<td/>').text('NT$ ' + numberWithCommas(item.price))
+      );
+      $tb.append($tr);
+    });
+  }
+
+  // 直接列印目前頁面（使用 @media print 隱藏控制列）
+  $('#btnPrint').on('click', function(){
+    // 若需要在列印前做些調整，可在這裡先修改 DOM
+    window.print();
+  });
+
+  // 彈出乾淨列印視窗：把 #printable 的 HTML 複製到新視窗 print
+  $('#btnPopupPrint').on('click', function(){
+    const printableHtml = $('#printable')[0].outerHTML;
+    const css = Array.from(document.styleSheets).map(s=>{
+      try {
+        return Array.from(s.cssRules||[]).map(r=>r.cssText).join('\n');
+      } catch(e){
+        // 外部樣式表可能會因為 CORS 被阻擋，使用一個小的內嵌樣式備援
+        return '';
+      }
+    }).join('\n');
+
+    // 建立新視窗內容：內含必要的 style 以確保列印時長相一致
+    const w = window.open('', '_blank', 'width=900,height=700');
+    w.document.open();
+    w.document.write(`
+      <!doctype html><html><head><meta charset="utf-8"><title>列印 - 乾淨版</title>
+      <style>
+        body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:18px; color:#222}
+        ${css}
+        /* 必要的快速樣式（以防來源樣式表被拒） */
+        .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+        .card{border-radius:10px;overflow:hidden;border:1px solid #e6e9ee}
+        .thumb{height:120px;object-fit:cover;width:100%;display:block}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+      </style>
+      </head><body>
+      ${printableHtml}
+      </body></html>
+    `);
+    w.document.close();
+
+    // 確保圖片載入完成再列印（避免列印時圖片尚未載入）
+    const imgs = w.document.images;
+    if (imgs.length>0) {
+      let loaded = 0;
+      for (let i=0;i<imgs.length;i++){
+        imgs[i].onload = imgs[i].onerror = function(){
+          loaded++;
+          if (loaded === imgs.length) {
+            setTimeout(()=>{ w.focus(); w.print(); w.close(); }, 200);
+          }
+        };
+      }
+    } else {
+      setTimeout(()=>{ w.focus(); w.print(); w.close(); }, 200);
+    }
+  });
+
+  // 重新產生內容（示範）
+  $('#btnGenerate').on('click', function(){
+    // 你可以改成從伺服器呼叫取得資料，再 render()
+    render(sampleData);
+  });
+
+  // 工具
+  function numberWithCommas(x){ return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  function escapeHtml(str){ return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // 初始 render
+  render(sampleData);
+});
+</script>
+</body>
+</html>
