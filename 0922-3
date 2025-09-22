@@ -5,6 +5,7 @@
 <title>動態新增 Tab + Card + Accordion + 預設頁面</title>
 <style>
 body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
+
 /* Tab 內容區塊 */
 .grid {
   display: none;
@@ -17,6 +18,7 @@ body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
   display: grid;
   opacity: 1;
 }
+
 /* Tabs wrapper */
 .tabs-wrapper {
   position: relative;
@@ -24,8 +26,10 @@ body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
   max-width: 100%;
   margin-bottom: 20px;
   overflow: hidden;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 2px solid #0078D7; /* 與未選 tab 底線連起來 */
 }
+
+/* 滾動容器 */
 .tabs-scroll {
   overflow-x: auto;
   box-sizing: border-box;
@@ -33,6 +37,8 @@ body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
   -webkit-overflow-scrolling: touch;
 }
 .tabs-scroll::-webkit-scrollbar { display: none; }
+
+/* Tabs */
 .tabs {
   display: flex;
   width: max-content;
@@ -47,38 +53,28 @@ body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
   font-weight: 500;
   white-space: nowrap;
   flex: 0 0 auto;
-  transition: background 0.2s, transform 0.08s, color 0.2s;
+  transition: background 0.2s, transform 0.08s, color 0.2s, border-color 0.2s;
   color: #333;
+  border: 2px solid transparent; /* 初始 border 透明 */
+  border-bottom: 2px solid #0078D7; /* 與 tabs-wrapper 底線連起來 */
+  margin-bottom: -2px; /* 讓底部 border 緊貼 */
 }
+
+.tab.active {
+  background: #fff;
+  color: #0078D7;
+  font-weight: 600;
+  border-color: #0078D7; /* active tab 上、左、右邊框 */
+  border-bottom: none;   /* 底部 border 消失 */
+  box-shadow: 0 -2px 6px rgba(0,120,215,0.2);
+  position: relative;
+}
+
 .tab:hover { 
   transform: translateY(-2px); 
   background: #e0e0e0;
 }
-.tab.active {
-  background: #fff;
-  border: 2px solid #0078D7;
-  border-bottom: none;
-  color: #0078D7;                /* 文字顏色變藍 */
-  font-weight: 600;
-  box-shadow: 0 -2px 6px rgba(0,120,215,0.2); /* 上方輕微陰影 */
-  position: relative;
-}
-
-/* 在 active tab 下方加藍色底線 */
-.tab.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -2px;
-  height: 3px;
-  background: #0078D7;
-  border-radius: 2px 2px 0 0;
-}
-
-.tab:hover { transform: translateY(-2px); }
-.tab.active { background: #fff; border: 2px solid #ddd; border-bottom: none; }
-
+ 
 /* 箭頭 */
 .scroll-btn {
   position: absolute;
@@ -116,11 +112,11 @@ body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
 
 /* Card */
 .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; }
-//.card:hover { transform: translateY(-5px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
 .card h3 { margin: 0 0 10px; font-size: 1.2em; color: #333; }
 .card p { color: #555; font-size: 0.95em; }
 .card button { margin-top: 10px; padding: 8px 12px; border: none; border-radius: 6px; background: #0078D7; color: #fff; cursor: pointer; }
 .card button:hover { background: #005a9e; }
+
 /* 卡片抖動動畫 */
 @keyframes shake {
   0% { transform: translate(0, 0) rotate(0deg); }
@@ -134,17 +130,18 @@ body { font-family: sans-serif; background: #f5f6fa; margin: 0; padding: 20px; }
 .card:hover {
   border: 2px solid #0078D7;
   box-shadow: 0 0 12px rgba(0,120,215,0.6);
-  animation: shake 0.5s infinite; /* 抖動持續播放 */
+  animation: shake 0.5s infinite;
 }
 
 .card.selected {
-  border: 2px solid #0078D7;      /* 外框顏色變藍 */
-  box-shadow: 0 0 12px rgba(0,120,215,0.6); /* 陰影效果 */
-  transform: translateY(-2px);     /* 輕微浮起效果 */
+  border: 2px solid #0078D7;
+  box-shadow: 0 0 12px rgba(0,120,215,0.6);
+  transform: translateY(-2px);
 }
 
 .accordion { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; background: #f9f9f9; border-radius: 8px; margin-top: 10px; padding: 0 10px; }
 .accordion.open { padding: 10px; max-height: 200px; }
+
 </style>
 </head>
 <body>
@@ -202,20 +199,15 @@ document.addEventListener('click', e => {
 });
 
 function addCard(tabId, title, content, detail){
-let url='https://www.yahoo.co.jp';
+  let url='https://www.yahoo.co.jp';
   let imgUrl='https://picsum.photos/400/200?random=1'
   const grid = document.getElementById(tabId);
   if(!grid){ alert('找不到 Tab: ' + tabId); return; }
   const card = document.createElement('div');
   card.className = 'card';
-  card.style.cursor = url ? 'pointer' : 'default'; // 有 url 才顯示手型
-  //card.style.backgroundImage = bgUrl ? `url(${bgUrl})` : 'none';
-  //card.style.backgroundSize = 'cover';
- // card.style.backgroundPosition = 'center';
-  if(true){
-    card.title = '點我前往 Example 網站'; // 加入 tooltip
-  }
- card.innerHTML = `
+  card.style.cursor = url ? 'pointer' : 'default';
+  card.title = '點我前往 Example 網站';
+  card.innerHTML = `
     <h3>${escapeHtml(title)}</h3>
     <hr style="border: none; border-top: 1px solid #ccc; margin: 8px 0;">
     <div style="position:relative; margin:10px 0; border-radius:8px; overflow:hidden; height:100px;">
@@ -235,19 +227,12 @@ let url='https://www.yahoo.co.jp';
         ${escapeHtml(content)}
       </div>
     </div>
-     
   `;
- // 點擊跳轉
   if(url){
     card.addEventListener('click', () => {
-      window.open(url, '_blank'); // 新分頁開啟
+      window.open(url, '_blank');
     });
   }
-  // 點選卡片顯示選中效果
- // card.addEventListener('click', () => {
-  //  document.querySelectorAll('.card.selected').forEach(c => c.classList.remove('selected'));
-  //  card.classList.add('selected');
- // });
   grid.appendChild(card);
 }
 function addCardToActiveTab(title, content, detail){
@@ -260,7 +245,6 @@ function addTab(){
   tabCounter++;
   const tabId = 'tab' + tabCounter;
 
-  // 如果還在顯示預設頁面，先移除它
   const defaultPage = document.getElementById('default-page');
   if(defaultPage) defaultPage.remove();
 
@@ -275,13 +259,14 @@ function addTab(){
   newGrid.id = tabId;
   newGrid.className = 'grid';
   tabContents.appendChild(newGrid);
+
   activateTab(newTab);
-  
-  addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1')
-  addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1')
-  // ⭐ 每次新增完 tab 後，自動切回第一個 tab
+
+  addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1');
+  addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1');
+
   const firstTab = document.querySelector('.tab');
-    if (firstTab) activateTab(firstTab);
+  if (firstTab) activateTab(firstTab);
 
   setTimeout(updateArrows, 250);
 }
