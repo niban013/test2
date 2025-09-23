@@ -1,0 +1,36 @@
+<script>
+let intervalId;
+let controller;
+
+function startPolling() {
+  intervalId = setInterval(async () => {
+    // 取消上一次尚未完成的請求
+    if (controller) controller.abort();
+    controller = new AbortController();
+
+    try {
+      const response = await fetch("/your/api/url", { signal: controller.signal });
+      if (!response.ok) throw new Error("HTTP error " + response.status);
+
+      const data = await response.json();
+      console.log("✅ API Data:", data);
+
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("⚠️ 請求被中斷");
+      } else {
+        console.warn("❌ Fetch error:", err.message);
+      }
+    }
+  }, 5000); // 每 5 秒輪詢一次
+}
+
+// 啟動 polling
+startPolling();
+
+// 頁面卸載時，清掉 interval 並中斷未完成的 fetch
+window.addEventListener("beforeunload", () => {
+  if (intervalId) clearInterval(intervalId);
+  if (controller) controller.abort();
+});
+</script>
