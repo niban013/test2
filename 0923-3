@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>動態新增 Tab + Card + Accordion + 預設頁面</title>
+<style>
+/* body 不捲動 */
+body {
+  font-family: sans-serif;
+  background: #f5f6fa;
+  margin: 0;
+  padding: 20px;
+  overflow: hidden; /* 禁止 body 出現 scrollbar */
+}
+
+/* tab 內容區塊 */
+#tab-contents {
+  margin-top: 0;
+  height: calc(100vh - 180px); /* 預留 tab 與按鈕空間 */
+  overflow: hidden;             /* 外層不捲動 */
+}
+
+/* 每個 grid 區塊 */
+/* grid 區塊垂直捲軸樣式 */
+/* 每個 tab content 統一邊框、底部保留空間 */
+.grid {
+  display: none;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  
+  border: 2px solid #0078D7; /* 四邊統一邊框 */
+  border-top: 0;            /* 上方 border 取消 */
+  border-radius: 0 0 12px 12px;
+  margin-top: -2px;         /* 拉近 tabs-wrapper 底線 */
+  //border-radius: 12px;        /* 可選：圓角 */
+  padding: 15px;
+  box-sizing: border-box;
+
+  max-height: calc(100vh - 200px); /* 預留 header/tab/底部 100px */
+  overflow-y: auto;               /* 卡片多時滾動 */
+}
+.grid.active {
+  display: grid;
+  opacity: 1;
+}
+
+/* 自訂滾動條半透明 */
+.grid::-webkit-scrollbar {
+  width: 8px;
+}
+.grid::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+
+/* Tabs wrapper */
+.tabs-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+ // margin-bottom: 20px;
+  overflow: hidden;
+  border-bottom: 2px solid #0078D7; /* 與未選 tab 底線連起來 */
+}
+
+/* 滾動容器 */
+.tabs-scroll {
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding: 0 35px;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs-scroll::-webkit-scrollbar { display: none; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 5px;
+}
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  background: #eee;
+  font-weight: 500;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition: background 0.2s, transform 0.08s, color 0.2s, border-color 0.2s;
+  color: #333;
+  border: 2px solid transparent; /* 初始 border 透明 */
+  border-bottom: 2px solid #0078D7; /* 與 tabs-wrapper 底線連起來 */
+  margin-bottom: -2px; /* 讓底部 border 緊貼 */
+}
+
+.tab.active {
+  background: #fff;
+  color: #0078D7;
+  font-weight: 600;
+  border-color: #0078D7; /* active tab 上、左、右邊框 */
+  border-bottom: none;   /* 底部 border 消失 */
+  box-shadow: 0 -2px 6px rgba(0,120,215,0.2);
+  position: relative;
+}
+
+.tab:hover { 
+  transform: translateY(-2px); 
+  background: #e0e0e0;
+}
+ 
+/* 箭頭 */
+.scroll-btn {
+  position: absolute;
+  top: 0;
+  width: 34px;
+  height: 100%;
+  background: rgba(255,255,255,0.95);
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.scroll-left { left: 0; }
+.scroll-right { right: 0; }
+
+/* Grid */
+#tab-contents { margin-top: 0; }
+.grid { display: none; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.grid.active { display: grid; }
+
+/* 預設頁面 */
+.default-page {
+  background: #fff;
+  padding: 40px;
+  text-align: center;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  font-size: 1.2em;
+  color: #555;
+}
+
+/* Card */
+.card {  background: #f0f0f0; /* 淺灰色 */ 
+border-radius: 12px; 
+padding: 20px; 
+box-shadow: 0 2px 6px rgba(0,0,0,0.5); 
+display: flex; 
+flex-direction: column; 
+transition: transform 0.2s, box-shadow 0.2s; 
+}
+.card h3 { margin: 0 0 10px; font-size: 1.2em; color: #333; }
+.card p { color: #555; font-size: 0.95em; }
+.card button { margin-top: 10px; padding: 8px 12px; border: none; border-radius: 6px; background: #0078D7; color: #fff; cursor: pointer; }
+.card button:hover { background: #005a9e; }
+
+/* 卡片抖動動畫 */
+@keyframes shake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(-2px, 0) rotate(-1deg); }
+  40% { transform: translate(2px, 0) rotate(1deg); }
+  60% { transform: translate(-2px, 0) rotate(-1deg); }
+  80% { transform: translate(2px, 0) rotate(1deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.card:hover {
+  border: 2px solid #0078D7;
+  box-shadow: 0 0 12px rgba(0,120,215,0.6);
+  animation: shake 0.5s infinite;
+}
+
+.card.selected {
+  border: 2px solid #0078D7;
+  box-shadow: 0 0 12px rgba(0,120,215,0.6);
+  transform: translateY(-2px);
+}
+
+.accordion { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; background: #f9f9f9; border-radius: 8px; margin-top: 10px; padding: 0 10px; }
+.accordion.open { padding: 10px; max-height: 200px; }
+/* Loading 遮罩 */
+#loading {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  flex-direction: column; /* 垂直排列 */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loader {
+  border: 6px solid #f3f3f3;
+  border-top: 6px solid #0078D7;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Loading 文字 */
+.loading-text {
+  margin-top: 15px;
+  color: #fff;
+  font-size: 1.2em;
+  font-weight: 500;
+}
+
+
+</style>
+</head>
+<body>
+<div id="loading">
+  <div class="loader"></div>
+  <div class="loading-text">載入中...</div>
+</div>
+ 
+<div style="margin-top:20px;"><h2>動態新增 Tab + Card + Accordion（預設頁面）</h2>
+  <button onclick="addTab()">新增 Tab</button>
+  <button onclick="addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1')">新增卡片到當前 Tab</button>
+</div>
+<div class="tabs-wrapper">
+  <button class="scroll-btn scroll-left" aria-label="向左" style="display:none">&lsaquo;</button>
+  <div class="tabs-scroll">
+    <div class="tabs" id="tabs-container"></div>
+  </div>
+  <button class="scroll-btn scroll-right" aria-label="向右" style="display:none">&rsaquo;</button>
+</div>
+
+<div id="tab-contents">
+  <div id="default-page" class="default-page">請新增 Tab</div>
+</div>
+
+
+
+<script>
+let tabCounter = 0;
+const tabsContainer = document.getElementById('tabs-container');
+const tabsScroll = document.querySelector('.tabs-scroll');
+const leftBtn = document.querySelector('.scroll-left');
+const rightBtn = document.querySelector('.scroll-right');
+const tabContents = document.getElementById('tab-contents');
+
+function bindTabEvents(tab){
+  tab.addEventListener('click', () => activateTab(tab));
+}
+function activateTab(tab){
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.grid').forEach(g => g.classList.remove('active'));
+  tab.classList.add('active');
+  const pane = document.getElementById(tab.dataset.target);
+  if (pane) pane.classList.add('active');
+  scrollTabIntoView(tab);
+  updateArrows();
+}
+function scrollTabIntoView(tab){
+  const tabRect = tab.getBoundingClientRect();
+  const containerRect = tabsScroll.getBoundingClientRect();
+  const offset = (tabRect.left + tabRect.right)/2 - (containerRect.left + containerRect.right)/2;
+  tabsScroll.scrollBy({ left: offset, behavior: 'smooth' });
+}
+
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('accordion-toggle')) {
+    e.target.nextElementSibling.classList.toggle('open');
+  }
+});
+
+function addCard(tabId, title, content, detail){
+  let url='https://www.yahoo.co.jp';
+  let imgUrl='https://picsum.photos/400/200?random=1'
+  const grid = document.getElementById(tabId);
+  if(!grid){ alert('找不到 Tab: ' + tabId); return; }
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.cursor = url ? 'pointer' : 'default';
+  card.title = '點我前往 Example 網站';
+  card.innerHTML = `
+    <h3>${escapeHtml(title)}</h3>
+    <hr style="border: none; border-top: 1px solid #ccc; margin: 8px 0;">
+    <div style="position:relative; margin:10px 0; border-radius:8px; overflow:hidden; height:100px;">
+      ${imgUrl ? `<img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover; display:block;">` : ''}
+      <div style="
+          position:absolute;
+          top:0; left:0; right:0; bottom:0;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          background: rgba(0,0,0,0.3);
+          color: #fff;
+          font-size: 1em;
+          text-align: center;
+          padding: 10px;
+      ">
+        ${escapeHtml(content)}
+      </div>
+    </div>
+  `;
+if(url){
+  card.addEventListener('click', () => {
+    const loading = document.getElementById('loading');
+    loading.style.display = 'flex';
+
+    let finished = false;
+    const timeout = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        loading.style.display = 'none';
+        window.open(url, '_blank');
+      }
+    }, 3000); // 最多等 3 秒
+
+    const testImg = new Image();
+    testImg.src = imgUrl;
+
+    testImg.onload = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      loading.style.display = 'none';
+      window.open(url, '_blank');
+    };
+
+    testImg.onerror = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      loading.style.display = 'none';
+      window.open(url, '_blank');
+    };
+  });
+}
+
+
+  grid.appendChild(card);
+}
+function addCardToActiveTab(title, content, detail){
+  const activeTab = document.querySelector('.tab.active');
+  if(!activeTab){ alert('沒有選中的 Tab'); return; }
+  addCard(activeTab.dataset.target, title, content, detail);
+}
+
+function addTab(){
+  tabCounter++;
+  const tabId = 'tab' + tabCounter;
+
+  const defaultPage = document.getElementById('default-page');
+  if(defaultPage) defaultPage.remove();
+
+  const newTab = document.createElement('div');
+  newTab.className = 'tab';
+  newTab.dataset.target = tabId;
+  newTab.textContent = '分類 ' + tabCounter;
+  tabsContainer.appendChild(newTab);
+  bindTabEvents(newTab);
+
+  const newGrid = document.createElement('div');
+  newGrid.id = tabId;
+  newGrid.className = 'grid';
+  tabContents.appendChild(newGrid);
+
+  activateTab(newTab);
+
+  addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1');
+  addCardToActiveTab('卡片 A1','這是 A1 的卡片內容。','詳細內容 A1');
+
+  const firstTab = document.querySelector('.tab');
+  if (firstTab) activateTab(firstTab);
+
+  setTimeout(updateArrows, 250);
+}
+
+leftBtn.addEventListener('click', () => {
+  tabsScroll.scrollBy({ left: -200, behavior: 'smooth' });
+});
+rightBtn.addEventListener('click', () => {
+  tabsScroll.scrollBy({ left: 200, behavior: 'smooth' });
+});
+
+function updateArrows(){
+  const scrollLeft = tabsScroll.scrollLeft;
+  const maxScroll = tabsScroll.scrollWidth - tabsScroll.clientWidth;
+  if (maxScroll <= 1) {
+    leftBtn.style.display = 'none';
+    rightBtn.style.display = 'none';
+  } else {
+    leftBtn.style.display = (scrollLeft > 5) ? 'block' : 'none';
+    rightBtn.style.display = (scrollLeft < maxScroll - 5) ? 'block' : 'none';
+  }
+}
+tabsScroll.addEventListener('scroll', () => window.requestAnimationFrame(updateArrows));
+window.addEventListener('resize', updateArrows);
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;')
+                   .replace(/</g, '&lt;')
+                   .replace(/>/g, '&gt;')
+                   .replace(/"/g, '&quot;')
+                   .replace(/'/g, '&#039;');
+}
+setTimeout(updateArrows, 100);
+</script>
+</body>
+</html>
