@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dynamic Lazy Load Tableau Viz (Shared Ticket + Timers)</title>
+<script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js"></script>
+ <style>
+/* body 不捲動 */
+body {
+  font-family: sans-serif;
+  background: #f5f6fa;
+  margin: 0;
+  padding: 20px;
+  overflow: hidden; /* 禁止 body 出現 scrollbar */
+}
+
+/* tab 內容區塊 */
+#tab-contents {
+  margin-top: 0;
+  height: calc(100vh - 180px); /* 預留 tab 與按鈕空間 */
+  overflow: hidden;             /* 外層不捲動 */
+}
+
+/* 每個 grid 區塊 */
+/* grid 區塊垂直捲軸樣式 */
+/* 每個 tab content 統一邊框、底部保留空間 */
+.grid {
+  display: none;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  
+  border: 2px solid #0078D7; /* 四邊統一邊框 */
+  border-top: 0;            /* 上方 border 取消 */
+  border-radius: 0 0 12px 12px;
+  margin-top: -2px;         /* 拉近 tabs-wrapper 底線 */
+  //border-radius: 12px;        /* 可選：圓角 */
+  padding: 15px;
+  box-sizing: border-box;
+
+  max-height: calc(100vh - 200px); /* 預留 header/tab/底部 100px */
+  overflow-y: auto;               /* 卡片多時滾動 */
+}
+.grid.active {
+  display: grid;
+  opacity: 1;
+}
+
+/* 自訂滾動條半透明 */
+.grid::-webkit-scrollbar {
+  width: 8px;
+}
+.grid::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+
+
+/* Tabs wrapper */
+.tabs-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+ // margin-bottom: 20px;
+  overflow: hidden;
+  border-bottom: 2px solid #0078D7; /* 與未選 tab 底線連起來 */
+}
+
+/* 滾動容器 */
+.tabs-scroll {
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding: 0 35px;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs-scroll::-webkit-scrollbar { display: none; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 5px;
+}
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  background: #eee;
+  font-weight: 500;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition: background 0.2s, transform 0.08s, color 0.2s, border-color 0.2s;
+  color: #333;
+  border: 2px solid transparent; /* 初始 border 透明 */
+  border-bottom: 2px solid #0078D7; /* 與 tabs-wrapper 底線連起來 */
+  margin-bottom: -2px; /* 讓底部 border 緊貼 */
+}
+
+.tab.active {
+  background: #fff;
+  color: #0078D7;
+  font-weight: 600;
+  border-color: #0078D7; /* active tab 上、左、右邊框 */
+  border-bottom: none;   /* 底部 border 消失 */
+  box-shadow: 0 -2px 6px rgba(0,120,215,0.2);
+  position: relative;
+}
+
+.tab:hover { 
+  transform: translateY(-2px); 
+  background: #e0e0e0;
+}
+ 
+/* 箭頭 */
+.scroll-btn {
+  position: absolute;
+  top: 0;
+  width: 34px;
+  height: 100%;
+  background: rgba(255,255,255,0.95);
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.scroll-left { left: 0; }
+.scroll-right { right: 0; }
+
+/* Grid */
+#tab-contents { margin-top: 0; }
+.grid { display: none; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+.grid.active { display: grid; }
+
+/* 預設頁面 */
+.default-page {
+  background: #fff;
+  padding: 40px;
+  text-align: center;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  font-size: 1.2em;
+  color: #555;
+}
+
+/* Card */
+.card {  background: #f0f0f0; /* 淺灰色 */ 
+border-radius: 12px; 
+padding: 20px; 
+box-shadow: 0 2px 6px rgba(0,0,0,0.5); 
+display: flex; 
+flex-direction: column; 
+transition: transform 0.2s, box-shadow 0.2s; 
+}
+.card h3 { margin: 0 0 10px; font-size: 1.2em; color: #333; }
+.card p { color: #555; font-size: 0.95em; }
+.card button { margin-top: 10px; padding: 8px 12px; border: none; border-radius: 6px; background: #0078D7; color: #fff; cursor: pointer; }
+.card button:hover { background: #005a9e; }
+
+/* 卡片抖動動畫 */
+@keyframes shake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(-2px, 0) rotate(-1deg); }
+  40% { transform: translate(2px, 0) rotate(1deg); }
+  60% { transform: translate(-2px, 0) rotate(-1deg); }
+  80% { transform: translate(2px, 0) rotate(1deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.card:hover {
+  border: 2px solid #0078D7;
+  box-shadow: 0 0 12px rgba(0,120,215,0.6);
+  animation: shake 0.5s infinite;
+}
+
+.card.selected {
+  border: 2px solid #0078D7;
+  box-shadow: 0 0 12px rgba(0,120,215,0.6);
+  transform: translateY(-2px);
+}
+
+.accordion { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; background: #f9f9f9; border-radius: 8px; margin-top: 10px; padding: 0 10px; }
+.accordion.open { padding: 10px; max-height: 200px; }
+/* Loading 遮罩 */
+#loading {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  flex-direction: column; /* 垂直排列 */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loader {
+  border: 6px solid #f3f3f3;
+  border-top: 6px solid #0078D7;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Loading 文字 */
+.loading-text {
+  margin-top: 15px;
+  color: #fff;
+  font-size: 1.2em;
+  font-weight: 500;
+}
+tableau-viz { width: 100%; height: 80vh; border: none; }
+
+</style>
+</head>
+<body>
+  <h2>Dynamic Tabs + Lazy Load (Shared Ticket + Timers)</h2>
+
+ 
+ <div class="tabs-wrapper">
+  <button class="scroll-btn scroll-left" aria-label="向左" style="display:none">&lsaquo;</button>
+  <div class="tabs-scroll">
+    <div class="tabs" id="tabs-container"></div>
+  </div>
+  <button class="scroll-btn scroll-right" aria-label="向右" style="display:none">&rsaquo;</button>
+</div>
+
+<div id="tab-contents">
+  <div id="default-page" class="default-page">請新增 Tab</div>
+</div>
+  <!-- 動態 Tabs 按鈕 -->
+  <div id="tab-buttons"></div>
+  <button onclick="addTab()">➕ Add Tab</button>
+
+  <script src="tabs.js"></script>
+  <script>
+ 
+
+   const SERVER = "https://your-tableau-server";
+    const SITE = "yoursite"; // 無 site 可留空 ""
+  
+
+    let refreshTimer = null;
+    let reloadTimer = null;
+// 使用方式
+const tabsMgr = new TabsManager({
+  tabsContainer: document.getElementById('tabs-container'),
+  tabsScroll: document.querySelector('.tabs-scroll'),
+  leftBtn: document.querySelector('.scroll-left'),
+  rightBtn: document.querySelector('.scroll-right'),
+  tabContents: document.getElementById('tab-contents')
+}); 
+
+tabsMgr.addTab('分類 1', '<p>這是內容 1</p>');
+
+
+function addTab(){tabsMgr.addTab('分類 1', '<p>這是內容 1</p>');
+}
+    // 🔹 啟動定時器
+    async function startTimers() {
+      if (!refreshTimer) {
+	  
+	//  await myTabs.refreshAllViz()
+        refreshTimer = setInterval(await tabsMgr.refreshAllViz(), 30 * 60 * 1000);
+        console.log("Refresh timer started");
+      }
+      if (!reloadTimer) {
+        reloadTimer = setInterval(tabsMgr.reloadAllViz(), 90 * 60 * 1000);
+        console.log("Reload timer started");
+      }
+    }
+
+    // 🔹 停止定時器
+    function stopTimers() {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+        console.log("Refresh timer stopped");
+      }
+      if (reloadTimer) {
+        clearInterval(reloadTimer);
+        reloadTimer = null;
+        console.log("Reload timer stopped");
+      }
+    }
+
+    // 🔹 監聽頁面可見性
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopTimers();
+      } else {
+        startTimers();
+      }
+    });
+
+    // 預設新增一個 tab + 啟動定時器
+   // addTab();
+    startTimers();
+	
+
+  </script>
+</body>
+</html>
