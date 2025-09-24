@@ -1,0 +1,202 @@
+// tabs.js
+(function(global){
+
+  class TabsManager  {
+ constructor(opts) {
+    // 透過解構賦值取得必要屬性
+    const { tabsContainer, tabsScroll, leftBtn, rightBtn, tabContents } = opts;
+
+    this.tabsContainer = tabsContainer;
+    this.tabsScroll = tabsScroll;
+    this.leftBtn = leftBtn;
+    this.rightBtn = rightBtn;
+    this.tabContents = tabContents;
+
+    this.tabCounter = 0;
+    
+	this.VIZ_CONFIGS = [];    
+    this.currentTicket = null; 
+    this.firstVizLoaded = false; 
+    // 綁定左右按鈕
+    this.leftBtn.addEventListener('click', () => {
+      this.tabsScroll.scrollBy({ left: -200, behavior: 'smooth' });
+      this.updateArrows();
+    });
+    this.rightBtn.addEventListener('click', () => {
+      this.tabsScroll.scrollBy({ left: 200, behavior: 'smooth' });
+      this.updateArrows();
+    });
+
+    // 初始化箭頭狀態
+    this.updateArrows();
+    this.tabsScroll.addEventListener('scroll', () => window.requestAnimationFrame(() => this.updateArrows()));
+    window.addEventListener('resize', () => this.updateArrows());
+  }
+  
+  bindTabEvents(tab) {
+    tab.addEventListener('click', () => this.activateTab(tab));
+  }
+
+  activateTab(tab) {
+    this.tabsContainer.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    //this.tabContents.querySelectorAll('.grid, .tab-pane').forEach(g => g.classList.remove('active'));
+
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.target);
+    if (pane) pane.classList.add('active');
+
+    this.scrollTabIntoView(tab);
+    this.updateArrows();
+  }
+
+  scrollTabIntoView(tab) {
+    const tabRect = tab.getBoundingClientRect();
+    const containerRect = this.tabsScroll.getBoundingClientRect();
+    const offset = (tabRect.left + tabRect.right) / 2 - (containerRect.left + containerRect.right) / 2;
+    this.tabsScroll.scrollBy({ left: offset, behavior: 'smooth' });
+  }
+
+  updateArrows() {
+    const scrollLeft = this.tabsScroll.scrollLeft;
+    const maxScroll = this.tabsScroll.scrollWidth - this.tabsScroll.clientWidth;
+    if (maxScroll <= 1) {
+      this.leftBtn.style.display = 'none';
+      this.rightBtn.style.display = 'none';
+    } else {
+      this.leftBtn.style.display = (scrollLeft > 5) ? 'block' : 'none';
+      this.rightBtn.style.display = (scrollLeft < maxScroll - 5) ? 'block' : 'none';
+    }
+  }
+
+  // 可擴充: 新增 tab
+  addTab(tabText, tabContentHtml) {
+    this.tabCounter++;
+    const tabId = `tab${this.tabCounter}`;
+    const vizId = `viz${this.tabCounter}`;
+	
+    const defaultPage = document.getElementById('default-page');
+    if(defaultPage) defaultPage.remove();
+	
+    const newTab = document.createElement('div');
+    newTab.className = 'tab';
+    newTab.dataset.target = tabId;
+    newTab.textContent = tabText;
+    this.tabsContainer.appendChild(newTab);
+    this.bindTabEvents(newTab);
+
+    const newContent = document.createElement('div');
+    //newContent.className = 'tab-pane';
+    newContent.id = tabId;
+    newContent.innerHTML =`<tableau-viz id="${vizId}"></tableau-viz>`;
+    this.tabContents.appendChild(newContent);
+	this.VIZ_CONFIGS.push({
+			el: vizId,
+			workbook: "WB" + this.tabCounter,
+			sheet: "Dashboard" + this.tabCounter,
+			loaded: false
+		  });
+
+    this.openTab(tabId); 
+    const firstTab = document.querySelector('.tab');
+    if (firstTab) this.activateTab(firstTab);
+   // setTimeout(updateArrows, 250);
+	
+	// 	this.tabsScroll.addEventListener('scroll', () => window.requestAnimationFrame(this.updateArrows));
+//window.addEventListener('resize', this.updateArrows);
+//setTimeout(this.updateArrows, 100);  
+  
+  }
+  
+   
+
+
+ // 🔹 後端取新票
+  async
+	 getnewticket() {
+      //const res = await fetch("/api/getNewTicket");
+      //const data = await res.json();
+      return "99999"//data.ticket;
+    }
+
+    // 🔹 初始化指定 tab 的 viz (Lazy Load)
+    async  initViz(cfg) {
+      if (cfg.loaded) return;
+
+      const el = document.getElementById(cfg.el);
+
+      // 第一個載入 → 用 trusted ticket
+      if (!this.firstVizLoaded) {
+        if (!this.currentTicket) this.currentTicket = this.getnewticket();
+        el.src = 'https://public.tableau.com/views/Superstore_embedded_800x800/Overview';//`${SERVER}/trusted/${currentTicket}/t/${SITE}/views/${cfg.workbook}/${cfg.sheet}`;
+        this.firstVizLoaded = true;
+        console.log(`Loaded ${cfg.el} with ticket:`, this.currentTicket);
+      } else {
+        // 之後的 tab → 直接共用 session
+        el.src = 'https://public.tableau.com/views/Superstore_embedded_800x800/Overview';//`${SERVER}/t/${SITE}/views/${cfg.workbook}/${cfg.sheet}`;
+        console.log(`Loaded ${cfg.el} with shared session`);
+      }
+
+      cfg.loaded = true;
+
+      // error handler → 若 session 失效就換票
+      el.addEventListener("error", async (event) => {
+        console.warn(`Error on ${cfg.el}:`, event.detail);
+        if (event.detail?.message?.includes("Session") || event.detail?.message?.includes("unauthorized")) {
+          await reloadAllViz();
+        }
+      });
+    }
+
+    // 🔹 批次刷新
+    async refreshAllViz() {
+		console.log('1')
+      for (const cfg of this.VIZ_CONFIGS) {
+        if (!cfg.loaded) continue;
+        const el = document.getElementById(cfg.el);
+        try {
+         // await el.ready;
+         // const wb = await el.workbook;
+          //const sheet = wb.activeSheet;
+          //await sheet.refreshDataAsync();
+          console.log(`Refreshed ${cfg.el} at`, new Date().toLocaleTimeString());
+        } catch (err) {
+          console.error(`Refresh failed on ${cfg.el}:`, err);
+        }
+      }
+    }
+
+    // 🔹 批次換票
+    async reloadAllViz() {
+      this.currentTicket = await this.getnewticket();
+      if (!this.currentTicket) return;
+
+      this.VIZ_CONFIGS.forEach((cfg, i) => {
+        if (!cfg.loaded) return;
+        const el = document.getElementById(cfg.el);
+
+        if (i === 0) {
+          el.src ='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';// `${SERVER}/trusted/${currentTicket}/t/${SITE}/views/${cfg.workbook}/${cfg.sheet}`;
+          console.log(`Reloaded ${cfg.el} with new ticket:`, this.currentTicket);
+        } else {
+          el.src ='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';// `${SERVER}/t/${SITE}/views/${cfg.workbook}/${cfg.sheet}`;
+          console.log(`Reloaded ${cfg.el} with shared session`);
+        }
+      });
+    }
+
+ // 🔹 Tab 切換
+    async openTab(tabId) {
+      document.querySelectorAll(".tab").forEach(t => {
+        t.classList.toggle("active", t.id === tabId);
+      });
+
+      const cfg = this.VIZ_CONFIGS.find(c => "tab" + c.el.replace("viz", "") === tabId);
+      if (cfg) await this.initViz(cfg);
+    }
+  
+  
+  }
+   
+
+ global.TabsManager = TabsManager; // 導出到全域
+})(window);
