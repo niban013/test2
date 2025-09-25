@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lazy Load Tableau Tabs</title>
+<script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js"></script>
+<style>
+body { margin: 0; padding: 20px; font-family: sans-serif; overflow: hidden; }
+.tabs-wrapper { position: relative; width: 100%; overflow: hidden; border-bottom: 2px solid #0078D7; }
+.tabs-scroll { overflow-x: auto; padding: 0 35px; -webkit-overflow-scrolling: touch; }
+/* 滾動容器 */
+.tabs-scroll {
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding: 0 35px;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs-scroll::-webkit-scrollbar { display: none; }
+.tabs { display: flex; width: max-content; gap: 5px; }
+.tab { padding: 10px 20px; cursor: pointer; border-radius: 6px 6px 0 0; background: #eee; font-weight: 500; white-space: nowrap; border: 2px solid transparent; border-bottom: 2px solid #0078D7; margin-bottom: -2px; }
+.tab.active { background: #fff; border-color: #0078D7; border-bottom: none; font-weight: 600; box-shadow: 0 -2px 6px rgba(0,120,215,0.2); position: relative; }
+.tab:hover { background: #e0e0e0; transform: translateY(-2px); }
+.scroll-btn { position: absolute; top: 0; width: 34px; height: 100%; background: rgba(255,255,255,0.95); border: none; cursor: pointer; font-size: 16px; display: flex; justify-content: center; align-items: center; z-index: 5; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.scroll-left { left: 0; }
+.scroll-right { right: 0; }
+#tab-contents { margin-top: 0; height: calc(100vh - 180px); overflow: hidden; }
+.tab-pane.viz { display: none; width: 100%; height: 100%; }
+.tab-pane.viz.active { display: block; }
+
+/* 每個 tab 的內容容器 */
+.viz {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+
+  border: 2px solid #0078D7;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  margin-top: -2px;
+  padding: 15px;
+  box-sizing: border-box;
+
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  background: #fff;
+}
+.viz.active {
+  display: block;
+  opacity: 1;
+}
+
+
+/* 自訂滾動條半透明 */
+.viz::-webkit-scrollbar {
+  width: 8px;
+}
+.viz::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.viz::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+tableau-viz { width: 100% !important; height: 80vh !important; display: block; border: none; }
+</style>
+</head>
+<body>
+<h2>Lazy Load Tableau Tabs</h2>
+<div class="tabs-wrapper">
+  <button class="scroll-btn scroll-left" style="display:none">&lsaquo;</button>
+  <div class="tabs-scroll"><div class="tabs" id="tabs-container"></div></div>
+  <button class="scroll-btn scroll-right" style="display:none">&rsaquo;</button>
+</div>
+<div id="tab-contents">
+  <div id="default-page" class="default-page">請新增 Tab</div>
+</div>
+<button onclick="addTab()">➕ Add Tab</button>
+
+<script>
+(function(global){
+class TabsManager {
+  constructor(opts) {
+    const { tabsContainer, tabsScroll, leftBtn, rightBtn, tabContents } = opts;
+    this.tabsContainer = tabsContainer;
+    this.tabsScroll = tabsScroll;
+    this.leftBtn = leftBtn;
+    this.rightBtn = rightBtn;
+    this.tabContents = tabContents;
+
+    this.tabCounter = 0;
+    this.VIZ_CONFIGS = [];
+    this.currentTicket = null;
+    this.firstVizLoaded = false;
+
+    // 左右箭頭
+    this.leftBtn.addEventListener('click', ()=>{ this.tabsScroll.scrollBy({ left:-200, behavior:'smooth' }); this.updateArrows(); });
+    this.rightBtn.addEventListener('click', ()=>{ this.tabsScroll.scrollBy({ left:200, behavior:'smooth' }); this.updateArrows(); });
+    this.updateArrows();
+    this.tabsScroll.addEventListener('scroll', ()=>window.requestAnimationFrame(()=>this.updateArrows()));
+    window.addEventListener('resize', ()=>this.updateArrows());
+  }
+
+  bindTabEvents(tab){ tab.addEventListener('click', ()=>this.activateTab(tab)); }
+
+  activateTab(tab){
+  // 移除所有 active 樣式
+  this.tabsContainer.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  this.tabContents.querySelectorAll('.tab-pane.viz').forEach(g=>g.classList.remove('active'));
+
+  tab.classList.add('active');
+  const pane = document.getElementById(tab.dataset.target);
+  if(pane){ pane.classList.add('active'); }
+
+  this.scrollTabIntoView(tab);
+  this.updateArrows();
+
+  // Lazy load viz
+  const cfg = this.VIZ_CONFIGS.find(c=>c.id===tab.dataset.target);
+  if(cfg) this.initViz(cfg); // 若 loaded=false，initViz 會重新建立 tableau-viz
+  
+    // 🔹 切換時只保留最新 3 個 tableau-viz
+  this.cleanupOldViz();
+}
+
+  scrollTabIntoView(tab){
+    const tabRect = tab.getBoundingClientRect();
+    const containerRect = this.tabsScroll.getBoundingClientRect();
+    const offset = (tabRect.left+tabRect.right)/2-(containerRect.left+containerRect.right)/2;
+    this.tabsScroll.scrollBy({ left: offset, behavior:'smooth' });
+  }
+
+  updateArrows(){
+    const scrollLeft = this.tabsScroll.scrollLeft;
+    const maxScroll = this.tabsScroll.scrollWidth - this.tabsScroll.clientWidth;
+    if(maxScroll<=1){ this.leftBtn.style.display='none'; this.rightBtn.style.display='none'; }
+    else { this.leftBtn.style.display=(scrollLeft>5)?'block':'none'; this.rightBtn.style.display=(scrollLeft<maxScroll-5)?'block':'none'; }
+  }
+
+  async getnewticket(){ return "99999"; }
+  
+  async initViz(cfg){
+  if(cfg.loaded) return;
+  const container = document.getElementById(cfg.id);
+  container.innerHTML = ""; // 清空舊內容
+
+  const viz = document.createElement("tableau-viz");
+  viz.style.width="100%";
+  viz.style.height="80vh";
+  container.appendChild(viz);
+
+  // V3 API 初始化
+  if(!this.firstVizLoaded){
+    if(!this.currentTicket) this.currentTicket = await this.getnewticket();
+    viz.src='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';
+    this.firstVizLoaded=true;
+  }else{
+    viz.src='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';
+  }
+
+  cfg.loaded = true;
+}
+  async initViz2(cfg){
+    if(cfg.loaded) return;
+    const container = document.getElementById(cfg.id);
+    container.innerHTML = ""; // 清空舊內容
+
+    // 建立 tableau-viz
+    const viz = document.createElement("tableau-viz");
+    viz.style.width="100%";
+    viz.style.height="80vh";
+    container.appendChild(viz);
+
+    // 初始化 V3 API
+    if(!this.firstVizLoaded){
+      if(!this.currentTicket) this.currentTicket = await this.getnewticket();
+      viz.src='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';
+      this.firstVizLoaded=true;
+	     console.log(`Loaded ${cfg.id} with ticket:`, this.currentTicket);
+    }else{
+      viz.src='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';
+	    console.log(`Loaded ${cfg.id} with shared session`);
+    }
+
+    cfg.loaded=true;
+  }
+
+  addTab(tabText){
+  this.tabCounter++;
+  const tabId = "tab"+this.tabCounter;
+
+  // 移除 default page
+  const defaultPage = document.getElementById('default-page');
+  if(defaultPage) defaultPage.remove();
+
+  // Tab 按鈕
+  const newTab = document.createElement('div');
+  newTab.className = 'tab';
+  newTab.dataset.target = tabId;
+  newTab.textContent = tabText;
+  this.tabsContainer.appendChild(newTab);
+  this.bindTabEvents(newTab);
+
+  // Tab 內容容器（空）
+  const newPane = document.createElement('div');
+  newPane.id = tabId;
+  newPane.className = 'tab-pane viz';
+  this.tabContents.appendChild(newPane);
+
+  // 記錄配置
+  this.VIZ_CONFIGS.push({ id: tabId, loaded: false });
+
+  // 🔹 限制同時最多 3 個 <tableau-viz>
+  this.cleanupOldViz();
+
+  // 打開新 tab
+  this.activateTab(newTab);
+}
+
+cleanupOldViz(){
+  // 只保留最新 3 個已建立的 tableau-viz
+  const loadedViz = this.VIZ_CONFIGS.filter(c => c.loaded);
+  if(loadedViz.length <= 3) return;
+
+  const excess = loadedViz.length - 3;
+  for(let i=0; i<excess; i++){
+    const cfg = loadedViz[i];
+    const pane = document.getElementById(cfg.id);
+    if(pane){
+      pane.innerHTML = ""; // 移除 <tableau-viz>
+      cfg.loaded = false;  // 標記為未載入
+    }
+  }
+}
+  async safeRefreshViz(vizEl){
+    try{
+      await vizEl.ready;
+      const sheet = vizEl.workbook.activeSheet;
+     if(sheet.sheetType === "worksheet"){
+        // 單一 worksheet
+        await sheet.refreshDataAsync();
+    } else if(sheet.sheetType === "dashboard"){
+        // Dashboard → 對每個 worksheet 刷新
+        const worksheets = sheet.getWorksheets();
+        for(const ws of worksheets){
+            await ws.refreshDataAsync();
+        }
+    } else if(sheet.sheetType === "story"){
+        // Story → 可以遍歷 story 對應 worksheets（視需求）
+        console.warn("Active sheet is a Story, handle manually if needed");
+    }
+      console.log("Refresh completed for",vizEl.id);
+    } catch(err){
+      console.error("Refresh failed:", err);
+    }
+  }
+
+  async refreshViz(vizEl){
+    try{
+      await vizEl.ready;
+      const workbook=vizEl.workbook;
+      const sheet=workbook.activeSheet;
+      await sheet.refreshDataAsync();
+      console.log("Refresh completed for",vizEl.id);
+    }catch(err){
+      console.error("Refresh failed:",err);
+    }
+  }
+  
+  // 🔹 批次刷新
+    async refreshAllViz() {
+		console.log('1')
+      for (const cfg of this.VIZ_CONFIGS) {
+        if (!cfg.loaded) continue;
+        const vizEl=document.getElementById(cfg.id).querySelector("tableau-viz");
+        if(vizEl) await this.safeRefreshViz(vizEl);
+      }
+    }
+
+    // 🔹 批次換票
+    async reloadAllViz() {
+      this.currentTicket = await this.getnewticket();
+      if (!this.currentTicket) return;
+
+      this.VIZ_CONFIGS.forEach((cfg, i) => {
+        if (!cfg.loaded) return;
+        const el = document.getElementById(cfg.el);
+
+        if (i === 0) {
+          el.src ='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';// `${SERVER}/trusted/${currentTicket}/t/${SITE}/views/${cfg.workbook}/${cfg.sheet}`;
+          console.log(`Reloaded ${cfg.el} with new ticket:`, this.currentTicket);
+        } else {
+          el.src ='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';// `${SERVER}/t/${SITE}/views/${cfg.workbook}/${cfg.sheet}`;
+          console.log(`Reloaded ${cfg.el} with shared session`);
+        }
+      });
+    }
+}
+global.TabsManager = TabsManager;
+})(window);
+
+    let refreshTimer = null;
+    let reloadTimer = null;
+// 使用
+const tabsMgr = new TabsManager({
+  tabsContainer: document.getElementById('tabs-container'),
+  tabsScroll: document.querySelector('.tabs-scroll'),
+  leftBtn: document.querySelector('.scroll-left'),
+  rightBtn: document.querySelector('.scroll-right'),
+  tabContents: document.getElementById('tab-contents')
+});
+
+function addTab(){ tabsMgr.addTab('分類 '+(tabsMgr.tabCounter+1)); }
+
+
+ // 🔹 啟動定時器
+    async function startTimers() {
+      if (!refreshTimer) {
+	  
+	//  await myTabs.refreshAllViz()
+        refreshTimer = setInterval(await tabsMgr.refreshAllViz(),  10* 1000);
+        console.log("Refresh timer started");
+      }
+      if (!reloadTimer) {
+        reloadTimer = setInterval(await tabsMgr.reloadAllViz(), 90 * 60 * 1000);
+        console.log("Reload timer started");
+      }
+    }
+
+    // 🔹 停止定時器
+    function stopTimers() {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+        console.log("Refresh timer stopped");
+      }
+      if (reloadTimer) {
+        clearInterval(reloadTimer);
+        reloadTimer = null;
+        console.log("Reload timer stopped");
+      }
+    }
+
+    // 🔹 監聽頁面可見性
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopTimers();
+      } else {
+        startTimers();
+      }
+    });
+window.addEventListener('load', () => {  
+  stopTimers();
+  startTimers(); // 頁面刷新時也啟動定時器
+});
+    // 預設新增一個 tab + 啟動定時器
+   // addTab();
+    startTimers();
+</script>
+</body>
+</html>
