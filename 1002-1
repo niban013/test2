@@ -1,0 +1,96 @@
+public enum ConditionType
+{
+    Equal,
+    Contains,
+    Regex
+}
+
+public class DynamicCondition
+{
+    public string PropertyName { get; set; }
+    public ConditionType ConditionType { get; set; }
+    public object Value { get; set; }
+}
+using System.Linq.Expressions;
+using System.Text.RegularExpressions;
+
+public static class DynamicQueryHelper
+{
+    /// <summary>
+    /// 針對 IQueryable 或 IEnumerable 做動態過濾
+    /// </summary>
+    public static IEnumerable<T> Filter<T>(IQueryable<T> source, List<DynamicCondition> conditions)
+    {
+        // 先將普通條件轉成 Expression
+        var query = source;
+
+        var regexConditions = new List<DynamicCondition>();
+
+        foreach (var cond in conditions)
+        {
+            if (cond.ConditionType == ConditionType.Regex)
+            {
+                // 正則條件留到記憶體過濾
+                regexConditions.Add(cond);
+                continue;
+            }
+
+            var param = Expression.Parameter(typeof(T), "x");
+            var prop = Expression.PropertyOrField(param, cond.PropertyName);
+            var constant = Expression.Constant(cond.Value);
+
+            Expression predicate = null;
+
+            switch (cond.ConditionType)
+            {
+                case ConditionType.Equal:
+                    predicate = Expression.Equal(prop, constant);
+                    break;
+                case ConditionType.Contains:
+                    predicate = Expression.Call(
+                        prop,
+                        typeof(string).GetMethod("Contains", new[] { typeof(string) }),
+                        constant);
+                    break;
+            }
+
+            var lambda = Expression.Lambda<Func<T, bool>>(predicate, param);
+            query = query.Where(lambda);
+        }
+
+        var result = query.ToList(); // 拉資料到記憶體
+
+        // 處理 Regex
+        foreach (var cond in regexConditions)
+        {
+            var regex = new Regex(cond.Value.ToString());
+            result = result.Where(x =>
+            {
+                var val = x.GetType().GetProperty(cond.PropertyName).GetValue(x)?.ToString() ?? "";
+                return regex.IsMatch(val);
+            }).ToList();
+        }
+
+        return result;
+    }
+}
+
+// 假設 EF DbContext
+var users = db.Users.AsQueryable();
+
+// 定義條件
+var conditions = new List<DynamicCondition>
+{
+    new DynamicCondition { PropertyName = "Name", ConditionType = ConditionType.Contains, Value = "John" },
+    new DynamicCondition { PropertyName = "Email", ConditionType = ConditionType.Regex, Value = @"^.*@gmail\.com$" },
+    new DynamicCondition { PropertyName = "Age", ConditionType = ConditionType.Equal, Value = 30 }
+};
+
+// 過濾
+var filtered = DynamicQueryHelper.Filter(users, conditions);
+
+foreach(var u in filtered)
+{
+    Console.WriteLine($"{u.Name} - {u.Email} - {u.Age}");
+}
+
