@@ -1,0 +1,726 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web;
+
+namespace mvc5.autofac
+{
+    public interface IDbSession : IDisposable
+    {
+        IDbConnection Connection { get; }
+        IDbTransaction Transaction { get; }
+ 
+        // Transaction
+        void BeginTransaction();
+        Task BeginTransactionAsync();
+        void Commit();
+        Task CommitAsync();
+        void Rollback();
+        Task RollbackAsync();
+        // 同步
+        IDbCommand CreateCommand(string sql, CommandType commandType = CommandType.Text, IDictionary<string, object> parameters = null);
+        int ExecuteNonQuery(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text);
+       
+        object ExecuteScalar(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text);
+        IDataReader ExecuteReader(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text);
+
+        // 非同步
+        Task<int> ExecuteNonQueryAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default);
+        Task<object> ExecuteScalarAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default);
+        Task<IDataReader> ExecuteReaderAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default);
+        // 呼叫儲存程序
+        int ExecuteProcedure(string procName, IDictionary<string, object> parameters = null);
+        Task<int> ExecuteProcedureAsync(string procName, IDictionary<string, object> parameters = null, CancellationToken cancellationToken = default);
+        DataTable GetDataTable(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text);
+        Task<DataTable> GetDataTableAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default);
+
+        DataTable ExecuteProcedureToDataTable(string procName, IDictionary<string, object> parameters = null);
+       
+        Task<DataTable> ExecuteProcedureToDataTableAsync(string procName, IDictionary<string, object> parameters = null, CancellationToken cancellationToken = default);
+        void BulkInsert(DataTable dt);
+    }
+}
+
+using Autofac;
+using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web;
+
+namespace mvc5.autofac
+{
+    public class DbSession : IDbSession
+    {
+        private readonly IDbConnection _connection;
+        private IDbTransaction _transaction;
+
+        public DbSession(IDbConnection connection)
+        {
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            if (_connection.State != ConnectionState.Open)
+                _connection.Open();
+        }
+
+        public IDbConnection Connection => _connection;
+        public IDbTransaction Transaction => _transaction;
+
+        public void BeginTransaction()
+        {
+            if (_transaction == null)
+                _transaction = _connection.BeginTransaction();
+        }
+        public async Task BeginTransactionAsync()
+        {
+            await Task.Run(() => BeginTransaction());
+        }
+
+        public void Commit()
+        {
+            _transaction?.Commit();
+            _transaction?.Dispose();
+            _transaction = null;
+        }
+        public async Task CommitAsync()
+        {
+            await Task.Run(() => Commit());
+        }
+        public void Rollback()
+        {
+            _transaction?.Rollback();
+            _transaction?.Dispose();
+            _transaction = null;
+        }
+        public async Task RollbackAsync()
+        {
+            await Task.Run(() => Rollback());
+        }
+        public IDbCommand CreateCommand(string sql, CommandType commandType = CommandType.Text, IDictionary<string, object> parameters = null)
+        {
+            if (_connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+            var cmd = _connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandType = commandType;
+            if (parameters != null)
+            {
+                foreach (var kvp in parameters)
+                {
+                    IDbDataParameter param;
+
+                    if (_connection is SqlConnection) // SQL Server
+                    {
+                        param = new SqlParameter
+                        {
+                            ParameterName = kvp.Key.StartsWith("@") ? kvp.Key : "@" + kvp.Key,
+                            Value = kvp.Value ?? DBNull.Value
+                        };
+                    }
+                    else if (_connection is OracleConnection) // Oracle
+                    {
+                        param = new OracleParameter
+                        {
+                            ParameterName = kvp.Key, // Oracle 不要 @
+                            Value = kvp.Value ?? DBNull.Value
+                        };
+                    }
+                    else
+                    {
+                        // fallback generic
+                        param = cmd.CreateParameter();
+                        param.ParameterName = kvp.Key;
+                        param.Value = kvp.Value ?? DBNull.Value;
+                    }
+
+                    cmd.Parameters.Add(param);
+                }
+            }
+
+            if (_transaction != null)
+                cmd.Transaction = _transaction;
+            return cmd;
+        }
+
+    
+
+        // ======== 同步 ========
+        public int ExecuteNonQuery(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            {
+                return cmd.ExecuteNonQuery();
+            }
+        }
+
+        public object ExecuteScalar(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            { 
+                return cmd.ExecuteScalar();
+            }
+        }
+
+        public IDataReader ExecuteReader(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            { 
+                return cmd.ExecuteReader(CommandBehavior.CloseConnection);
+            }
+        }
+
+        // ======== 非同步 ========
+        public async Task<int> ExecuteNonQueryAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            {
+                if (cmd is SqlCommand sqlCmd)
+                    return await sqlCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                if (cmd is OracleCommand oracleCmd)
+                    return await Task.Run(() => oracleCmd.ExecuteNonQuery(), cancellationToken);
+
+                return await Task.Run(() => cmd.ExecuteNonQuery(), cancellationToken);
+            }
+        }
+
+        public async Task<object> ExecuteScalarAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        { 
+            using (var cmd = (IDbCommand)CreateCommand(sql, commandType, parameters))
+            {
+                if (cmd is SqlCommand sqlCmd)
+                    return await sqlCmd.ExecuteScalarAsync(cancellationToken);
+
+                if (cmd is OracleCommand oracleCmd)
+                    return await Task.Run(() => oracleCmd.ExecuteScalar(), cancellationToken);
+
+                return await Task.Run(() => cmd.ExecuteScalar(), cancellationToken); 
+            }
+        }
+
+        public async Task<IDataReader> ExecuteReaderAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        { 
+            using (var cmd = (IDbCommand)CreateCommand(sql, commandType, parameters))
+            {
+                if (cmd is SqlCommand sqlCmd)
+                    return await sqlCmd.ExecuteReaderAsync(CommandBehavior.CloseConnection, cancellationToken);
+
+                if (cmd is OracleCommand oracleCmd)
+                    return await Task.Run(() => oracleCmd.ExecuteReader(CommandBehavior.CloseConnection), cancellationToken);
+
+                return await Task.Run(() => cmd.ExecuteReader(CommandBehavior.CloseConnection), cancellationToken); 
+            }
+        }
+        // ---------------- ExecuteProcedure ----------------
+        public int ExecuteProcedure(string procName, IDictionary<string, object> parameters = null)
+        {
+            using (var cmd = CreateCommand(procName, CommandType.StoredProcedure, parameters))
+            {
+                return cmd.ExecuteNonQuery();
+            }
+        }
+        public async Task<int> ExecuteProcedureAsync(string procName, IDictionary<string, object> parameters = null, CancellationToken cancellationToken = default)
+        {
+            using (var cmd = CreateCommand(procName, CommandType.StoredProcedure, parameters))
+            {
+                return await Task.Run(() => cmd.ExecuteNonQuery());
+            } 
+        }
+
+        public async Task<DataTable> ExecuteProcedureToDataTableAsync(string procName, IDictionary<string, object> parameters = null, CancellationToken cancellationToken = default)
+        {
+            if (Connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+
+            if (Connection.State != ConnectionState.Open)
+                Connection.Open();
+
+            using (var cmd = Connection.CreateCommand())
+            {
+                cmd.CommandText = procName;
+                cmd.CommandType = CommandType.StoredProcedure;
+                if (Transaction != null)
+                    cmd.Transaction = Transaction;
+
+                if (parameters != null)
+                    foreach (var p in parameters)
+                        cmd.Parameters.Add(p);
+
+                IDataAdapter da = null;
+                if (cmd is SqlCommand sqlCmd)
+                    da = new SqlDataAdapter(sqlCmd);
+                else if (cmd is OracleCommand oracleCmd)
+                    da = new OracleDataAdapter(oracleCmd);
+                else
+                    throw new NotSupportedException("不支援的 Command 類型");
+
+                try
+                {
+                    var ds = new DataSet();
+                    await Task.Run(() => da.Fill(ds));
+                    return ds.Tables[0];
+                }
+                finally
+                {
+                    // IDataAdapter 強制釋放
+                    if (da is IDisposable disposable)
+                        disposable.Dispose();
+                }
+            }
+        }
+
+        public DataTable ExecuteProcedureToDataTable(string procName, IDictionary<string, object> parameters = null)
+        {
+            if (Connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+
+            if (Connection.State != ConnectionState.Open)
+                Connection.Open();
+
+            using (var cmd = Connection.CreateCommand())
+            {
+                cmd.CommandText = procName;
+                cmd.CommandType = CommandType.StoredProcedure;
+                if (Transaction != null)
+                    cmd.Transaction = Transaction;
+
+                if (parameters != null)
+                    foreach (var p in parameters)
+                        cmd.Parameters.Add(p);
+
+                IDataAdapter da = null;
+                if (cmd is SqlCommand sqlCmd)
+                    da = new SqlDataAdapter(sqlCmd);
+                else if (cmd is OracleCommand oracleCmd)
+                    da = new OracleDataAdapter(oracleCmd);
+                else
+                    throw new NotSupportedException("不支援的 Command 類型");
+
+                try
+                {
+                    var ds = new DataSet();
+                    da.Fill(ds);
+                    return ds.Tables[0];
+                }
+                finally
+                {
+                    // IDataAdapter 強制釋放
+                    if (da is IDisposable disposable)
+                        disposable.Dispose();
+                }
+            }
+        }
+
+
+        // ---------------- private helpers ----------------
+        //private IDbCommand CreateCommand(string cmdText, CommandType type, IDbDataParameter[] parameters)
+        //{
+        //    IDbCommand cmd = Connection.CreateCommand();
+        //    cmd.CommandText = cmdText;
+        //    cmd.CommandType = type;
+        //    if (Transaction != null)
+        //        cmd.Transaction = Transaction;
+
+        //    if (parameters != null)
+        //    {
+        //        foreach (var p in parameters)
+        //            cmd.Parameters.Add(p);
+        //    }
+
+        //    return cmd;
+        //}
+
+        
+        public async Task<DataTable> GetDataTableAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        { 
+            return await Task.Run(() => GetDataTable(sql, parameters, commandType), cancellationToken);
+        }
+
+        public DataTable GetDataTable(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = (IDbCommand)CreateCommand(sql, commandType, parameters)) 
+            { 
+                IDataAdapter da = null;
+                if (cmd is SqlCommand sqlCmd)
+                    da = new SqlDataAdapter(sqlCmd);
+                else if (cmd is OracleCommand oracleCmd)
+                    da = new OracleDataAdapter(oracleCmd);
+                else
+                    throw new NotSupportedException("不支援的 Command 類型");
+
+                try
+                {
+                    var ds = new DataSet();
+                    da.Fill(ds);
+                    return ds.Tables[0];
+                }
+                finally
+                {
+                    // IDataAdapter 強制釋放
+                    if (da is IDisposable disposable)
+                        disposable.Dispose();
+                } 
+            }
+        }
+        public async Task BulkInsertAsync(DataTable dt, CancellationToken ct = default)
+        {
+            if (_connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+
+            if (_connection is SqlConnection) // SQL Server
+            {
+                using (var bulk = new SqlBulkCopy((SqlConnection)Connection, SqlBulkCopyOptions.Default, (SqlTransaction)Transaction))
+                {
+                    bulk.DestinationTableName = dt.TableName;
+
+                    foreach (DataColumn col in dt.Columns)
+                    {
+                        bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    }
+
+                    // .NET 4.5+ 可以直接使用 async
+                    await bulk.WriteToServerAsync(dt, ct);
+                }
+            }
+            else if (_connection is OracleConnection) // Oracle
+            {
+                // Oracle 沒有內建 async bulk insert
+                await Task.Run(() => BulkInsert(dt), ct);
+            }
+            else
+            {
+                throw new NotSupportedException("不支援的 Command 類型");
+            }
+        }
+        public void BulkInsert(DataTable dt)
+        {
+            if (_connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+
+            if (_connection is SqlConnection) // SQL Server
+            {
+                using (var bulk = new SqlBulkCopy((SqlConnection)Connection, SqlBulkCopyOptions.Default, (SqlTransaction)Transaction))
+                {
+                    bulk.DestinationTableName = dt.TableName;
+
+                    foreach (DataColumn col in dt.Columns)
+                    {
+                        bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    } 
+                    bulk.WriteToServer(dt);
+                } 
+            }
+            else if (_connection is OracleConnection) // Oracle
+            {
+                if (dt.Rows.Count == 0) return;
+                OracleCommand cmd = (OracleCommand)Connection.CreateCommand();
+                cmd.Transaction = (OracleTransaction)Transaction;
+
+                var cols = dt.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+                string colList = string.Join(",", cols);
+                string paramList = string.Join(",", cols.Select(c => ":" + c));
+
+                cmd.CommandText = $"INSERT INTO {dt.TableName} ({colList}) VALUES ({paramList})";
+                cmd.ArrayBindCount = dt.Rows.Count;
+
+                foreach (DataColumn col in dt.Columns)
+                {
+                    var values = dt.AsEnumerable().Select(r => r[col.ColumnName]).ToArray();
+                    var p = new OracleParameter(col.ColumnName, values);
+                    cmd.Parameters.Add(p);
+                }
+
+                cmd.ExecuteNonQuery();
+            }
+            else
+            {
+                throw new NotSupportedException("不支援的 Command 類型");
+            } 
+        }
+
+        public void Dispose()
+        {
+            _transaction?.Dispose();
+            if (_connection?.State == ConnectionState.Open)
+                _connection?.Close();
+            _connection?.Dispose();
+        }
+    }
+
+    public static class DbSessionExtensions
+    {
+        public static T UsingSession<T>(this IComponentContext scope, Func<IDbSession, T> action)
+        {
+            using (var session = scope.Resolve<IDbSession>())
+            {
+                return action(session);
+            }
+        }
+
+        public static T UsingSession<T>(this IComponentContext scope, string dbKey, Func<IDbSession, T> action)
+        {
+            using (var session = scope.ResolveNamed<IDbSession>(dbKey))
+            {
+                return action(session);
+            }
+        }
+
+        public static async Task<T> UsingSessionAsync<T>(this IComponentContext scope, Func<IDbSession, Task<T>> action)
+        {
+            using (var session = scope.Resolve<IDbSession>())
+            {
+                return await action(session);
+            }
+        }
+
+        public static async Task<T> UsingSessionAsync<T>(this IComponentContext scope, string dbKey, Func<IDbSession, Task<T>> action)
+        {
+            using (var session = scope.ResolveNamed<IDbSession>(dbKey))
+            {
+                return await action(session);
+            }
+        }
+    }
+}
+
+using Autofac;
+using Dapper;
+using mvc5.autofac;
+using mvc5.Service;
+using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Web;
+using System.Web.Mvc;
+using ws2;
+using YourMvcApp.Data;
+using static System.Collections.Specialized.BitVector32;
+
+namespace mvc5.Controllers
+{
+    public class HomeController : Controller
+    {
+        private readonly IDbService _db; 
+        private readonly UserService _userService;
+        private readonly ILifetimeScope _scope;
+        private readonly IList<string> _stringList;
+        private readonly HttpContextBase _httpContext;
+        public HomeController(ILifetimeScope scope,IDbService db, IList<string> stringList, HttpContextBase httpContext, UserService userService)
+        { 
+            _scope = scope;
+                _stringList = stringList;
+            _httpContext = httpContext;
+            _userService = userService;
+            _db = db;
+            // 預設 DB → 一行拿 DataTable
+            var dt = _scope.UsingSession(s => s.GetDataTable("SELECT * FROM Customers"));
+
+            // 指定 Oracle_DB1 → 一行拿 DataTable
+            var dt2 = _scope.UsingSession("Oracle_DB1", s => s.GetDataTable("SELECT * FROM Orders"));
+
+            // 🔹 非同步 → 一行拿 DataTable
+            //var dtAsync = await _scope.UsingSessionAsync(s => s.GetDataTableAsync("SELECT * FROM Products"));
+
+            // 🔹 非同步 + 指定 DB
+            //var dtAsync2 = await _scope.UsingSessionAsync("Oracle_DB1", s => s.GetDataTableAsync("SELECT * FROM Employees"));
+            // === 同步 ===
+            //var rows = _scope.UsingSession(s => s.ExecuteNonQuery("INSERT INTO LogTable(Message) VALUES('Hello')"));
+
+            //var dt = _scope.UsingSession(s => s.GetDataTable("SELECT * FROM Customers"));
+
+            //var dtProc = _scope.UsingSession(s =>
+            //    s.ExecuteProcedureToDataTable("usp_GetOrders", new SqlParameter("@CustomerId", 1)));
+
+            //// === 非同步 ===
+            //var rowsAsync = await _scope.UsingSessionAsync(s => s.ExecuteNonQueryAsync("DELETE FROM TempTable"));
+
+            //var dtAsync = await _scope.UsingSessionAsync(s => s.GetDataTableAsync("SELECT * FROM Orders"));
+
+            //var dtProcAsync = await _scope.UsingSessionAsync(s =>
+            //    s.ExecuteProcedureToDataTableAsync("usp_GetOrders", new SqlParameter("@CustomerId", 1)));
+            using (var session = _scope.Resolve<IDbSession>())
+            {
+                try
+                {
+                    session.BeginTransaction();
+
+                    session.ExecuteNonQuery("INSERT INTO Users(Name) VALUES(@Name)",
+                        new Dictionary<string, object> { { "@Name", "Tom" } });
+
+                    session.ExecuteNonQuery("UPDATE Users SET Name=@Name WHERE Id=@Id",
+                        new Dictionary<string, object> { { "@Name", "Jerry" }, { "@Id", 1 } });
+
+                    session.Commit();
+                }
+                catch
+                {
+                    session.Rollback();
+                    throw;
+                }
+            }
+
+            //using (var session = _scope.Resolve<IDbSession>())
+            //{
+            //    try
+            //    {
+            //        await session.BeginTransactionAsync();
+
+            //        await session.ExecuteNonQueryAsync("INSERT INTO Users(Name) VALUES(@Name)",
+            //            new Dictionary<string, object> { { "@Name", "Alice" } });
+
+            //        await session.ExecuteNonQueryAsync("UPDATE Users SET Name=@Name WHERE Id=@Id",
+            //            new Dictionary<string, object> { { "@Name", "Bob" }, { "@Id", 2 } });
+
+            //        await session.CommitAsync();
+            //    }
+            //    catch
+            //    {
+            //        await session.RollbackAsync();
+            //        throw;
+            //    }
+            //}
+
+
+        }
+
+
+
+
+
+        //        using (var session = new DbSession(new OracleConnection(
+        //    System.Configuration.ConfigurationManager.ConnectionStrings["Oracle_DB1"].ConnectionString)))
+        //{
+        //    session.ExecuteProcedure("PROC_UPDATE_USER",
+        //        new OracleParameter("P_USER_ID", 1),
+        //        new OracleParameter("P_USER_NAME", "Test"));
+
+        //    await session.ExecuteProcedureAsync("PROC_UPDATE_USER",
+        //        new OracleParameter("P_USER_ID", 2),
+        //        new OracleParameter("P_USER_NAME", "AsyncTest"));
+
+        //    var dt = session.ExecuteProcedureToDataTable("PROC_GET_USERS",
+        //        new OracleParameter("P_ROLE_ID", 1));
+
+        //    var dtAsync = await session.ExecuteProcedureToDataTableAsync("PROC_GET_USERS",
+        //        new OracleParameter("P_ROLE_ID", 2));
+        //}
+
+        //        using (var session = new DbSession(new SqlConnection(
+        //    System.Configuration.ConfigurationManager.ConnectionStrings["SqlServer_DB1"].ConnectionString)))
+        //{
+        //    // 同步執行 Procedure
+        //    session.ExecuteProcedure("usp_UpdateUser",
+        //        new SqlParameter("@UserId", 1),
+        //        new SqlParameter("@UserName", "Test"));
+
+        //    // 非同步執行 Procedure
+        //    await session.ExecuteProcedureAsync("usp_UpdateUser",
+        //        new SqlParameter("@UserId", 2),
+        //        new SqlParameter("@UserName", "AsyncTest"));
+
+        //    // DataTable
+        //    var dt = session.ExecuteProcedureToDataTable("usp_GetUsers",
+        //        new SqlParameter("@RoleId", 1));
+
+        //    // 非同步 DataTable
+        //    var dtAsync = await session.ExecuteProcedureToDataTableAsync("usp_GetUsers",
+        //        new SqlParameter("@RoleId", 2));
+        //}
+
+
+        //public ActionResult FromSqlServer1()
+        //{
+        //    using (var session = _scope.ResolveNamed<IDbSession>("SqlServer_DB1"))
+        //    {
+        //        var repo = new UserRepository(session);
+        //        var users = repo.GetUsersAsync().Result;
+        //        return Json(users, JsonRequestBehavior.AllowGet);
+        //    }
+        //}
+
+        //public ActionResult FromOracle()
+        //{
+        //    using (var session = _scope.ResolveNamed<IDbSession>("Oracle_DB1"))
+        //    {
+        //        var repo = new UserRepository(session);
+        //        var users = repo.GetUsersAsync().Result;
+        //        return Json(users, JsonRequestBehavior.AllowGet);
+        //    }
+        //}
+        //public ActionResult GetFromSqlServer()
+        //{
+        //    using (var session = _scope.Resolve<IDbSession>(new NamedParameter("dbKey", "SqlServer_DB1")))
+        //    {
+        //        var repo = new UserRepository(session);
+        //        var users = repo.GetUsersAsync().Result;
+        //        return Json(users, JsonRequestBehavior.AllowGet);
+        //    }
+        //}
+
+        //public ActionResult GetFromOracle()
+        //{
+        //    using (var session = _scope.Resolve<IDbSession>(new NamedParameter("dbKey", "Oracle_DB1")))
+        //    {
+        //        var repo = new UserRepository(session);
+        //        var users = repo.GetUsersAsync().Result;
+        //        return Json(users, JsonRequestBehavior.AllowGet);
+        //    }
+        //}
+        [ActionName("Index")]
+        public async Task<ActionResult> IndexAsync()
+        {
+            try
+            {
+                //using (var connection = new SqlConnection(@"Server=(localdb)\MSSQLLocalDB;Database=jqueryDb;Trusted_Connection=True;"))
+                //{
+                //    connection.Open();
+                //    var customers = connection.QueryAsync<dynamic>("SELECT * FROM Customers").Result; // 明確寫 dbo
+                //    //foreach (var c in customers)
+                //    //    Console.WriteLine(c);
+                //}
+                //using (var conn = new SqlConnection(@"Server=(localdb)\MSSQLLocalDB;Database=jqueryDb;Trusted_Connection=True;"))
+                //{
+                //    var c = await conn.QueryAsync<dynamic>("SELECT * FROM Customers", null);
+                //}
+                 
+                    var d2 = await _db.QueryAsync<dynamic>("delete from Customers where FirstName='Web'");
+               
+                var d =  _db.Query<dynamic>("SELECT  * FROM Customers where FirstName=@FirstName", new { FirstName = "Web" });
+                //DataTable dt = await _db.QueryDataTableAsync("SELECT TOP 5 * FROM Customers");
+                //var name = _userService.GetUserName(123);
+                //_stringList.Add(new Random().Next(1, 100).ToString());
+                LogHelper.Info("This is an information message.");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("log4net error: " + ex.Message);
+            }
+            return View();
+        }
+
+        public ActionResult About()
+        {
+            ViewBag.Message = "Your application description page.";
+
+            return View();
+        }
+
+        public ActionResult Contact()
+        {
+            ViewBag.Message = "Your contact page.";
+
+            return View();
+        }
+    }
+}
