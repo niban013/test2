@@ -1,0 +1,707 @@
+
+using mvc5.autofac;
+using mvc5.Service;
+using Newtonsoft.Json;
+using Quartz;
+using Quartz.Impl.Matchers;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Web.Mvc;
+using static Quartz.Logging.OperationName;
+
+namespace mvc5.Controllers
+{
+    // 動態查詢模型
+    public class DynamicFilter
+    {
+        public string TableName { get; set; } = "";
+        public Dictionary<string, object> Conditions { get; set; } = new Dictionary<string, object>();
+    }
+
+    // JobViewModel 可根據需要動態產生欄位
+    public class Field
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public string Type { get; set; } // select, text, checkbox
+        public List<string> Options { get; set; } = new List<string>();
+        public string DefaultValue { get; set; }
+    }
+    public class EmployeeController : Controller
+    {
+        public ActionResult Index()
+        {
+            return View();
+        }
+        // 取得前端要生成的動態欄位
+        public JsonResult GetFields(string tableName)
+        {
+            // 範例: 根據 tableName 回傳不同欄位
+            var fields = new List<Field>();
+
+            if (tableName == "Employees")
+            {
+                fields.Add(new Field { Id = "Department", Label = "部門", Type = "select", Options = new List<string> { "HR", "IT", "Sales" }, DefaultValue = "IT" } );
+                fields.Add(new Field { Id = "Active", Label = "狀態", Type = "select", Options = new List<string> { "Active", "Inactive" } });
+                fields.Add(new Field { Id = "Name", Label = "姓名", Type = "text" });
+            }
+            else if (tableName == "Departments")
+            {
+                fields.Add(new Field { Id = "Location", Label = "地點", Type = "select", Options = new List<string> { "Taipei", "Kaohsiung" } });
+                fields.Add(new Field { Id = "Manager", Label = "經理", Type = "text" });
+            }
+
+            return Json(fields, JsonRequestBehavior.AllowGet);
+        }
+        [HttpGet]
+        public JsonResult GetSearchFields()
+        {
+            // 後端決定哪些欄位要顯示
+            var fields = new List<object>
+        {
+            new { Type = "select", Id = "department", Label = "部門", Options = new[] { "HR", "IT", "Sales" }  },
+            new { Type = "text", Id = "name", Label = "姓名" },
+            new { Type = "checkbox", Id = "active", Label = "包含離職員工" }
+        };
+
+            return Json(fields, JsonRequestBehavior.AllowGet);
+        }
+        [HttpGet]
+        public JsonResult GetTableDefinition()
+        {
+            // 後端決定 DataTable 欄位
+            var columns = new[]
+            {
+            new { data = "Id", title = "編號" },
+            new { data = "Name", title = "姓名" },
+            new { data = "Department", title = "部門" },
+            new { data = "Active", title = "狀態" },
+            new { data = "HireDate", title = "到職日" }
+        };
+            return Json(columns, JsonRequestBehavior.AllowGet);
+        }
+        [HttpGet]
+        public JsonResult GetDepartments()
+        {
+            var list = new[] { "HR", "IT", "Sales", "Finance", "Admin" };
+            return Json(list, JsonRequestBehavior.AllowGet);
+        }
+        Dictionary<string, string> auto = new Dictionary<string, string>();
+        // ✅ 模擬資料來源 (實務上可改為資料庫查詢)
+        private DataTable GetMockData()
+        {
+            auto["Department"] = "D";
+            auto["Active"] = "C";
+            auto["Name"] = "T";
+            var dt = new DataTable();
+            dt.Columns.Add("Id", typeof(int));
+            dt.Columns.Add("Name", typeof(string));
+            dt.Columns.Add("Department", typeof(string));
+            dt.Columns.Add("Active", typeof(bool));
+            dt.Columns.Add("HireDate", typeof(DateTime));
+            dt.Columns.Add("Auto", typeof(bool));
+
+            dt.Rows.Add(1, "John", "HR", true, DateTime.Now.AddYears(-3));
+            dt.Rows.Add(2, "Mary", "IT", true, DateTime.Now.AddYears(-1));
+            dt.Rows.Add(3, "Tom", "Sales", false, DateTime.Now.AddYears(-5));
+            dt.Rows.Add(4, "Jane", "IT", true, DateTime.Now.AddYears(-2));
+            dt.Rows.Add(5, "Kevin", "Sales", false, DateTime.Now.AddYears(-4));
+
+            return dt;
+        }
+
+        // ✅ DataTables AJAX 端點
+        [HttpPost]
+        public JsonResult SearchEmployees(EmployeeFilter filter)
+        {
+            var dt = GetMockData();
+
+            var query = dt.AsEnumerable();
+
+            // 模擬篩選條件
+            if (!string.IsNullOrEmpty(filter.Department))
+                query = query.Where(r => r.Field<string>("Department") == filter.Department);
+
+            if (!string.IsNullOrEmpty(filter.Keyword))
+                query = query.Where(r => r.Field<string>("Name").Contains(filter.Keyword));
+
+            if (!filter.IncludeInactive)
+                query = query.Where(r => r.Field<bool>("Active"));
+
+            var result = query.Select(r => new
+            {
+                Id = r.Field<int>("Id"),
+                Name = r.Field<string>("Name"),
+                Department = r.Field<string>("Department"),
+                Active = r.Field<bool>("Active") ? "Active" : "Inactive",
+                HireDate = r.Field<DateTime>("HireDate").ToString("yyyy-MM-dd")
+            }).ToList();
+
+            return Json(new { data = result }, JsonRequestBehavior.AllowGet);
+        }
+
+        // 動態查詢
+        [HttpPost]
+        public JsonResult Search([Microsoft.AspNetCore.Mvc.FromBody] DynamicFilter filter)
+        {
+            if (string.IsNullOrEmpty(filter.TableName))
+                return Json(new { data = new List<object>() });
+
+          
+
+            var dt = GetMockData();
+
+            var query = dt.AsEnumerable();
+
+            foreach (var kv in filter.Conditions)
+            {
+                //if (kv.Value is string str && str.Contains("%"))
+                //    whereClauses.Add($"{kv.Key} LIKE @{kv.Key}");
+                //else
+                query = query.Where(r => r.Field<string>(kv.Key) == kv.Value.ToString());
+                //    ////whereClauses.Add($"{kv.Key} = @{kv.Key}");
+            }
+
+
+            //// 模擬篩選條件
+            //if (!string.IsNullOrEmpty(filter.Department))
+            //    query = query.Where(r => r.Field<string>("Department") == filter.Department);
+
+            //if (!string.IsNullOrEmpty(filter.Keyword))
+            //    query = query.Where(r => r.Field<string>("Name").Contains(filter.Keyword));
+
+            //if (!filter.IncludeInactive)
+            //    query = query.Where(r => r.Field<bool>("Active"));
+
+            var result = query.Select(r => new
+            {
+                Id = r.Field<int>("Id"),
+                Name = r.Field<string>("Name"),
+                Department = r.Field<string>("Department"),
+                Active = r.Field<bool>("Active") ? "Active" : "Inactive",
+                HireDate = r.Field<DateTime>("HireDate").ToString("yyyy-MM-dd")
+            }).ToList();
+
+            ////string sql = BuildDynamicSql(filter);
+
+            ////using (var conn = new SqlConnection(ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString))
+            ////using (var cmd = new SqlCommand(sql, conn))
+            ////{
+            ////    foreach (var kv in filter.Conditions)
+            ////        cmd.Parameters.AddWithValue("@" + kv.Key, kv.Value ?? DBNull.Value);
+
+            ////    var da = new SqlDataAdapter(cmd);
+            ////    da.Fill(dt);
+            ////}
+
+            return Json(new { data = result }, JsonRequestBehavior.AllowGet);
+        }
+
+        private string BuildDynamicSql(DynamicFilter filter)
+        {
+            var whereClauses = new List<string>();
+
+            foreach (var kv in filter.Conditions)
+            {
+                if (kv.Value is string str && str.Contains("%"))
+                    whereClauses.Add($"{kv.Key} LIKE @{kv.Key}");
+                else
+                    whereClauses.Add($"{kv.Key} = @{kv.Key}");
+            }
+
+            string whereSql = whereClauses.Any() ? "WHERE " + string.Join(" AND ", whereClauses) : "";
+            string sql = $"SELECT * FROM {filter.TableName} {whereSql}";
+            return sql;
+        }
+    }
+    public class EmployeeFilter
+    {
+        public string Department { get; set; }
+        public string Keyword { get; set; }
+        public bool IncludeInactive { get; set; }
+    }
+}
+
+@{
+    ViewBag.Title = "動態查詢範例";
+}
+
+<h2>動態查詢 + DataTable</h2>
+
+<div>
+    選擇表：
+    <select id="tableSelector" class="form-control input-sm">
+        <option value="">請選擇表</option>
+        <option value="Employees">Employees</option>
+        <option value="Departments">Departments</option>
+    </select>
+</div>
+
+<div id="filterArea" class="form-row mt-3"></div>
+
+<button id="btnSearch" class="btn btn-primary mt-2">查詢</button>
+
+<hr />
+
+<div id="tableWrapper" class="mt-3"></div>
+
+@section Scripts{
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+    <script>
+        let fields = [];
+        let table;
+
+        // 當選擇表格時，動態生成查詢欄位
+        $("#tableSelector").on("change", function() {
+            const tableName = $(this).val();
+            $("#filterArea").empty();
+            $("#tableWrapper").empty();
+
+            if (!tableName) return;
+
+            $.getJSON('/Employee/GetFields', { tableName: tableName }, function(result){
+                fields = result;
+                const $area = $("#filterArea");
+
+                fields.forEach(f => {
+                    let html = '';
+                      let defaultValue = f.DefaultValue || ''; // 預設值
+                    if (f.Type === "select") {
+                        html += `<label for="${f.Id}">${f.Label}</label>`;
+                        html += `<select id="${f.Id}" class="form-control input-sm">`;
+                        html += `<option value="">全部</option>`;
+                         f.Options.forEach(opt => {
+      const selected = (opt === defaultValue) ? 'selected' : '';
+      html += `<option value="${opt}" ${selected}>${opt}</option>`;
+  });
+                        html += `</select>`;
+                    } else if (f.Type === "text") {
+                         html += `<label for="${f.Id}">${f.Label}</label>`;
+   html += `<input id="${f.Id}" type="text" class="form-control input-sm" value="${defaultValue}" />`;
+                    } else if (f.Type === "checkbox") {
+                      const checked = (defaultValue === true) ? 'checked' : '';
+ html += `<label><input type="checkbox" id="${f.Id}" ${checked}> ${f.Label}</label>`;
+                    }
+                    $area.append(`<div class="form-group mr-2 d-inline-block">${html}</div>`);
+                });
+
+                // 產生DataTable容器
+                $("#tableWrapper").html(`<table id="dataTable" class="display" style="width:100%"><thead></thead></table>`);
+                $("#btnSearch").trigger("click");
+
+              //  table = $('#dataTable').DataTable({
+             //       columns: [], // 等查詢後動態生成
+             //   });
+            });
+        });
+
+        $("#btnSearch").on("click", function() {
+            const filter = {
+                TableName: $("#tableSelector").val(),
+                Conditions: {}
+            };
+
+            fields.forEach(f => {
+                const val = $(`#${f.Id}`).val();
+                if (val !== null && val !== "")
+                    filter.Conditions[f.Id] = val;
+            });
+
+            $.ajax({
+                url: '/Employee/Search',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(filter),
+                success: function(result) {
+                    if (!result.data || !result.data.length) return;
+
+                    // 動態生成欄位
+                    const keys = Object.keys(result.data[0]);
+                    const columns = keys.map(k => ({ title: k, data: k }));
+
+                    if ($.fn.DataTable.isDataTable('#dataTable')) {
+                        table.destroy();
+                        $('#dataTable').remove();
+                        $("#tableWrapper").html('<table id="dataTable" class="display" style="width:100%"><thead></thead></table>');
+                    }
+
+                    table = $('#dataTable').DataTable({
+                        data: result.data,
+                        columns: columns
+                    });
+                }
+            });
+        });
+    </script>
+}
+
+
+@{
+    ViewBag.Title = "員工查詢";
+}
+
+<h2>員工查詢</h2>
+<style>
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* 每格最小220px，自動填滿 */
+        gap: 12px 16px; /* 列間距、行間距 */
+        align-items: center;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 4px;
+    }
+
+    .form-group select,
+    .form-group input[type="text"] {
+        width: 100%;
+        padding: 4px 6px;
+        box-sizing: border-box;
+    }
+
+    .form-group input[type="checkbox"] {
+        margin-right: 4px;
+    }
+
+  /*  .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+*/
+   /* .modal-content {
+        background: #fff;
+        border-radius: 10px;
+        width: 500px;
+        max-width: 90%;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        overflow: hidden;
+    }*/
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.4);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        max-width: 800px;
+        width: 80%;
+        max-height: 90%;
+        overflow-y: auto;
+        transition: all 0.3s ease;
+    }
+
+        /* 🔹 全螢幕樣式 */
+        .modal-content.fullscreen {
+            width: 95%;
+            height: 90%;
+            max-width: none;
+            max-height: none;
+        }
+    .modal-header, .modal-footer {
+        padding: 10px 16px;
+        background: #f5f5f5;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-body {
+        padding: 20px 16px;
+    }
+
+    .close {
+        cursor: pointer;
+        font-size: 22px;
+    }
+
+    .btn {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background-color: #007bff;
+        color: #fff;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: #fff;
+    }
+
+</style>
+
+<div>
+    選擇表：
+    <select id="tableSelector" class="form-control input-sm">
+        <option value="">請選擇表</option>
+        <option value="Employees">Employees</option>
+        <option value="Departments">Departments</option>
+    </select>
+</div>
+<!-- 🔍 查詢區 -->
+<div id="searchArea" class="form-grid"><!-- 這是佔位符 --></div>
+
+<button id="btnSearch" style="margin-top:10px;">查詢</button>
+<button id="btnShow">開啟範例 Modal</button>
+
+<!-- 📋 資料表 -->
+<!-- Table 佔位符 -->
+<table id="empTable" class="display" style="width:100%">
+    <thead>
+        <tr id="empHeaderRow"></tr>
+    </thead>
+</table>
+<!-- Modal 結構 -->
+<div id="myModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle"></h3>
+            <span id="modalClose" class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="modalFieldsArea" class="form-grid"></div> <!-- 這裡是動態產生欄位的地方 -->
+            <div id="modalBody">
+                
+                <table id="empTable2" class="display" style="width:100%">
+                    <thead>
+                        <tr id="empHeaderRow2"></tr>
+                    </thead>
+                </table>
+                
+                </div>       <!-- 這裡可放其他內容或結果 -->
+
+        </div>
+        <div class="modal-footer">
+            <button id="modalCancel" class="btn btn-secondary">關閉</button>
+            <button id="modalOk" class="btn btn-primary">確定</button>
+        </div>
+    </div>
+</div>
+@section scripts {
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet" />
+
+    <script>
+$(async function () {
+    // 1️⃣ 從後端取得欄位設定
+    const fields = await $.get('@Url.Action("GetSearchFields", "Employee")');
+    const columns = await $.get('@Url.Action("GetTableDefinition", "Employee")');
+    const $area = $('#searchArea');
+    const $area2 = $('#modalFieldsArea');
+    const $theadRow = $('#empHeaderRow');
+    const $theadRow2 = $('#empHeaderRow2');
+    // 2️⃣ 動態產生欄位
+    $area.empty();
+    $area2.empty();
+
+    fields.forEach(f => {
+        let html = '';
+        let defaultValue = f.DefaultValue || ''; // 預設值
+        if (f.Type === "select") {
+            html += `<label for="${f.Id}">${f.Label}</label>`;
+            html += `<select id="${f.Id}" class="form-control input-sm">`;
+            html += `<option value="">全部</option>`;
+            f.Options.forEach(opt => {
+                const selected = (opt === defaultValue) ? 'selected' : '';
+                html += `<option value="${opt}" ${selected}>${opt}</option>`;
+            });
+            html += `</select>`;
+        } else if (f.Type === "text") {
+            html += `<label for="${f.Id}">${f.Label}</label>`;
+            html += `<input id="${f.Id}" type="text" class="form-control input-sm" value="${defaultValue}" />`;
+        } else if (f.Type === "checkbox") {
+            const checked = (defaultValue === true) ? 'checked' : '';
+            html += `<label><input type="checkbox" id="${f.Id}" ${checked}> ${f.Label}</label>`;
+        }
+
+        $area.append(`<div class="form-group">${html}</div>`);
+    });
+    // 3️⃣ 動態產生 thead
+    columns.forEach(col => {
+        $theadRow.append(`<th>${col.title}</th>`);
+    });
+    // 3️⃣ 初始化 DataTable
+     // 4️⃣ 初始化 DataTable
+    const table = $('#empTable').DataTable({
+        ajax: {
+            url: '@Url.Action("SearchEmployees", "Employee")',
+            type: 'POST',
+            data: function (d) {
+                fields.forEach(f => {
+                    if (f.Type === "checkbox")
+                        d[f.Id] = $(`#${f.Id}`).is(':checked');
+                    else
+                        d[f.Id] = $(`#${f.Id}`).val();
+                });
+            }
+        },
+        columns: columns,
+        searching: false,
+        paging: true
+    });
+    // 3️⃣ 動態產生 thead
+    columns.forEach(col => {
+        $theadRow2.append(`<th>${col.title}</th>`);
+    });
+    const table2 = $('#empTable2').DataTable({
+    ajax: {
+        url: '@Url.Action("SearchEmployees", "Employee")',
+        type: 'POST',
+        data: function (d) {
+            fields.forEach(f => {
+                if (f.Type === "checkbox")
+                    d[f.Id] = $(`#${f.Id}`).is(':checked');
+                else
+                    d[f.Id] = $(`#${f.Id}`).val();
+            });
+        }
+    },
+    columns: columns,
+    searching: false,
+    paging: true
+});
+    // 4️⃣ 查詢按鈕事件
+    $('#btnSearch').on('click', function () {
+        table.ajax.reload();
+    });
+
+    // 開啟 modal
+    function openModal(title, bodyHtml, onOk, fullscreen = false) {
+        $("#modalTitle").text(title);
+        const $modal = $("#myModal");
+        const $content = $modal.find(".modal-content");
+        const $area = $("#modalFieldsArea");
+        $area2.empty(); // 清空舊內容
+        $content.removeClass("fullscreen"); // 先移除舊樣式
+
+        // 🔹 是否全螢幕
+        if (fullscreen) {
+            $content.addClass("fullscreen");
+        }
+        // 🔹 根據 fields 動態建立欄位
+        fields.forEach(f => {
+            let html = '';
+            if (f.Type === "select") {
+                html += `<label for="${f.Id}">${f.Label}</label>`;
+                html += `<select id="${f.Id}" class="form-control input-sm">`;
+                html += `<option value="">全部</option>`;
+                f.Options.forEach(opt => {
+                    html += `<option value="${opt}">${opt}</option>`;
+                });
+                html += `</select>`;
+            } else if (f.Type === "text") {
+                html += `<label for="${f.Id}">${f.Label}</label>`;
+                html += `<input id="${f.Id}" type="text" class="form-control input-sm" />`;
+            } else if (f.Type === "checkbox") {
+                html += `<label><input type="checkbox" id="${f.Id}"> ${f.Label}</label>`;
+            }
+            $area2.append(`<div class="form-group">${html}</div>`);
+        });
+
+        $("#myModal").fadeIn(150);
+
+        // 綁定確定事件
+        $("#modalOk").off("click").on("click", function () {
+            if (onOk) onOk();
+            closeModal();
+        });
+    }
+
+    // 關閉 modal
+    function closeModal() {
+        $("#myModal").fadeOut(150);
+    }
+    $("#btnShow").on("click", function () {
+
+        // 範例：點擊按鈕開啟 Modal 並 AJAX 取資料
+        $("#btnShow").on("click", function () {
+            let empId = 101; // 假設要查的員工ID，可改成從 DataTable 拿
+
+
+            openModal("動態搜尋條件", fields,true,true);
+
+            // 可選：開啟後再 AJAX 取得初始資料
+            // $.get('/Employee/GetFilters', function(data) {
+            //     openModal("條件選擇", data.fields);
+            // });
+
+
+
+            @*// 呼叫後端 MVC Action
+            $.ajax({
+                url: '@Url.Action("SearchEmployees", "Employee")',
+                type: 'GET',
+                data: { id: empId },
+                success: function (res) {
+
+
+                    $("#modalBody").html(html);
+                },
+                error: function () {
+                    $("#modalBody").html("<p style='color:red;'>載入失敗，請稍後再試。</p>");
+                }
+            });*@
+        });
+
+
+
+
+
+
+//        openModal("員工明細", `
+//     <div id="searchArea2" class="form-grid"><!-- 這是佔位符 --></div>
+
+//<button id="btnSearch2" style="margin-top:10px;">查詢</button>
+//    `, function () {
+//            alert("使用者按下確定！");
+//        });
+    });
+    // 綁定關閉按鈕
+    $(document).ready(function () {
+        $("#modalClose, #modalCancel").on("click", closeModal);
+    });
+});
+    </script>
+}
+
+
+
+
+
+
