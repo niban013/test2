@@ -1,0 +1,30 @@
+          case "tomselect":
+  $input = $('<select multiple class="tomSelect"></select>');
+  p.options.forEach(opt => {
+    const $opt = $(`<option value="${opt.key}">${opt.value}</option>`);
+    $input.append($opt);
+  });
+  setTimeout(() => {
+    const ts = new TomSelect($input[0], {
+      valueField: "key",
+      labelField: "value",
+      searchField: ["value"],
+      options: p.options, plugins: ['remove_button'],
+      create: (input) => ({ key: input, value: input }),
+      onChange: (vals) => {
+        obj[p.key] = vals;
+        onPropertyChanged(p.key, obj[p.key]);
+
+        // 🪄 若全部刪除，立即展開下拉清單
+        if (vals.length === 0) {
+          ts.open();
+        }
+      },
+      render: {
+        option: (item, escape) => `<div>${escape(item.value)} (${escape(item.key)})</div>`,
+        item: (item, escape) => `<div>${escape(item.value)} (${escape(item.key)})</div>`
+      }
+    });
+    ts.setValue(value);
+  });
+  break;
