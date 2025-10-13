@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>群組版 PropertyGrid + 多筆 JSON 切換 + 新增/刪除</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; padding: 20px; display: flex; gap: 20px; }
+    .left, .right { flex: 1; }
+    table.property-grid {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    table.property-grid th, table.property-grid td {
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      vertical-align: middle;
+    }
+    table.property-grid th { background: #f0f0f0; text-align: left; width: 180px; }
+    .readonly input, .readonly select { background: #eee; pointer-events: none; }
+    .hint { color: #777; font-size: 12px; display: block; margin-top: 2px; }
+    .group-header {
+      background: #dfe9f3; font-weight: bold; cursor: pointer;
+      padding: 8px 10px; border: 1px solid #bbb; user-select: none;
+    }
+    .group-header::before {
+      content: "▸"; display: inline-block; margin-right: 6px; transition: transform 0.2s;
+    }
+    .group-header.open::before { transform: rotate(90deg); }
+    .group-body { display: none; }
+    .group-body.open { display: table-row-group; }
+    textarea {
+      width: 100%; height: 600px; font-family: monospace;
+      font-size: 13px; border: 1px solid #ccc; border-radius: 6px;
+      padding: 8px; box-sizing: border-box; background: #fafafa;
+    }
+    button, select {
+      margin-top: 10px; padding: 6px 12px; font-size: 14px; cursor: pointer;
+    }
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<div class="left">
+  <h2>⚙️ 群組版 PropertyGrid</h2>
+
+  <div class="toolbar">
+    <label>選擇資料筆數：</label>
+    <select id="recordSelector"></select>
+    <button id="addRecord">＋ 新增</button>
+    <button id="deleteRecord">🗑 刪除</button>
+  </div>
+
+  <div id="gridContainer"></div>
+  <button id="showJson">📤 匯出 JSON</button>
+</div>
+
+<div class="right">
+  <h2>🧾 JSON 資料編輯區</h2>
+  <textarea id="jsonEditor"></textarea>
+  <button id="importJson">📥 匯入 JSON</button>
+</div>
+
+<script>
+// 🧩 初始多筆資料（加上 pk）
+  let models = [
+  {
+    "index": 0,
+    "pk": "U1001",
+    "Name": "Alice",
+    "Age": 28,
+    "IsActive": true,
+    "Department": "IT",
+    "Tags": ["HR", "Finance"],
+    "Role": "User",
+    "Note": "主負責人",
+    "CreatedDate": "2024-09-10",
+    "PermissionLevel": 3
+  },
+  {
+    "index": 1,
+    "pk": "U1002",
+    "Name": "Bob",
+    "Age": 34,
+    "IsActive": false,
+    "Department": "Sales",
+    "Tags": ["Sales"],
+    "Role": "Admin",
+    "Note": "主管",
+    "CreatedDate": "2024-08-01",
+    "PermissionLevel": 5
+  }
+]
+
+
+  // 🧱 Schema 結構（新增 pk 欄位）
+  const schemaGroups = [
+    {
+      group: "基本屬性",
+      properties: [
+        { key: "pk", type: "string", label: "主鍵", readonly: true, hint: "自動產生，不可修改" },
+        { key: "Name", type: "string", label: "姓名", hint: "員工全名" },
+        { key: "Age", type: "number", label: "年齡" },
+        { key: "IsActive", type: "boolean", label: "是否啟用" },
+        { key: "Department", type: "enum", label: "部門", options: ["HR", "IT", "Sales", "Finance"] }
+      ]
+    },
+    {
+      group: "進階屬性",
+      properties: [
+        {
+          key: "Tags",
+          type: "tomselect",
+          label: "標籤 (多選)",
+          options: [
+            { key: "HR", value: "人資" },
+            { key: "IT", value: "資訊" },
+            { key: "Finance", value: "財務" },
+            { key: "Sales", value: "銷售" }
+          ]
+        },
+        { key: "Role", type: "enum", label: "角色", options: ["Admin", "User", "Guest"] },
+        { key: "Note", type: "string", label: "備註", hint: "可填入說明" },
+        { key: "PermissionLevel", type: "number", label: "權限等級" }
+      ]
+    },
+    {
+      group: "系統屬性",
+      properties: [
+        { key: "CreatedDate", type: "string", label: "建立日期", readonly: true }
+      ]
+    }
+  ];
+
+  let currentIndex = 0;
+  let model = { ...models[currentIndex] };
+
+ 
+    // 🔑 產生唯一 pk（UUID 簡化版）
+  function generatePk() {
+    return "U" + Math.random().toString(36).substring(2, 8).toUpperCase();
+  }
+ // 🪄 屬性變更事件
+const onPropertyChanged = (key, value) => {
+  models[currentIndex] = { ...model };
+
+  // 🔢 每筆加上 index
+  const indexedModels = models.map((m, i) => ({ index: i, ...m }));
+
+  $("#jsonEditor").val(JSON.stringify(indexedModels, null, 2));
+};
+
+  // 🧱 建立 PropertyGrid
+  function renderGroupedGrid(obj, groupedSchema) {
+    const $container = $("#gridContainer").empty();
+
+    groupedSchema.forEach(group => {
+      const $header = $(`<div class="group-header">${group.group}</div>`);
+      const $table = $('<table class="property-grid"><thead><tr><th>屬性</th><th>值</th></tr></thead></table>');
+      const $tbody = $("<tbody class='group-body'></tbody>");
+      $table.append($tbody);
+      $container.append($header).append($table);
+
+      // 展開/收合
+      $header.on("click", () => {
+        const open = !$header.hasClass("open");
+        $header.toggleClass("open", open);
+        $tbody.toggleClass("open", open);
+      });
+
+      // 每個欄位
+      group.properties.forEach(p => {
+        const value = obj[p.key];
+        const $tr = $("<tr>");
+        const $label = $("<td>").html(`${p.label || p.key}${p.readonly ? " 🔒" : ""}`);
+        const $valCell = $("<td>");
+        let $input;
+
+        switch (p.type) {
+          case "boolean":
+            $input = $('<input type="checkbox">').prop("checked", !!value);
+            $input.on("change", () => {
+              obj[p.key] = $input.prop("checked");
+              onPropertyChanged(p.key, obj[p.key]);
+            });
+            break;
+          case "number":
+            $input = $(`<input type="number" value="${value}">`);
+            $input.on("input", () => {
+              obj[p.key] = Number($input.val());
+              onPropertyChanged(p.key, obj[p.key]);
+            });
+            break;
+          case "enum":
+            $input = $("<select></select>");
+            p.options.forEach(opt => {
+              const $opt = $(`<option value="${opt}">${opt}</option>`);
+              if (opt === value) $opt.prop("selected", true);
+              $input.append($opt);
+            });
+            $input.on("change", () => {
+              obj[p.key] = $input.val();
+              onPropertyChanged(p.key, obj[p.key]);
+            });
+            break;
+          case "tomselect":
+            $input = $('<select multiple class="tomSelect"></select>');
+            p.options.forEach(opt => {
+              const $opt = $(`<option value="${opt.key}">${opt.value}</option>`);
+              $input.append($opt);
+            });
+            setTimeout(() => {
+              const ts = new TomSelect($input[0], {
+                valueField: "key",
+                labelField: "value",
+                searchField: ["value"],
+                options: p.options,
+                create: (input) => ({ key: input, value: input }),
+                onChange: (vals) => {
+                  obj[p.key] = vals;
+                  onPropertyChanged(p.key, obj[p.key]);
+                },
+                render: {
+                  option: (item, escape) => `<div>${escape(item.value)} (${escape(item.key)})</div>`,
+                  item: (item, escape) => `<div>${escape(item.value)} (${escape(item.key)})</div>`
+                }
+              });
+              ts.setValue(value);
+            });
+            break;
+        default:
+		  $input = $(`<input type="text" value="${value}">`);
+		  $input.on("input", () => {
+			obj[p.key] = $input.val();
+			onPropertyChanged(p.key, obj[p.key]);
+
+			// 🔄 若修改的是姓名，更新下拉選項文字
+			if (p.key === "Name") {
+			  const $sel = $("#recordSelector option").eq(currentIndex);
+			  const pk = models[currentIndex].pk;
+			  const name = obj[p.key] || "未命名";
+			  $sel.text(`${currentIndex + 1} - ${name} (${pk})`);
+			}
+		  });
+		  break;
+
+        }
+
+        if (p.readonly) $input.prop("disabled", true).addClass("readonly");
+        $valCell.append($input);
+        if (p.hint) $valCell.append(`<span class="hint">${p.hint}</span>`);
+        $tr.append($label, $valCell);
+        $tbody.append($tr);
+      });
+    });
+
+    $(".group-header").addClass("open");
+    $(".group-body").addClass("open");
+  }
+
+  // 🔄 匯出 JSON（加上 index）
+$("#showJson").on("click", () => {
+  const indexedModels = models.map((m, i) => ({ index: i, ...m }));
+  $("#jsonEditor").val(JSON.stringify(indexedModels, null, 2));
+});
+
+   // 🔁 匯入 JSON（補上缺 pk 的資料）
+  $("#importJson").on("click", () => {
+    try {
+      const parsed = JSON.parse($("#jsonEditor").val());
+      models = Array.isArray(parsed) ? parsed : [parsed];
+      models.forEach(m => {
+        if (!m.pk) m.pk = generatePk(); // 🔑 若無 pk 自動補
+      });
+      currentIndex = 0;
+      updateRecordSelector();
+      model = { ...models[currentIndex] };
+      renderGroupedGrid(model, schemaGroups);
+      $("#jsonEditor").val(JSON.stringify(models, null, 2));
+    } catch {
+      alert("❌ JSON 格式錯誤，請確認內容是否正確！");
+    }
+  });
+
+  // 🧭 更新下拉選單
+  function updateRecordSelector() {
+    const $sel = $("#recordSelector").empty();
+    models.forEach((m, i) => {
+      const name = m.Name || "未命名";
+      $sel.append(`<option value="${i}">${i + 1} - ${name} (${m.pk})</option>`);
+    });
+    $sel.val(currentIndex);
+  }
+
+
+  $("#recordSelector").on("change", function() {
+    currentIndex = Number($(this).val());
+    model = { ...models[currentIndex] };
+    renderGroupedGrid(model, schemaGroups);
+  });
+
+  // ➕ 新增一筆
+$("#addRecord").on("click", function() {
+  const template = JSON.parse(JSON.stringify(models[0]));
+  template.pk = generatePk();
+  template.Name = "新使用者";
+  template.CreatedDate = new Date().toISOString().slice(0,10);
+  models.push(template);
+  currentIndex = models.length - 1;
+  model = { ...models[currentIndex] };
+  updateRecordSelector();
+  renderGroupedGrid(model, schemaGroups);
+
+  const indexedModels = models.map((m, i) => ({ index: i, ...m }));
+  $("#jsonEditor").val(JSON.stringify(indexedModels, null, 2));
+});
+
+// 🗑 刪除一筆
+$("#deleteRecord").on("click", function() {
+  if (models.length === 0) return alert("❌ 沒有資料可刪除！");
+  if (!confirm("確定要刪除此筆資料嗎？")) return;
+  models.splice(currentIndex, 1);
+  if (models.length === 0) {
+    models = [{}];
+  }
+  currentIndex = Math.max(0, currentIndex - 1);
+  model = { ...models[currentIndex] };
+  updateRecordSelector();
+  renderGroupedGrid(model, schemaGroups);
+
+  const indexedModels = models.map((m, i) => ({ index: i, ...m }));
+  $("#jsonEditor").val(JSON.stringify(indexedModels, null, 2));
+});
+
+  // 初始化
+  updateRecordSelector();
+  renderGroupedGrid(model, schemaGroups);
+  $("#jsonEditor").val(JSON.stringify(models, null, 2));
+</script>
+</body>
+</html>
