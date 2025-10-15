@@ -1,0 +1,101 @@
+ // GET /Export?tableName=Customers
+ [HttpGet]
+ public ActionResult Export(string tableName)
+ {
+     if (string.IsNullOrEmpty(tableName))
+         return new HttpStatusCodeResult(400, "請提供 tableName");
+     try
+     {
+         ExcelExportService d = new ExcelExportService();
+      
+
+         var fileBytes = d.ExportCustomers(tableName);
+     return File(fileBytes,
+                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             "Customers.xlsx");
+     }
+     catch (System.ArgumentException ex)
+     {
+         // 返回 400 Bad Request
+         return new HttpStatusCodeResult(400, ex.Message);
+     }
+
+     using ClosedXML.Excel;
+using MiniExcelLibs;
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+
+namespace mvc5.Service
+{
+    public class ExcelExportService
+    { // 允許匯出的資料表白名單
+        private readonly HashSet<string> allowedTables = new HashSet<string>
+    {
+        "Customers",
+        "Orders",
+        "Products"
+    };
+        public byte[] ExportCustomers(string tableName)
+        {
+            
+            //if (!allowedTables.Contains(tableName))
+            //    throw new System.ArgumentException("無效的資料表名稱");
+            var ms = new MemoryStream();
+            string connStr = "Server=(localdb)\\MSSQLLocalDB;Database=jqueryDb;Trusted_Connection=True;";
+            string sql = "SELECT * FROM customers"; // 資料幾十萬筆都 OK
+            using (var conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand("SELECT * FROM Customers", conn))
+                using (var reader = cmd.ExecuteReader())
+                using (ms = new MemoryStream())
+                {
+                    MiniExcel.SaveAs(ms, reader, sheetName: "Customers");
+                    ms.Position = 0;
+
+                    // 第2階段：用 ClosedXML 套用樣式
+                    using (var wb = new XLWorkbook(ms))
+                    {
+                        var ws = wb.Worksheet(1);
+
+                        // Header 藍底白字
+                        var headerRange = ws.RangeUsed().FirstRow();
+                        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+                        headerRange.Style.Font.FontColor = XLColor.White;
+                        headerRange.Style.Font.Bold = true;
+                        headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                        // 數字右對齊、文字左對齊
+                        var usedRange = ws.RangeUsed();
+                        foreach (var cell in usedRange.CellsUsed().Skip(headerRange.CellCount()))
+                        {
+                            if (double.TryParse(cell.Value.ToString(), out _))
+                                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                            else
+                                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                        }
+
+                        // 自動欄寬
+                        ws.Columns().AdjustToContents();
+
+                        // 重新寫回 MemoryStream
+                        using (var outMs = new MemoryStream())
+                        {
+                            wb.SaveAs(outMs);
+                            return outMs.ToArray();
+                        }
+                    }
+
+                }
+            }
+        }
+        
+    }
+}
+
+ }
