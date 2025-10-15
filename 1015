@@ -1,4 +1,252 @@
- // GET /Export?tableName=Customers
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.IO;
+using System.Web.Mvc;
+using MiniExcelLibs;
+
+public class ExportController : Controller
+{
+    private readonly string _connStr = "Server=.;Database=TestDB;User Id=sa;Password=1234;";
+
+    [HttpGet]
+    public ActionResult DownloadExcel()
+    {
+        Response.BufferOutput = false; // 禁用緩衝
+        Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        Response.AddHeader("Content-Disposition", "attachment; filename=Customers.xlsx");
+
+        // 如果能取得資料總筆數，用來計算前端進度
+        long totalRows = GetTotalRowCount();
+
+        try
+        {
+            using (var writer = new MemoryStream())
+            using (var conn = new SqlConnection(_connStr))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand("SELECT CustomerId, CustomerName, Age FROM Customers ORDER BY CustomerId", conn))
+                using (var reader = cmd.ExecuteReader())
+                {
+                    int batchSize = 5000;
+                    var buffer = new List<object>();
+                    long processed = 0;
+
+                    // MiniExcel 可以直接寫入 Stream
+                    while (reader.Read())
+                    {
+                        buffer.Add(new
+                        {
+                            CustomerId = reader.GetInt32(0),
+                            CustomerName = reader.GetString(1),
+                            Age = reader.GetInt32(2)
+                        });
+
+                        if (buffer.Count >= batchSize)
+                        {
+                            MiniExcel.SaveAs(Response.OutputStream, buffer, sheetName: "Customers", append: true);
+                            buffer.Clear();
+                            Response.Flush(); // 立即送到前端
+
+                            processed += batchSize;
+                            // 可透過自訂 Header 通知前端進度
+                            Response.AddHeader("X-Progress", ((double)processed / totalRows * 100).ToString("F2"));
+                        }
+                    }
+
+                    if (buffer.Count > 0)
+                    {
+                        MiniExcel.SaveAs(Response.OutputStream, buffer, sheetName: "Customers", append: true);
+                        Response.Flush();
+                    }
+                }
+            }
+
+            return new EmptyResult(); // 已經寫入 Response
+        }
+        catch (Exception ex)
+        {
+            return new HttpStatusCodeResult(500, ex.Message);
+        }
+    }
+
+    private long GetTotalRowCount()
+    {
+        using (var conn = new SqlConnection(_connStr))
+        {
+            conn.Open();
+            using (var cmd = new SqlCommand("SELECT COUNT(1) FROM Customers", conn))
+            {
+                return (long)cmd.ExecuteScalar();
+            }
+        }
+    }
+}
+
+<div>
+    <button id="downloadBtn">下載 Excel</button>
+</div>
+<div id="progressContainer" style="width:100%;background:#eee;display:none;">
+    <div id="progressBar" style="width:0%;height:20px;background:green;"></div>
+</div>
+<div id="result"></div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $('#downloadBtn').click(function () {
+        $('#progressContainer').show();
+        $('#progressBar').css('width', '0%');
+        $('#result').text('');
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/Export/DownloadExcel', true);
+        xhr.responseType = 'blob';
+
+        xhr.onprogress = function (evt) {
+            if (evt.lengthComputable) {
+                var percent = evt.loaded / evt.total * 100;
+                $('#progressBar').css('width', percent + '%');
+            }
+        };
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var blob = xhr.response;
+                var link = document.createElement('a');
+                link.href = window.URL.createObjectURL(blob);
+                link.download = 'Customers.xlsx';
+                link.click();
+                $('#progressBar').css('width', '100%');
+                $('#result').html('<span style="color:green;">下載完成</span>');
+            } else {
+                $('#result').html('<span style="color:red;">下載失敗</span>');
+            }
+        };
+
+        xhr.send();
+    });
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@{
+    ViewBag.Title = "匯入 Excel";
+}
+
+<h2>匯入 Excel</h2>
+
+<div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+</div>
+<br />
+<div>
+    <button id="uploadBtn">匯入</button>
+</div>
+<br />
+<div id="progressContainer" style="width: 100%; background: #eee; display:none;">
+    <div id="progressBar" style="width:0%; height:20px; background:green;"></div>
+</div>
+<br />
+<div id="result"></div>
+
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('#uploadBtn').click(function () {
+                var file = $('#fileInput')[0].files[0];
+                if (!file) {
+                    alert('請選擇 Excel 檔案');
+                    return;
+                }
+
+                var formData = new FormData();
+                formData.append('file', file);
+
+                $('#progressContainer').show();
+                $('#progressBar').css('width', '0%');
+                $('#result').text('');
+
+                $.ajax({
+                    url: '@Url.Action("Import", "Import")',
+                    type: 'POST',
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    xhr: function () {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.upload.addEventListener("progress", function (evt) {
+                            if (evt.lengthComputable) {
+                                var percentComplete = evt.loaded / evt.total * 100;
+                                $('#progressBar').css('width', percentComplete + '%');
+                            }
+                        }, false);
+                        return xhr;
+                    },
+                    success: function (response) {
+                        $('#progressBar').css('width', '100%');
+                        $('#result').html('<span style="color:green;">匯入成功</span>');
+                    },
+                    error: function (xhr, status, error) {
+                        $('#result').html('<span style="color:red;">匯入失敗：' + xhr.responseText + '</span>');
+                    }
+                });
+            });
+        });
+    </script>
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+[HttpPost]
+   public ActionResult Import(HttpPostedFileBase file)
+   {
+       if (file == null || file.ContentLength == 0)
+       {
+           ViewBag.Message = "請上傳 Excel 檔案";
+           return View();
+       }
+
+       try
+       {
+           using (var stream = file.InputStream)
+           {
+               // 每 5000 行寫入一次，可根據記憶體調整
+               //_importService.ImportCustomers(stream, batchSize: 5000);
+           }
+           ViewBag.Message = "匯入成功";
+       }
+       catch (Exception ex)
+       {
+           ViewBag.Message = "匯入失敗：" + ex.Message;
+       }
+
+       return View();
+   }
+
+// GET /Export?tableName=Customers
  [HttpGet]
  public ActionResult Export(string tableName)
  {
@@ -40,6 +288,75 @@ namespace mvc5.Service
         "Orders",
         "Products"
     };
+
+ public void ImportCustomers(Stream excelStream, int batchSize = 5000)
+ {
+     using (var conn = new SqlConnection(_connStr))
+     {
+         conn.Open();
+
+         // ⚡ 建議：匯入前資料庫 Recovery Model 為 Simple 或 Bulk-Logged
+         using (var tran = conn.BeginTransaction())
+         {
+             try
+             {
+                 // 1️⃣ 讀取 Excel 流式資料
+                 var rows = MiniExcel.Query(excelStream, useHeaderRow: true);
+
+                 // 2️⃣ 建立 DataTable 模板
+                 var dt = new DataTable();
+                 dt.Columns.Add("CustomerId", typeof(int));
+                 dt.Columns.Add("CustomerName", typeof(string));
+                 dt.Columns.Add("Age", typeof(int));
+
+                 int count = 0;
+
+                 // 3️⃣ SqlBulkCopy 使用 TableLock 以最小化日誌
+                 using (var bulk = new SqlBulkCopy(conn, SqlBulkCopyOptions.TableLock, tran))
+                 {
+                     bulk.DestinationTableName = "Customers";
+                     bulk.BatchSize = batchSize;
+                     bulk.ColumnMappings.Add("CustomerId", "CustomerId");
+                     bulk.ColumnMappings.Add("CustomerName", "CustomerName");
+                     bulk.ColumnMappings.Add("Age", "Age");
+
+                     foreach (var row in rows)
+                     {
+                         var dict = row as IDictionary<string, object>;
+                         var dr = dt.NewRow();
+                         dr["CustomerId"] = dict["客戶編號"];
+                         dr["CustomerName"] = dict["客戶名稱"];
+                         dr["Age"] = dict["年齡"];
+                         dt.Rows.Add(dr);
+                         count++;
+
+                         // 4️⃣ 每 batchSize 行寫入一次
+                         if (count % batchSize == 0)
+                         {
+                             bulk.WriteToServer(dt);
+                             dt.Clear();
+                         }
+                     }
+
+                     // 5️⃣ 寫入剩下的資料
+                     if (dt.Rows.Count > 0)
+                     {
+                         bulk.WriteToServer(dt);
+                         dt.Clear();
+                     }
+                 }
+
+                 // 6️⃣ 成功 commit
+                 tran.Commit();
+             }
+             catch
+             {
+                 tran.Rollback();
+                 throw;
+             }
+         }
+     }
+ }
         public byte[] ExportCustomers(string tableName)
         {
             
