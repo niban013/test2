@@ -1,0 +1,121 @@
+你想在 ASP.NET MVC5 + Autofac 裡注入服務（Service），而且你的專案裡有 100 個以上的 Service，不想每個都在 Controller 建構子裡寫出來，但仍然能使用，這是可以做到的，我幫你整理幾種方式：
+
+1️⃣ 使用 IEnumerable<T> 注入所有同類型服務
+
+如果你的 Service 都實作了相同介面，例如 IService：
+
+public interface IService { void DoSomething(); }
+public class ServiceA : IService { ... }
+public class ServiceB : IService { ... }
+
+
+Autofac 註冊：
+
+var builder = new ContainerBuilder();
+
+// 註冊所有實作 IService 的類別
+builder.RegisterAssemblyTypes(typeof(ServiceA).Assembly)
+       .Where(t => typeof(IService).IsAssignableFrom(t))
+       .As<IService>();
+
+
+Controller：
+
+public class MyController : Controller
+{
+    private readonly IEnumerable<IService> _services;
+
+    public MyController(IEnumerable<IService> services)
+    {
+        _services = services;
+    }
+
+    public ActionResult Index()
+    {
+        foreach(var s in _services)
+        {
+            s.DoSomething();
+        }
+        return View();
+    }
+}
+
+
+✅ 優點：不需要列出所有 Service，Autofac 會自動把所有實作 IService 的類別注入。
+
+2️⃣ 使用 Service Locator / 解析容器
+
+如果每個 Service 的介面不同，你也可以直接注入 ILifetimeScope 或 IComponentContext，在 Controller 裡動態解析：
+
+public class MyController : Controller
+{
+    private readonly ILifetimeScope _scope;
+
+    public MyController(ILifetimeScope scope)
+    {
+        _scope = scope;
+    }
+
+    public ActionResult Index()
+    {
+        var serviceA = _scope.Resolve<ServiceA>();
+        var serviceB = _scope.Resolve<ServiceB>();
+        // 動態解析任何 Service
+        return View();
+    }
+}
+
+
+✅ 優點：不需要在建構子寫 100 個參數
+⚠️ 缺點：使用 Service Locator 會降低可測試性
+
+3️⃣ 使用 泛型工廠 / Factory 模式
+
+如果你的 Service 都遵循某個命名規則或介面，可以建立一個工廠：
+
+public interface IServiceFactory
+{
+    T GetService<T>() where T : class;
+}
+
+public class ServiceFactory : IServiceFactory
+{
+    private readonly ILifetimeScope _scope;
+    public ServiceFactory(ILifetimeScope scope)
+    {
+        _scope = scope;
+    }
+
+    public T GetService<T>() where T : class
+    {
+        return _scope.Resolve<T>();
+    }
+}
+
+
+Controller：
+
+public class MyController : Controller
+{
+    private readonly IServiceFactory _factory;
+    public MyController(IServiceFactory factory)
+    {
+        _factory = factory;
+    }
+
+    public ActionResult Index()
+    {
+        var serviceA = _factory.GetService<ServiceA>();
+        var serviceB = _factory.GetService<ServiceB>();
+        return View();
+    }
+}
+
+
+✅ 優點：只注入一個 Factory，動態取得所有 Service
+
+🔹 建議
+
+如果 Service 數量超過 100 個，建議用 Factory 或 ILifetimeScope 動態解析，不要在 Controller 建構子寫 100 個參數
+
+如果 Service 都實作同一個介面，使用 IEnumerable<IService> 是最簡單且可測試的方式
