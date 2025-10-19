@@ -1,3 +1,156 @@
+好的，我幫你寫一個完整範例，滿足以下條件：
+
+100 個以上的 Service，不用在 Controller 一一注入
+
+Controller 可以依名稱動態取得 Service 並呼叫
+
+使用 Autofac + MVC5
+
+1️⃣ 定義 Service 介面（可選統一介面）
+public interface IService
+{
+    string Name { get; }
+    void Execute();
+}
+
+2️⃣ 實作多個 Service
+public class ServiceA : IService
+{
+    public string Name => "ServiceA";
+    public void Execute() => System.Diagnostics.Debug.WriteLine("執行 ServiceA");
+}
+
+public class ServiceB : IService
+{
+    public string Name => "ServiceB";
+    public void Execute() => System.Diagnostics.Debug.WriteLine("執行 ServiceB");
+}
+
+// 可以用類似寫法模擬 100 個 Service
+
+3️⃣ Service Factory
+using Autofac;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public interface IServiceFactory
+{
+    IService GetServiceByName(string name);
+    IEnumerable<IService> GetAllServices();
+}
+
+public class ServiceFactory : IServiceFactory
+{
+    private readonly ILifetimeScope _scope;
+    private readonly Dictionary<string, Type> _serviceMap;
+
+    public ServiceFactory(ILifetimeScope scope)
+    {
+        _scope = scope;
+
+        // 自動掃描所有 IService 類別
+        _serviceMap = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(a => a.GetTypes())
+            .Where(t => typeof(IService).IsAssignableFrom(t) && t.IsClass && !t.IsAbstract)
+            .ToDictionary(t => t.Name, t => t);
+    }
+
+    public IService GetServiceByName(string name)
+    {
+        if (_serviceMap.TryGetValue(name, out var type))
+            return (IService)_scope.Resolve(type);
+
+        return null;
+    }
+
+    public IEnumerable<IService> GetAllServices()
+    {
+        foreach (var type in _serviceMap.Values)
+            yield return (IService)_scope.Resolve(type);
+    }
+}
+
+4️⃣ Autofac 設定
+using Autofac;
+using Autofac.Integration.Mvc;
+using System.Web.Mvc;
+using System.Reflection;
+
+public class AutofacConfig
+{
+    public static void RegisterDependencies()
+    {
+        var builder = new ContainerBuilder();
+
+        // 註冊 Controller
+        builder.RegisterControllers(Assembly.GetExecutingAssembly());
+
+        // 註冊所有 IService 實作
+        builder.RegisterAssemblyTypes(Assembly.GetExecutingAssembly())
+               .Where(t => typeof(IService).IsAssignableFrom(t))
+               .AsSelf(); // 以類別型別解析
+
+        // 註冊 ServiceFactory
+        builder.RegisterType<ServiceFactory>()
+               .As<IServiceFactory>()
+               .SingleInstance();
+
+        var container = builder.Build();
+        DependencyResolver.SetResolver(new AutofacDependencyResolver(container));
+    }
+}
+
+
+在 Global.asax.cs 的 Application_Start() 呼叫：
+
+AutofacConfig.RegisterDependencies();
+
+5️⃣ Controller 使用
+public class HomeController : Controller
+{
+    private readonly IServiceFactory _factory;
+
+    public HomeController(IServiceFactory factory)
+    {
+        _factory = factory;
+    }
+
+    public ActionResult Index()
+    {
+        // 取得單個 Service
+        var serviceA = _factory.GetServiceByName("ServiceA");
+        serviceA?.Execute();
+
+        // 或批次執行所有 Service
+        foreach (var svc in _factory.GetAllServices())
+        {
+            svc.Execute();
+        }
+
+        return Content("完成");
+    }
+}
+
+
+✅ 優點：
+
+Controller 不用列出 100 個 Service
+
+新增 Service 只要實作 IService，Factory 自動掃描
+
+可以動態取得單個 Service 或全部執行
+
+適用 MVC5 + Aut
+
+
+
+
+
+
+
+
+
 你想在 ASP.NET MVC5 + Autofac 裡注入服務（Service），而且你的專案裡有 100 個以上的 Service，不想每個都在 Controller 建構子裡寫出來，但仍然能使用，這是可以做到的，我幫你整理幾種方式：
 
 1️⃣ 使用 IEnumerable<T> 注入所有同類型服務
