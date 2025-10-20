@@ -1,3 +1,49 @@
+  $.get(target)
+        .done(function (html) {
+            // ✅ 使用 .empty() + .append() 避免 innerHTML 汙染 DOM
+            $content.empty().append(html);
+
+            // ✅ 根據目標檔案設定標題
+            const titleMap = {
+                "panel1.html": "永續報告",
+                "sub1.html": "範疇一排放",
+                "sub2.html": "範疇二排放",
+                "tableau.html": "能源儀表板"
+            };
+            $("#page-title").text(titleMap[target] || "ESG Dashboard");
+
+            // ✅ 延遲插入 footer，確保 DOM 已渲染完成
+            if (target === "z22.html" && $content.find(".accordion-footer").length === 0) {
+                setTimeout(() => {
+                    // 防止重複插入
+                    if ($content.find(".accordion-footer").length === 0) {
+                        const footerHtml = `
+                            <div class="panel-group accordion-footer" id="footerAccordion">
+                                <div class="panel panel-default">
+                                    <div class="panel-heading" data-toggle="collapse" data-parent="#footerAccordion" href="#footerContent">
+                                        <h4 class="panel-title">
+                                            <a>＋ 點擊展開 ESG 資訊</a>
+                                        </h4>
+                                    </div>
+                                    <div id="footerContent" class="panel-collapse collapse">
+                                        <div class="panel-body text-center text-muted">
+                                            &copy; 2025 綠色永續股份有限公司 - ESG報告平台<br>
+                                            聯絡信箱：info@esgcompany.com
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        $content.append(footerHtml);
+                    }
+                }, 50); // 微延遲確保 HTML 完全插入
+            }
+        })
+        .fail(function () {
+            $content.html("<div class='text-center text-danger' style='padding:50px;'>⚠️ 資料載入失敗</div>");
+        });
+}
+
 好的，我幫你寫一個完整範例，滿足以下條件：
 
 100 個以上的 Service，不用在 Controller 一一注入
