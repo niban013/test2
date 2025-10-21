@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ECharts X軸標籤模式控制</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5"></script>
+  <style>
+    body {
+      font-family: "Microsoft JhengHei", sans-serif;
+      margin: 20px;
+      background: #f6f6f6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h2 { margin-bottom: 10px; color: #444; text-align: center; }
+    .controls {
+      text-align: center;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 15px;
+    }
+    button:hover { background: #2563eb; }
+    .chart-container {
+      width: 95%;
+      max-width: 900px;
+      height: 60vh;
+      min-height: 400px;
+      margin-bottom: 30px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h2>📊 ECharts X軸標籤模式控制</h2>
+
+  <div class="controls">
+    <button onclick="renderChart('chart1', chartConfig1)">群組直條圖</button>
+    <button onclick="renderChart('chart2', chartConfigStacked2)">堆疊圖</button>
+  </div>
+
+  <div id="chart1" class="chart-container"></div>
+  <div id="chart2" class="chart-container"></div>
+
+  <script>
+    const ChartUtil = {
+      renderChart: function(containerId, config) {
+        const container = document.getElementById(containerId);
+        if (container.chartInstance) container.chartInstance.dispose();
+        const chart = echarts.init(container);
+        container.chartInstance = chart;
+
+        const isMobile = window.innerWidth < 600;
+        const legendPosition = config.type === 'pie'
+          ? (isMobile ? {orient:'horizontal',top:'bottom',left:'center'} : {orient:'vertical',left:'5%',top:'center'})
+          : (isMobile ? {top:40,left:'center'} : {orient:'vertical',right:10,top:'center'});
+        const gridPadding = isMobile
+          ? { left:'10%', right:'10%', bottom:'15%' }
+          : { left:'10%', right:'15%', bottom:'15%' };
+
+        const colors = config.colors || [];
+
+        // 🔹 X軸標籤模式
+        function getXAxisLabelOption(categories, mode) {
+          const maxLen = 8;
+          switch(mode) {
+            case 'wrap':
+              return {
+                interval:0,
+                rotate:0,
+                formatter: function(value){
+                  if(value.length > maxLen){
+                    return value.match(new RegExp('.{1,'+maxLen+'}','g')).join('\n');
+                  }
+                  return value;
+                },
+                fontSize: 12
+              };
+            case 'rotate':
+              return {
+                interval:0,
+                rotate: categories.some(v=>v.length > maxLen) ? (isMobile?30:45):0,
+                formatter: '{value}',
+                fontSize: 12
+              };
+            case 'alternate':
+              return {
+                interval:0,
+                formatter: function(value,index){
+                  return index % 2 === 0 ? value : '\n'+value;
+                },
+                fontSize:12
+              };
+            default:
+              return { interval:0, formatter:'{value}', fontSize:12 };
+          }
+        }
+
+        let option = {};
+        switch(config.type) {
+          case 'singleBar':
+          case 'bar':
+          case 'stacked':
+            option = {
+              title: { text: config.title, left: 'center' },
+              tooltip: { trigger: 'axis', axisPointer: { type:'shadow' } },
+              legend: config.type==='singleBar'?{}:legendPosition,
+              grid: gridPadding,
+              xAxis: { type:'category', data: config.categories, name: config.xlabel, axisLabel:getXAxisLabelOption(config.categories, config.xlabelMode) },
+              yAxis: { type:'value', name: config.ylabel },
+              series: config.series.map((s,i)=>({
+                name:s.name,
+                type:'bar',
+                stack: config.type==='stacked'?'total':undefined,
+                emphasis: config.type==='stacked'?{focus:'series'}:undefined,
+                label:{show:true,position:'top'},
+                data:s.data,
+                itemStyle:{color:colors[i]||undefined}
+              }))
+            };
+            break;
+          case 'pie':
+            const pieData = config.series.map((s,i)=>({ name:s.name, value:s.data.reduce((a,b)=>a+b,0), itemStyle:{color: colors[i] || undefined} }));
+            option = {
+              title: { text: config.title, left:'center' },
+              tooltip: { trigger:'item', formatter:'{a}<br/>{b}: {c} ({d}%)' },
+              legend: legendPosition,
+              series:[{ name: config.ylabel || '總銷售', type:'pie', radius:['40%','70%'], center:isMobile?['50%','55%']:['65%','55%'], data:pieData, label:{formatter:'{b}: {d}%'} }]
+            };
+            break;
+        }
+
+        chart.setOption(option);
+        chart.resize();
+        window.addEventListener('resize',()=>{chart.resize();});
+
+        return chart;
+      }
+    };
+
+    // 範例資料
+    const chartConfig1 = {
+      type:'bar',
+      title:'📊 群組直條圖示例',
+      xlabel:'季度',
+      ylabel:'銷售量',
+      xlabelMode:'alternate', // 'wrap' | 'rotate' | 'alternate'
+      categories:['Q1很長的標籤示例','Q2很長的標籤示例','Q3很長的標籤示例','Q4很長的標籤示例'],
+      series:[
+        {name:'產品A', data:[120,200,150,80]},
+        {name:'產品B', data:[90,150,180,70]},
+        {name:'產品C', data:[60,100,130,50]}
+      ],
+      colors:['#3b82f6','#f97316','#10b981']
+    };
+
+    const chartConfigStacked2 = {
+      type:'stacked',
+      title:'📚 第二圖堆疊圖示例',
+      xlabel:'季度',
+      ylabel:'銷售量',
+      xlabelMode:'alternate', // 'wrap' | 'rotate' | 'alternate'
+      categories:['Q1','Q2','Q3','Q4很長的標籤示例'],
+      series:[
+        {name:'產品X', data:[50,80,100,40]},
+        {name:'產品Y', data:[30,60,80,20]}
+      ],
+      colors:['#f43f5e','#8b5cf6']
+    };
+
+    renderChart('chart1', chartConfig1);
+    renderChart('chart2', chartConfigStacked2);
+
+    function renderChart(containerId, config){
+      ChartUtil.renderChart(containerId, config);
+    }
+  </script>
+</body>
+</html>
