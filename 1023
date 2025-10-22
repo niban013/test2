@@ -401,3 +401,243 @@ window.addEventListener('load', ()=>tabsMgr.startTimers());
   </div>
 </div>
 
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>三級下拉靈活選（Select2 完整版 + 初始顯示請選XX）</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { margin: 10px; padding: 5px; width: 200px; }
+  .selected-option { font-weight: bold; color: #007BFF; }
+</style>
+</head>
+<body>
+<h2>三級下拉靈活選（初始顯示請選XX，Select2 隱藏搜尋）</h2>
+
+<select id="select1"></select>
+<select id="select2"></select>
+<select id="select3"></select>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// 原始資料
+const data = {
+  "台灣": { "台北": ["中正區", "大安區", "信義區"], "台中": ["北區", "西屯區", "南區"] },
+  "日本": { "東京": ["新宿", "渋谷", "品川"], "大阪": ["梅田", "難波", "心齋橋"] },
+  "美國": { "紐約": ["曼哈頓", "布魯克林", "皇后區"], "洛杉磯": ["好萊塢", "聖塔莫尼卡", "比佛利山"] }
+};
+
+// 扁平化索引
+const index = [];
+for (let country in data) {
+  for (let city in data[country]) {
+    for (let area of data[country][city]) {
+      index.push({ country, city, area });
+    }
+  }
+}
+
+// SelectBox 封裝類（Select2 版）
+class SelectBox {
+  constructor(selectId, key, label) {
+    this.$select = $(`#${selectId}`);
+    this.key = key;
+    this.label = label;
+    this.value = "";        // 初始值空
+    this.updating = false;  // 防止循環觸發
+
+    // 初始化 Select2，隱藏搜尋框
+    this.$select.select2({
+      width: '200px',
+      minimumResultsForSearch: Infinity, 
+      templateResult: (state) => {
+        if (!state.id) return state.text;
+        return $('<span>').text(state.text).addClass(state.element.className);
+      },
+      templateSelection: (state) => {
+        if (!state.id) return state.text;
+        return $('<span>').text(state.text).addClass(state.element.className);
+      }
+    });
+  }
+
+  update(filteredIndex) {
+    this.updating = true;
+    const prevValue = this.value || "";
+    const values = [...new Set(filteredIndex.map(i => i[this.key]))];
+
+    this.$select.empty();
+
+    // 初始提示文字也可選
+    const placeholderText = `請選${this.label}`;
+    const isPlaceholderSelected = prevValue === "" || prevValue === placeholderText;
+    this.$select.append(new Option(placeholderText, placeholderText, isPlaceholderSelected, isPlaceholderSelected));
+
+    // 加入可選值
+    values.forEach(v => {
+      const selected = v === prevValue;
+      const option = new Option(v, v, selected, selected);
+      if (selected) option.className = 'selected-option';
+      this.$select.append(option);
+    });
+
+    // 保留選中值，不觸發循環
+    this.$select.val(prevValue || placeholderText).trigger('change.select2');
+    this.updating = false;
+  }
+
+  onChange(callback) {
+    this.$select.on('change', (e) => {
+      if (this.updating) return;
+      this.value = e.target.value;
+      callback();
+    });
+  }
+}
+
+// 建立下拉
+const selectCountry = new SelectBox('select1', 'country', '國家');
+const selectCity = new SelectBox('select2', 'city', '城市');
+const selectArea = new SelectBox('select3', 'area', '區域');
+
+// 更新所有下拉
+function updateAll() {
+  const filtered = index.filter(i =>
+    (!selectCountry.value || i.country === selectCountry.value || selectCountry.value.startsWith("請選")) &&
+    (!selectCity.value || i.city === selectCity.value || selectCity.value.startsWith("請選")) &&
+    (!selectArea.value || i.area === selectArea.value || selectArea.value.startsWith("請選"))
+  );
+
+  selectCountry.update(filtered);
+  selectCity.update(filtered);
+  selectArea.update(filtered);
+}
+
+// 初始化，初始就顯示請選XX
+updateAll();
+
+// 綁定事件
+selectCountry.onChange(updateAll);
+selectCity.onChange(updateAll);
+selectArea.onChange(updateAll);
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>封裝 Select2 大資料分頁搜尋</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { width: 300px; margin: 10px; }
+</style>
+</head>
+<body>
+<h2>封裝 Select2 - 大資料分頁 + 搜尋</h2>
+
+<select id="mySelect"></select>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// 模擬大量資料
+const largeData = [];
+for(let i=1;i<=1000;i++){
+    largeData.push({id: i, text: `選項 ${i}`});
+}
+
+// 封裝 Select2
+class LargeSelect2 {
+    constructor(selectId, options={}) {
+        this.$select = $(`#${selectId}`);
+        this.placeholder = options.placeholder || "請選";
+        this.pageSize = options.pageSize || 50;
+        this.initValue = options.initValue || null;
+
+        // 初始化 Select2
+        this.$select.select2({
+            placeholder: this.placeholder,
+            allowClear: true,
+            ajax: {
+                transport: (params, success, failure) => {
+                    // 模擬 server 分頁
+                    const page = params.data.page || 1;
+                    const search = params.data.q || "";
+                    let results = largeData.filter(item => item.text.includes(search));
+                    const start = (page-1)*this.pageSize;
+                    const end = start + this.pageSize;
+                    const pagedResults = results.slice(start,end);
+
+                    success({
+                        results: pagedResults,
+                        pagination: { more: end < results.length }
+                    });
+                },
+                delay: 250
+            }
+        });
+
+        // 設定初始值
+        if(this.initValue){
+            const initialOption = new Option(this.initValue.text, this.initValue.id, true, true);
+            this.$select.append(initialOption).trigger('change');
+        }
+    }
+
+    getValue(){
+        return this.$select.val();
+    }
+
+    setValue(id, text){
+        const option = new Option(text, id, true, true);
+        this.$select.append(option).trigger('change');
+    }
+
+    onChange(callback){
+        this.$select.on('change', (e)=>callback(e.target.value));
+    }
+}
+
+// 使用範例
+const mySelect2 = new LargeSelect2('mySelect', {
+    placeholder: '請選一個選項',
+    pageSize: 50,
+    initValue: {id: 5, text: '選項 5'}
+});
+
+// 監聽變化
+mySelect2.onChange((val)=>{
+    console.log('目前選取值:', val);
+});
+</script>
+</body>
+</html>
+
+{
+  "items": [
+    {"id": 1, "text": "選項1"},
+    {"id": 2, "text": "選項2"}
+  ],
+  "more": true   // true表示還有下一頁
+}
+
+
