@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>動態 Object + Accordion Footer</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<style>
+  body { margin:0; font-family:"Microsoft JhengHei",sans-serif; }
+  #mainContainer {
+    display:block; width:100%; height:calc(100vh - 150px); /* 預留 footer 高度 */
+    border:1px solid #ccc; position:relative;
+  }
+  object { width:100%; height:100%; border:none; display:block; }
+  #loading {
+    position:absolute; inset:0;
+    display:none; background:rgba(255,255,255,0.8);
+    justify-content:center; align-items:center; font-weight:bold; display:flex; z-index:10;
+  }
+  footer {
+    width:100%; position:fixed; bottom:0; left:0; background:#f1f1f1;
+    border-top:1px solid #ccc; max-height:150px; overflow:hidden;
+  }
+  .accordion-section {
+    border-bottom:1px solid #ccc;
+  }
+  .accordion-header {
+    background:#ddd; padding:10px; cursor:pointer;
+    font-weight:bold;
+  }
+  .accordion-content {
+    display:none; padding:10px;
+    background:#eee;
+  }
+  .nav-btns { margin-bottom:10px; }
+</style>
+</head>
+<body>
+
+<div class="nav-btns">
+  <button data-url="panel1.html" data-footer-url="sub1.html">載入 Page 1</button>
+  <button data-url="z31.html" data-footer-url="footer2.html">載入 Page 2</button>
+</div>
+
+<div id="mainContainer">
+  <div id="loading">載入中...</div>
+  <object id="contentObject" type="text/html" data="panel1.html"></object>
+</div>
+
+<footer id="pageFooter"></footer>
+
+<script>
+$(function(){
+  const $container = $("#mainContainer");
+  const $loading = $("#loading");
+  const $footer = $("#pageFooter");
+
+  function loadUrl(url, footerUrl){
+    $loading.show();
+
+    // 移除舊 object
+    const oldObj = document.getElementById("contentObject");
+    if(oldObj) $container[0].removeChild(oldObj);
+
+    // 建立新 object
+    const newObj = document.createElement("object");
+    newObj.id = "contentObject";
+    newObj.type = "text/html";
+    newObj.width = "100%";
+    newObj.height = "100%";
+
+    // object 載入完成
+    newObj.onload = function(){
+      $loading.hide();
+
+      if(footerUrl){
+        $footer.load(footerUrl, function(response, status){
+          if(status === "success"){
+            $footer.slideDown(200);
+
+            // 初始化 Accordion
+            $footer.find(".accordion-header").off("click").on("click", function(){
+              const $content = $(this).next(".accordion-content");
+              if($content.is(":visible")){
+                $content.slideUp(200);
+              } else {
+                $footer.find(".accordion-content").slideUp(200); // 同時關閉其他
+                $content.slideDown(200);
+              }
+            });
+
+          } else {
+            $footer.slideUp(200);
+          }
+        });
+      } else {
+        $footer.slideUp(200);
+      }
+    };
+
+    $container[0].appendChild(newObj);
+
+    setTimeout(()=>{ newObj.data = url; },10);
+  }
+
+  // 初始載入
+  loadUrl("panel1.html", "sub1.html");
+
+  $(".nav-btns button").on("click", function(){
+    const url = $(this).data("url");
+    const footerUrl = $(this).data("footer-url");
+    loadUrl(url, footerUrl);
+  });
+});
+</script>
+
+</body>
+</html>
+
+<title>Lazy Load Tableau Tabs</title>
+<script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js"></script>
+<style>
+body { margin: 0; padding: 20px; font-family: sans-serif; overflow: hidden; }
+.tabs-wrapper { position: relative; width: 100%; overflow: hidden; border-bottom: 2px solid #0078D7; }
+.tabs-scroll { overflow-x: auto; padding: 0 35px; -webkit-overflow-scrolling: touch; }
+/* 滾動容器 */
+.tabs-scroll {
+  overflow-x: auto;
+  box-sizing: border-box;
+  padding: 0 35px;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs-scroll::-webkit-scrollbar { display: none; }
+.tabs { display: flex; width: max-content; gap: 5px; }
+.tab { padding: 10px 20px; cursor: pointer; border-radius: 6px 6px 0 0; background: #eee; font-weight: 500; white-space: nowrap; border: 2px solid transparent; border-bottom: 2px solid #0078D7; margin-bottom: -2px; }
+.tab.active { background: #fff; border-color: #0078D7; border-bottom: none; font-weight: 600; box-shadow: 0 -2px 6px rgba(0,120,215,0.2); position: relative; }
+.tab:hover { background: #e0e0e0; transform: translateY(-2px); }
+.scroll-btn { position: absolute; top: 0; width: 34px; height: 100%; background: rgba(255,255,255,0.95); border: none; cursor: pointer; font-size: 16px; display: flex; justify-content: center; align-items: center; z-index: 5; box-shadow: 0 1px 6px rgba(0,0,0,0.06); }
+.scroll-left { left: 0; }
+.scroll-right { right: 0; }
+#tab-contents { margin-top: 0; height: calc(100vh - 180px); overflow: hidden; }
+.tab-pane.viz { display: none; width: 100%; height: 100%; }
+.tab-pane.viz.active { display: block; }
+
+/* 每個 tab 的內容容器 */
+.viz {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+
+  border: 2px solid #0078D7;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  margin-top: -2px;
+  padding: 15px;
+  box-sizing: border-box;
+
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  background: #fff;
+}
+.viz.active {
+  display: block;
+  opacity: 1;
+}
+
+
+/* 自訂滾動條半透明 */
+.viz::-webkit-scrollbar {
+  width: 8px;
+}
+.viz::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+.viz::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+tableau-viz { width: 100% !important; height: 80vh !important; display: block; border: none; }
+</style>
+ 
+<h2>Lazy Load Tableau Tabs</h2>
+<div class="tabs-wrapper">
+  <button class="scroll-btn scroll-left" style="display:none">&lsaquo;</button>
+  <div class="tabs-scroll"><div class="tabs" id="tabs-container"></div></div>
+  <button class="scroll-btn scroll-right" style="display:none">&rsaquo;</button>
+</div>
+<div id="tab-contents">
+  <div id="default-page" class="default-page">請新增 Tab</div>
+</div>
+<button onclick="addTab()">➕ Add Tab</button>
+
+<script type="module">
+import "https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js";
+(function(global){
+class TabsManager {
+  constructor(opts){
+    const { tabsContainer, tabsScroll, leftBtn, rightBtn, tabContents } = opts;
+    this.tabsContainer = tabsContainer;
+    this.tabsScroll = tabsScroll;
+    this.leftBtn = leftBtn;
+    this.rightBtn = rightBtn;
+    this.tabContents = tabContents;
+
+    this.tabCounter = 0;
+    this.VIZ_CONFIGS = [];
+    this.currentTicket = null;
+    this.firstVizLoaded = false;
+
+    this.refreshTimer = null;
+    this.reloadTimer = null;
+
+    // 左右箭頭
+    this.leftBtn.addEventListener('click', ()=>{ this.tabsScroll.scrollBy({ left:-200, behavior:'smooth' }); this.updateArrows(); });
+    this.rightBtn.addEventListener('click', ()=>{ this.tabsScroll.scrollBy({ left:200, behavior:'smooth' }); this.updateArrows(); });
+    this.updateArrows();
+    this.tabsScroll.addEventListener('scroll', ()=>window.requestAnimationFrame(()=>this.updateArrows()));
+    window.addEventListener('resize', ()=>this.updateArrows());
+
+   
+  }
+
+  // ----------------- Tab / Viz -----------------
+  bindTabEvents(tab){ tab.addEventListener('click', ()=>this.activateTab(tab)); }
+
+  activateTab(tab){
+    this.tabsContainer.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    this.tabContents.querySelectorAll('.tab-pane.viz').forEach(p=>p.classList.remove('active'));
+
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.target);
+    if(pane) pane.classList.add('active');
+
+    this.scrollTabIntoView(tab);
+    this.updateArrows();
+
+    const cfg = this.VIZ_CONFIGS.find(c=>c.id===tab.dataset.target);
+    if(cfg) this.initViz(cfg);
+
+    this.cleanupOldViz();
+  }
+
+  addTab(tabText){
+    this.tabCounter++;
+    const tabId = "tab"+this.tabCounter;
+
+    const defaultPage = document.getElementById('default-page');
+    if(defaultPage) defaultPage.remove();
+
+    const newTab = document.createElement('div');
+    newTab.className = 'tab';
+    newTab.dataset.target = tabId;
+    newTab.textContent = tabText;
+    this.tabsContainer.appendChild(newTab);
+    this.bindTabEvents(newTab);
+
+    const newPane = document.createElement('div');
+    newPane.id = tabId;
+    newPane.className = 'tab-pane viz';
+    this.tabContents.appendChild(newPane);
+
+    this.VIZ_CONFIGS.push({ id: tabId, loaded: false });
+
+    this.cleanupOldViz();
+    this.activateTab(newTab);
+  }
+
+  scrollTabIntoView(tab){
+    const tabRect = tab.getBoundingClientRect();
+    const containerRect = this.tabsScroll.getBoundingClientRect();
+    const offset = (tabRect.left+tabRect.right)/2-(containerRect.left+containerRect.right)/2;
+    this.tabsScroll.scrollBy({ left: offset, behavior:'smooth' });
+  }
+
+  updateArrows(){
+    const scrollLeft = this.tabsScroll.scrollLeft;
+    const maxScroll = this.tabsScroll.scrollWidth - this.tabsScroll.clientWidth;
+    if(maxScroll<=1){ this.leftBtn.style.display='none'; this.rightBtn.style.display='none'; }
+    else { this.leftBtn.style.display=(scrollLeft>5)?'block':'none'; this.rightBtn.style.display=(scrollLeft<maxScroll-5)?'block':'none'; }
+  }
+
+  async getnewticket(){ return "99999"; }
+
+  async initViz(cfg){
+    if(cfg.loaded) return;
+    const container = document.getElementById(cfg.id);
+    container.innerHTML = "";
+
+    const viz = document.createElement("tableau-viz");
+    viz.style.width="100%";
+    viz.style.height="80vh";
+    container.appendChild(viz);
+
+    if(!this.firstVizLoaded){
+      if(!this.currentTicket) this.currentTicket = await this.getnewticket();
+      viz.src='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';
+      this.firstVizLoaded = true;
+    } else {
+      viz.src='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';
+    }
+    if(this.firstVizLoaded)
+	{
+	 
+	}
+    cfg.loaded = true;
+    cfg.el = viz;
+  }
+
+  cleanupOldViz(){
+    const loadedViz = this.VIZ_CONFIGS.filter(c => c.loaded);
+    if(loadedViz.length <= 3) return;
+    const excess = loadedViz.length - 3;
+    for(let i=0;i<excess;i++){
+      const cfg = loadedViz[i];
+      const pane = document.getElementById(cfg.id);
+      if(pane) pane.innerHTML="";
+      cfg.loaded = false;
+    }
+  }
+
+  async safeRefreshViz(vizEl){
+    try{
+      await vizEl.ready;
+      const sheet = vizEl.workbook.activeSheet;
+      if(sheet.sheetType==="worksheet"){
+        await sheet.refreshDataAsync();
+      } else if(sheet.sheetType==="dashboard"){
+        const worksheets = sheet.getWorksheets();
+        for(const ws of worksheets) await ws.refreshDataAsync();
+      }
+      console.log("Refresh completed for",vizEl.id);
+    } catch(err){ console.error("Refresh failed:",err); }
+  }
+
+  async refreshAllViz(){
+    for(const cfg of this.VIZ_CONFIGS){
+      if(!cfg.loaded) continue;
+      if(cfg.el) await this.safeRefreshViz(cfg.el);
+    }
+  }
+
+  async reloadAllViz(){
+    this.currentTicket = await this.getnewticket();
+    if(!this.currentTicket) return;
+
+    this.VIZ_CONFIGS.forEach((cfg,i)=>{
+      if(!cfg.loaded || !cfg.el) return;
+      if(i===0){
+        cfg.el.src='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';
+      } else {
+        cfg.el.src='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';
+      }
+      console.log(`Reloaded ${cfg.id} with ticket`, this.currentTicket);
+    });
+  }
+
+  // ----------------- 定時器 -----------------
+  startTimers(){
+    if(!this.refreshTimer){
+      this.refreshTimer = setInterval(()=>this.refreshAllViz(), 10*1000);
+      console.log("Refresh timer started");
+    } 
+  }
+
+  stopTimers(){
+    if(this.refreshTimer){ clearInterval(this.refreshTimer); this.refreshTimer=null; console.log("Refresh timer stopped"); } 
+  }
+}
+
+global.TabsManager = TabsManager;
+})(window);
+
+// ----------------- 使用 -----------------
+const tabsMgr = new TabsManager({
+  tabsContainer: document.getElementById('tabs-container'),
+  tabsScroll: document.querySelector('.tabs-scroll'),
+  leftBtn: document.querySelector('.scroll-left'),
+  rightBtn: document.querySelector('.scroll-right'),
+  tabContents: document.getElementById('tab-contents')
+});
+
+// Add Tab 按鈕
+tabsMgr.addTab('分類 '+(tabsMgr.tabCounter+1))
+tabsMgr.addTab('分類 '+(tabsMgr.tabCounter+1))
+// 頁面 load 時啟動定時器
+window.addEventListener('load', ()=>tabsMgr.startTimers());
+    // 🔹 監聽頁面可見性
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        tabsMgr.stopTimers();
+      } else {
+     
+      }
+    });
+</script>
+
+<div class="accordion-section">
+  <div class="accordion-header">Footer 區塊 1</div>
+  <div class="accordion-content">
+    <p>這是 Footer 區塊 1 的內容</p>
+  </div>
+</div>
+
