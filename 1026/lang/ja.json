@@ -1,0 +1,17 @@
+{
+  "pageTitleDefault": "ESG ダッシュボード",
+  "greeting": "こんにちは, ユーザー",
+  "logout": "ログアウト",
+  "downloading": "ダウンロード開始",
+  "menu": "メニュー",
+  "welcome": "你好，{0}！歡迎回來！",
+  "greet": "{0}，{1}！",
+  "footerInfo": "&copy; 2025 グリーンサステナビリティ株式会社 - ESGレポートプラットフォーム<br>メール: info@esgcompany.com",
+  "menuItems": {
+    "sustain": "サステナビリティ報告",
+    "analysis": "炭素分析",
+    "sub1": "スコープ1排出",
+    "sub2": "スコープ2排出",
+    "z22": "ダッシュボード"
+  }
+}

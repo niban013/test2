@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>🌐 多國語言維護（動態語系）</title> 
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<style>
+body { font-family:"Microsoft JhengHei",sans-serif;margin:20px; }
+th,td { 
+  border:1px solid #ccc;
+  padding:0;
+  margin:0;
+  height:36px;
+  vertical-align:middle;
+  text-align:left;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#i18nTable {
+  table-layout: fixed;
+  width: 100% !important;
+}
+td input { width:100%;height:100%;box-sizing:border-box;margin:0;padding:0;border:none;outline:none;background:transparent;font-size:14px; }
+td:last-child { white-space:nowrap; }
+button { padding:4px 8px;margin:0 2px;cursor:pointer;border:none;border-radius:4px;color:#fff; }
+.editBtn { background:#5bc0de } .editBtn:hover { background:#31b0d5; }
+.saveBtn { background:#5cb85c } .saveBtn:hover { background:#449d44; }
+.cancelBtn { background:#999 } .cancelBtn:hover { background:#777; }
+.deleteBtn { background:#e26a5c } .deleteBtn:hover { background:#c9574c; }
+.reloadBtn { background:#f0ad4e } .reloadBtn:hover { background:#ec971f; }
+#statusBar { margin-bottom:12px;font-weight:bold; }
+th.key-col, td.key-col { width:220px; }
+th.actions-col, td.actions-col { width:140px; text-align:center; }
+:root {
+  --fixed-total: 360px;
+}
+.lang-cell {
+  width: calc((100% - var(--fixed-total)) / var(--lang-count));
+}
+</style>
+</head>
+<body>
+<h2>🌐 多國語言維護</h2>
+<div id="statusBar">📦 載入中...</div>
+<div class="mb-2">
+  <button id="addRowBtn" class="btn btn-primary btn-sm">➕ 新增 Key</button>
+  <button id="saveBtn" class="btn btn-success btn-sm">💾 儲存 JSON</button>
+  <button id="reloadJson" class="btn btn-warning btn-sm reloadBtn">🔄 重新載入 JSON</button>
+</div>
+
+<table id="i18nTable" class="display nowrap" style="width:100%">
+  <thead><tr id="theadRow"></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script>
+// ✅ 可動態設定語系
+const langs = ["zh","en","fr","ja"];
+document.documentElement.style.setProperty('--lang-count', langs.length);
+
+const totalWidth = 100;
+const fixedWidthPercent = ((220 + 140) / 1200) * 100;
+const remainPercent = totalWidth - fixedWidthPercent;
+const eachLangPercent = remainPercent / langs.length;
+
+const dynamicStyle = document.createElement('style');
+let css = '';
+langs.forEach(lang => { css += `th.lang-${lang}, td.lang-${lang} { width:${eachLangPercent}%; }`; });
+dynamicStyle.textContent = css;
+document.head.appendChild(dynamicStyle);
+
+let tempIdCounter = 0;
+function genTempId(){ return "r"+(++tempIdCounter); }
+let currentNewRow = null;
+
+function flatten(obj,prefix=''){
+  const res={};
+  for(const k in obj){
+    if(typeof obj[k]==='object' && obj[k]!==null)
+      Object.assign(res,flatten(obj[k],prefix+k+'.'));
+    else res[prefix+k]=obj[k];
+  }
+  return res;
+}
+function unflatten(obj){
+  const res={};
+  for(const k in obj){
+    const keys=k.split('.');
+    let cur=res;
+    keys.forEach((key,i)=>{
+      if(i===keys.length-1) cur[key]=obj[k];
+      else { if(!cur[key]||typeof cur[key]!=='object') cur[key]={}; cur=cur[key]; }
+    });
+  }
+  return res;
+}
+
+$(async function(){
+
+  const $thead = $("#theadRow");
+  $thead.append(`<th class="key-col">Key</th>`);
+  langs.forEach(l => $thead.append(`<th class="lang-${l} lang-cell">${l.toUpperCase()}</th>`));
+  $thead.append(`<th class="actions-col">操作</th>`);
+
+  const table = $('#i18nTable').DataTable({
+    paging:true, searching:true, ordering:false,
+    pageLength:5, lengthMenu:[5,10,20,50], autoWidth:false,
+    columns: [
+      { data: 'key', className: 'key-col' },
+      ...langs.map(lang => ({
+        data: lang,
+        title: lang.toUpperCase(),
+        className: `lang-${lang} lang-cell`
+      })),
+      { data: 'actions', orderable: false, className: 'actions-col' }
+    ]
+  });
+
+  function btnHtml(editing=false){
+    return editing
+      ? `<button class="saveBtn">Save</button><button class="cancelBtn">Cancel</button>`
+      : `<button class="editBtn">Edit</button><button class="deleteBtn">刪除</button>`;
+  }
+
+  async function loadLocalOrLang(){
+    let parsed = {};
+    const saved = localStorage.getItem("i18nData");
+
+    if (saved) {
+      parsed = JSON.parse(saved);
+      $('#statusBar').text("📦 已從 LocalStorage 載入資料");
+    } else {
+      $('#statusBar').text("🌐 嘗試載入 lang/*.json...");
+      for (const lang of langs) {
+        try {
+          const res = await fetch(`lang/${lang}.json`);
+          if (res.ok) parsed[lang] = await res.json();
+          else parsed[lang] = {};
+        } catch {
+          parsed[lang] = {};
+        }
+      }
+      localStorage.setItem("i18nData", JSON.stringify(parsed, null, 2));
+      $('#statusBar').text("🌐 已從 lang/*.json 載入（缺少檔自動補空）");
+    }
+
+    langs.forEach(l => parsed[l] = flatten(parsed[l] || {}));
+    const keys = new Set();
+    langs.forEach(l => Object.keys(parsed[l] || {}).forEach(k => keys.add(k)));
+
+    table.clear();
+    keys.forEach(k=>{
+      const row={rowId:genTempId(), key:k};
+      langs.forEach(l=>row[l]=parsed[l][k]||"");
+      row.actions=btnHtml(false);
+      table.row.add(row);
+    });
+    table.draw(false);
+    $('#statusBar').append(`（共 ${keys.size} 筆）`);
+  }
+
+  await loadLocalOrLang();
+
+  function updateLocalStorage(){
+    const existing={};
+    langs.forEach(l=>existing[l]={});
+    table.rows().every(function(){
+      const d=this.data();
+      langs.forEach(l=>existing[l][d.key]=d[l]);
+    });
+    langs.forEach(l=>existing[l]=unflatten(existing[l]));
+    localStorage.setItem("i18nData",JSON.stringify(existing,null,2));
+    $('#statusBar').text(`📦 已更新 LocalStorage`);
+  }
+
+  // ✅ 重新載入 JSON（新增功能）
+  $('#reloadJson').click(async function(){
+    const confirmReload = confirm("⚠️ 重新載入將覆蓋尚未儲存的修改，確定要繼續嗎？");
+    if (!confirmReload) return;
+    localStorage.removeItem("i18nData");
+    await loadLocalOrLang();
+    $('#statusBar').text("🔄 已重新載入 JSON 並覆蓋現有資料");
+  });
+
+  // ✅ CRUD 功能保持不變
+  $('#addRowBtn').click(function(){
+    if(currentNewRow) return;
+    const newRow={rowId:genTempId(), key:""};
+    langs.forEach(l=>newRow[l]="");
+    newRow.actions=btnHtml(true);
+    const allData=table.rows().data().toArray();
+    allData.unshift(newRow);
+    table.clear().rows.add(allData).draw(false);
+    table.page('first').draw(false);
+    const $row=$($('#i18nTable tbody tr')[0]);
+    $row.find('td').each(function(i){
+      if(i<=langs.length){ $(this).html(`<input type="text" class="form-control" value="">`); }
+    });
+    $row.data('isNew',true);
+    currentNewRow=$row;
+    $('#addRowBtn').prop('disabled',true);
+    $('#i18nTable tbody .editBtn, #i18nTable tbody .deleteBtn').prop('disabled',true);
+  });
+
+  $('#i18nTable tbody').on('click','.saveBtn',function(){
+    const $row=$(this).closest('tr');
+    const inputs=$row.find('input');
+    const vals={ key:inputs.eq(0).val().trim() };
+    langs.forEach((l,i)=>vals[l]=inputs.eq(i+1).val().trim());
+    if(!vals.key) return alert("Key 不可為空");
+    const newData={...vals, actions:btnHtml(false), rowId:genTempId()};
+    table.row($row).data(newData).draw(false);
+    currentNewRow=null;
+    $('#addRowBtn').prop('disabled',false);
+    $('#i18nTable tbody .editBtn, #i18nTable tbody .deleteBtn').prop('disabled',false);
+    updateLocalStorage();
+  });
+
+  $('#i18nTable tbody').on('click','.cancelBtn',function(){
+    const $row=$(this).closest('tr');
+    if($row.data('isNew')){
+      table.row($row).remove().draw(false);
+      currentNewRow=null;
+    } else {
+      const inputs=$row.find('input');
+      const newData={rowId: table.row($row).data().rowId, actions:btnHtml(false)};
+      langs.forEach((l,i)=>newData[l]=inputs.eq(i+1).val().trim());
+      newData.key=inputs.eq(0).val().trim();
+      table.row($row).data(newData).draw(false);
+    }
+    currentNewRow=null;
+    $('#addRowBtn').prop('disabled',false);
+    $('#i18nTable tbody .editBtn, #i18nTable tbody .deleteBtn').prop('disabled',false);
+  });
+
+  $('#i18nTable tbody').on('click','.editBtn',function(){
+    if(currentNewRow) return;
+    const $row=$(this).closest('tr');
+    const data=table.row($row).data();
+    const values=[data.key,...langs.map(l=>data[l])];
+    $row.find('td').each(function(i){
+      if(i<=langs.length)
+        $(this).html(`<input type="text" class="form-control" value="${values[i]??''}">`);
+    });
+    $row.find('td:last').html(btnHtml(true));
+  });
+
+  $('#i18nTable tbody').on('click','.deleteBtn',function(){
+    if(currentNewRow) return;
+    const $row=$(this).closest('tr');
+    table.row($row).remove().draw(false);
+    updateLocalStorage();
+  });
+
+  $('#saveBtn').click(function(){
+    const existing={};
+    langs.forEach(l=>existing[l]={});
+    table.rows().every(function(){
+      const d=this.data();
+      langs.forEach(l=>existing[l][d.key]=d[l]);
+    });
+    langs.forEach(l=>existing[l]=unflatten(existing[l]));
+    langs.forEach(l=>{
+      const blob=new Blob([JSON.stringify(existing[l],null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download=`${l}.json`;a.click();
+      URL.revokeObjectURL(url);
+    });
+    alert("所有語系 JSON 已生成，可下載");
+  });
+});
+</script>
+</body>
+</html>

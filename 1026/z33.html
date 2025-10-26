@@ -1,0 +1,47 @@
+ <head>
+ 
+    <h3 data-i18n="pageTitleDefault"></h3>
+	<h2 class="page-title" style="display:none;">z33</h2>
+    <style>
+        #app {
+            border: 1px solid #ccc;
+            padding: 20px;
+            min-height: 100px;
+        }
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+ 
+    <h1>SPA 範例</h1>
+    <h1 data-i18n="welcome" data-i18n-args="王小明"></h1>
+<p data-i18n="greet" data-i18n-args="王小明,早上好"></p>
+<button data-i18n="menuItems.sustain"></button>
+   <button onclick="window.navigateTo('sub1.html')">前往 B 頁面</button>
+  <button id="showMsg">顯示訊息</button>
+
+<script>
+  // ✅ 翻譯畫面靜態文字
+  window.parent.i18n.apply(document);
+    // ✅ JS 內動態顯示翻譯
+  $("#showMsg").on("click", function(){
+    const msg = window.parent.i18n.t("downloading");
+    alert(msg); // 會根據語言顯示「開始模擬下載」或 "Start Download"
+	alert(i18n.t("welcomeUser", "小明"));
+  });
+  
+  // 單純呼叫
+console.log(i18n.t("welcome", "王小明"));  // 你好，王小明！
+// 多參數
+console.log(i18n.t("greet", "王小明", "早上好")); // 王小明，早上好！
+//alert(i18n.t("greeting"));               // 取一般文字 key
+//alert(i18n.t("menuItems.永續報告"));     // 取多層 key（支援巢狀）
+//alert(i18n.translateText("永續報告"));   // 用中文詞找對應翻譯（常用於動態資料）
+
+//colName = "永續報告";
+//translated = i18n.translateText(colName);
+//console.log(translated); // => "Sustainability Report"
+  // ✅ JS 內動態顯示翻譯
+</script>
+ 

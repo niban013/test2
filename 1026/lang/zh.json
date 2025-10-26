@@ -1,0 +1,18 @@
+{
+  "pageTitleDefault": "ESG儀表板",
+  "greeting": "你好, 使用者",
+  "logout": "登出",
+  "downloading": "開始模擬下載",
+  "menu": "選單",
+  "welcome": "你好，{0}！歡迎回來！",
+"analyze":"分析",
+  "greet": "{0}，{1}！",
+  "footerInfo": "&copy; 2025 綠色永續股份有限公司 - ESG報告平台<br>聯絡信箱：info@esgcompany.com",
+  "menuItems": {
+    "sustain": "永續報告",
+    "analysis": "碳排分析",
+    "sub1": "範疇一排放",
+    "sub2": "範疇二排放",
+    "z22": "環境儀表"
+  }
+}

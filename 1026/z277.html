@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESG Dashboard - 帶浮動子選單</title>
+
+<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script src="./i18n.js"></script>
+<style>
+body {
+  overflow-x:hidden;
+  margin:0;
+  background-color:#f4f8f5; /* 柔和綠底 */
+  font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: 240px;
+  height: 100%;
+  background: linear-gradient(180deg, #2b593f 0%, #1e3a2b 100%); /* 深綠漸層 */
+  color: #e9f5ee;
+  transition: all .3s ease-in-out;
+  z-index: 1040;
+  overflow-y: auto;
+  box-shadow: 2px 0 6px rgba(0,0,0,0.2);
+}
+.sidebar a {
+  color: #d2f0de;
+  display: block;
+  padding: 10px 15px;
+  text-decoration: none;
+  transition: all .2s;
+}
+.sidebar a:hover, .sidebar a.active {
+  background: #5cb85c; /* 綠色主調 */
+  color: #fff;
+}
+
+/* Submenu */
+.sidebar .submenu { display: none; padding-left: 25px; }
+.sidebar .submenu a {
+  font-size: 0.9em;
+  color: #c6e8d1;
+}
+.sidebar .submenu a:hover {
+  background: rgba(255,255,255,0.1);
+}
+/* 防止展開時 hover 或 active 變白 */
+.sidebar .has-submenu.open > a,
+.sidebar .has-submenu > a:hover {
+  background: #2b593f !important;
+  color: #fff !important;
+}
+/* Sidebar 縮起 */
+.sidebar.collapsed { width: 60px; overflow: visible; }
+.sidebar.collapsed a span.text { display: none; }
+
+/* ✅ 浮動子選單（縮進狀態下顯示） */
+.sidebar.collapsed .has-submenu:hover > .submenu {
+  display: block !important;
+  position: absolute;
+  left: 60px;
+  top: 0;
+  background: #2f5c43;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
+  width: 180px;
+  padding: 5px 0;
+  z-index: 1050;
+}
+
+/* Main Panel */
+#main-panel {
+  margin-left: 240px;
+  transition: margin-left .3s ease-in-out;
+  background-color: #f4f8f5;
+  min-height: 100vh;
+}
+#main-panel.full { margin-left: 60px; }
+
+/* Header */
+#main-header {
+  background: #e9f5ee;
+  border-bottom: 1px solid #c8e3d0;
+  height: 50px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+#main-header .btn {
+  background-color: #5cb85c;
+  color: #fff;
+  border: none;
+  transition: background .2s;
+}
+#main-header .btn:hover { background-color: #4cae4c; }
+
+#main-header .header-title {
+  flex: 1;
+  text-align: center;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #2e4634;
+  letter-spacing: 1px;
+}
+#main-header .user-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #2b3b2b;
+}
+#logoutBtn {
+  background-color: #e26a5c;
+  border: none;
+  color: #fff;
+}
+#logoutBtn:hover { background-color: #c9574c; }
+
+/* Content */
+#content-container {
+  padding: 25px 35px;
+  background: #f8fbf9;
+  border-radius: 6px;
+  margin: 15px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.05);
+}
+
+/* Accordion Footer */
+.accordion-footer {
+  margin-top: 30px;
+}
+.accordion-footer .panel-heading {
+  background: #d9f0df;
+  border-top: 1px solid #b6dec0;
+  cursor: pointer;
+}
+.accordion-footer .panel-title a {
+  display: block;
+  text-decoration: none;
+  color: #2b3b2b;
+  font-weight: 500;
+}
+.accordion-footer .panel-body {
+  background: #f4f8f5;
+  border-top: 1px solid #cde7d5;
+}
+.nav > li > a:focus{
+    background-color: #5cb85c !important;
+    text-decoration: none !important;
+  }
+  
+  .nav > li > a:hover {
+    background-color: #5cb85c !important;
+    text-decoration: none !important;
+  }
+/* ---------------------------
+   Sidebar Icon 與文字樣式
+--------------------------- */
+
+/* li a 置中對齊容器 */
+.sidebar a {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* icon 與文字間隔 */
+  transition: all 0.2s ease;
+}
+
+/* Icon */
+.sidebar a span.glyphicon {
+  flex-shrink: 0;
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+/* 收合時放大並置中 */
+.sidebar.collapsed a span.glyphicon {
+  font-size: 24px;
+  width: 100%;
+  text-align: center;
+}
+
+/* 收合時隱藏文字 */
+.sidebar.collapsed a span.text {
+  display: none;
+}
+
+/* 二級 submenu li */
+.sidebar .submenu a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 30px;
+  transition: all 0.2s ease;
+}
+
+/* 收合時 submenu 也置中 icon、隱藏文字 */
+.sidebar.collapsed .submenu a span.text {
+  display: none;
+}
+.sidebar.collapsed .submenu a {
+  justify-content: center;
+}
+
+/* 收合時所有子選單隱藏，僅浮動時顯示 */
+.sidebar.collapsed .submenu {
+  display: none !important;
+}
+
+/* 浮動子選單（滑鼠 hover） */
+.sidebar.collapsed .has-submenu:hover > .submenu {
+  display: block !important;
+  position: absolute;
+  left: 60px;
+  top: 0;
+  background: #2f5c43;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
+  width: 100px;
+  padding: 5px 0;
+  z-index: 1050;
+}
+
+/* 收合時 hover 效果，icon 放大 */
+.sidebar.collapsed a:hover span.glyphicon,
+.sidebar.collapsed .submenu a:hover span.glyphicon {
+  font-size: 24px;
+}
+
+/* ✅ 浮動右側下載進度面板 */
+#download-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 280px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  overflow: hidden;
+  transition: all .3s ease;
+  z-index: 1060;
+}
+
+/* header */
+#download-panel .panel-header {
+  background: #2b593f;
+  color: #fff;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+#download-panel .panel-header:hover {
+  background: #36744e;
+}
+
+/* 內容區 */
+#download-panel .panel-body {
+  max-height: 240px;
+  overflow-y: auto;
+  background: #f8fbf9;
+  padding: 10px;
+}
+
+/* 單筆下載項目 */
+.download-item {
+  padding: 6px 0;
+  border-bottom: 1px solid #dbe9e0;
+}
+.download-item:last-child { border-bottom: none; }
+
+.download-item .file-name {
+  font-size: 13px;
+  color: #2b3b2b;
+  margin-bottom: 4px;
+}
+.download-item .progress {
+  height: 6px;
+  margin: 0;
+}
+.download-item .progress-bar {
+  background-color: #5cb85c;
+}
+
+/* 收合狀態 */
+#download-panel.collapsed {
+  height: 42px;
+  width: 200px;
+}
+#download-panel.collapsed .panel-body {
+  display: none;
+}
+/* 確保 tooltip 顯示在最上層 */
+.tooltip { z-index: 3000 !important; }
+
+/* 收合按鈕圖示 */
+#download-toggle {
+  font-size: 16px;
+}
+/* 手機模式 Sidebar */
+@media (max-width:767px){
+  .sidebar {
+    width: 80%; max-width: 300px;
+    transform: translateX(-110%);
+    background: rgba(34,73,53,0.97);
+    box-shadow: 3px 0 15px rgba(0,0,0,0.3);
+    transition: transform .3s ease, opacity .3s ease;
+    opacity: 0;
+  }
+  .sidebar.show { transform: translateX(0); opacity: 1; }
+  #main-panel { margin-left: 0 !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div id="sidebar" class="sidebar">
+  <div class="text-center" style="padding:10px;">
+    <a href="#" id="portal" style="color:#fff;text-decoration:none;font-weight:600;"  data-i18n="menu"><strong>選單</strong></a>
+  </div>
+  <ul class="nav nav-pills nav-stacked" id="menu">
+    <li><a href="#" data-target="z33.html" data-toggle="tooltip" title="面板一"><span class="glyphicon glyphicon-leaf"></span> <span class="text" data-i18n="menuItems.sustain">永續報告</span></a></li>
+    <li class="has-submenu">
+      <a href="#" data-toggle="tooltip" title="面板二"><span class="glyphicon glyphicon-stats"></span> <span class="text">碳排分析 ▾</span></a>
+      <ul class="submenu nav">
+        <li><a href="#" data-target="sub1.html" data-toggle="tooltip" title="sub1"><span class="glyphicon glyphicon-stats"></span> <span class="text">sub1</span></a></li>
+        <li><a href="#" data-target="sub2.html" data-toggle="tooltip" title="sub2"><span class="glyphicon glyphicon-stats"></span> <span class="text">sub2</span></a></li>
+      </ul>
+    </li>
+    <li><a href="#" data-target="z22.html" data-toggle="tooltip" title="Tableau"><span class="glyphicon glyphicon-globe"></span> <span class="text">z22</span></a></li>
+  </ul>
+</div>
+
+<!-- Main Panel -->
+<div id="main-panel">
+  <!-- Header -->
+  <div id="main-header">
+    <button id="toggleSidebar" class="btn btn-sm">☰</button>
+    <h5 id="page-title" class="header-title"></h5>
+    <div class="user-info">
+      <span>你好, 使用者</span>
+      <button class="btn btn-xs" id="logoutBtn">登出</button>
+	  <button id="testDownload" class="btn btn-primary">開始模擬下載</button>
+    </div>
+	 <!-- ✅ 新增語言選擇 -->
+      <select id="langSelect" class="form-control input-sm" style="width:100px;display:inline-block;">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+      </select>
+	 
+  </div>
+
+  <div id="content-container" class="flex-grow-1 overflow-auto">
+    <h3 class="text-center text-muted">請從左側選單選擇內容 🌱</h3>
+  </div>
+</div> 
+ 
+<script>
+$(async function(){
+  var $sidebar = $("#sidebar"),
+      $main = $("#main-panel"),
+      $content = $("#content-container"),
+      $menu = $("#menu");
+  
+  $("#download-panel").hide(); // 一開始隱藏
+	 
+  // 初始化語言
+      await i18n.init();
+	    // 初始化語言選單
+      $("#langSelect").val(i18n.getLang());
+
+       // 語言切換
+      $("#langSelect").on("change", async function(){
+        const lang = $(this).val();
+        await i18n.setLang(lang);
+		  // 再次套用翻譯
+        i18n.apply(document);
+      });
+ console.log(i18n.t("welcome", "王小明"));  // 你好，王小明！
+// 多參數
+console.log(i18n.t("greet", "王小明", "早上好")); // 王小明，早上好！
+// 提供給子頁面 a.html 呼叫
+function navigateTo(pageUrl) {
+    loadPanel(pageUrl);
+}
+
+// 將函式掛到全域，a.html 可以呼叫
+window.navigateTo = navigateTo;
+	  
+  // 🚀 動態載入選單
+  async function loadMenu() {
+    try {
+      const menuData = await $.getJSON("menu.json");
+      $menu.empty();
+
+      menuData.forEach(item => {
+        const li = createMenuItem(item);
+        $menu.append(li);
+      });
+
+      // ✅ 初始化 Bootstrap tooltip（動態生成後再綁）
+      $menu.find('[data-toggle="tooltip"]').tooltip({
+        container: 'body',
+        placement: 'right',
+        trigger: 'hover'
+      });
+	      // ✅ 關鍵：動態節點生成完後，重新套用 i18n 翻譯
+      i18n.apply($menu[0]);
+
+    } catch (err) {
+      console.error("❌ menu.json 載入失敗", err);
+      $menu.html(`<li><a href="#"><span class="glyphicon glyphicon-warning-sign"></span> <span class="text">載入選單失敗</span></a></li>`);
+    }
+  }
+
+  // ✅ 建立單一節點（含遞迴 submenu）
+  function createMenuItem(item) {
+    if (item.submenu && item.submenu.length > 0) {
+      const li = $(`
+        <li class="has-submenu">
+          <a href="#" data-toggle="tooltip" data-placement="${item.placement || 'right'}" title="${i18n.t(item.tooltip) || ''}">
+            <span class="${item.icon || 'glyphicon glyphicon-folder-open'}"></span>
+            <span class="text"  data-i18n="${item.title}">${item.title} ▾</span>
+          </a>
+        </li>
+      `);
+      const subUl = $('<ul class="submenu nav"></ul>');
+      item.submenu.forEach(sub => subUl.append(createMenuItem(sub)));
+      li.append(subUl);
+      return li;
+    } else {
+      return $(`
+        <li>
+          <a href="#" data-target="${item.target || '#'}" data-toggle="tooltip" data-placement="${item.placement || 'right'}" title="${i18n.t(item.tooltip) || ''}">
+            <span class="${item.icon || 'glyphicon glyphicon-file'}"></span>
+            <span class="text" data-i18n="${item.title}">${item.title}</span>
+          </a>
+        </li>
+      `);
+    }
+  }
+
+  // 初始化載入選單
+  await loadMenu();
+
+  // 📌 二級選單展開/收合
+  $("#menu").on("click", ".has-submenu > a", function(e){
+    e.preventDefault();
+    var $submenu = $(this).next(".submenu");
+    var isOpen = $submenu.is(":visible");
+    $("#menu .submenu").not($submenu).slideUp(200);
+    $("#menu .has-submenu").not($(this).parent()).removeClass("open");
+    $submenu.slideToggle(200);
+    $(this).parent().toggleClass("open", !isOpen);
+	 // ✅ 關鍵：動態節點生成完後，重新套用 i18n 翻譯
+        i18n.apply($submenu[0]);
+  });
+
+  // 📌 點擊載入內容
+  $("#menu").on("click","a[data-target]",function(e){
+    e.preventDefault();
+    if(!$(this).closest(".has-submenu").length){
+      $("#menu a").removeClass("active");
+      $(this).addClass("active");
+    } else {
+      $("#menu a").removeClass("active");
+      $(this).addClass("active");
+    }
+    var target = $(this).data("target");
+    if(target && target !== "#"){
+      loadPanel(target);
+      if($(window).width() < 768) $sidebar.removeClass("show");
+      localStorage.setItem("activePage", target);
+    }
+  });
+
+  // 📄 載入內容函式
+  function loadPanel(target) {
+    $content.html("<div class='text-center text-muted' style='padding:50px;'>🌿 資料載入中...</div>");
+    $.get(target)
+      .done(function (html) { 
+        $content.empty().append(html); 
+        const pageTitle = $content.find(".page-title").text().trim();
+        $("#page-title").text(pageTitle || "ESG Dashboard");
+		 // ✅ 關鍵：動態節點生成完後，重新套用 i18n 翻譯
+      i18n.apply($content[0]);
+      })
+      .fail(function () {
+        $content.html("<div class='text-center text-danger' style='padding:50px;'>⚠️ 資料載入失敗</div>");
+      });
+  }
+
+  // 自動載入上次頁面
+  var saved = localStorage.getItem("activePage") || "z33.html";
+  $menu.on("DOMSubtreeModified", function(){
+    const target = $(`#menu a[data-target='${saved}']`);
+    if(target.length){
+      target.addClass("active");
+      loadPanel(saved);
+      $menu.off("DOMSubtreeModified");
+    }
+  });
+
+  // Sidebar 切換
+  $("#portal, #toggleSidebar").on("click", function(){
+    if($(window).width() < 768){
+      $sidebar.toggleClass("show");
+    } else {
+      $sidebar.toggleClass("collapsed");
+      $main.toggleClass("full");
+    }
+  });
+
+  // 登出
+  $("#logoutBtn").click(function(){ alert("已登出！"); });
+});
+</script>
+
+
+
+</body>
+</html>

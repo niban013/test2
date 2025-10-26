@@ -1,0 +1,216 @@
+<h2 class="page-title" style="display:none;">z22</h2>
+
+<div id="container">
+  <div id="object">
+    <h2>Lazy Load Tableau Tabs</h2>
+    <div class="tabs-wrapper">
+      <button class="scroll-btn scroll-left" style="display:none">&lsaquo;</button>
+      <div class="tabs-scroll"><div class="tabs" id="tabs-container"></div></div>
+      <button class="scroll-btn scroll-right" style="display:none">&rsaquo;</button>
+    </div>
+    <div id="tab-contents">
+      <div id="default-page" class="default-page">請新增 Tab</div>
+    </div>
+    <button id="add-tab-btn">➕ Add Tab</button>
+  </div>
+  
+</div>
+
+<script type="module">
+import "https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js";
+
+ (function(global){
+class TabsManager {
+  constructor(opts){
+    const { tabsContainer, tabsScroll, leftBtn, rightBtn, tabContents } = opts;
+    this.tabsContainer = tabsContainer;
+    this.tabsScroll = tabsScroll;
+    this.leftBtn = leftBtn;
+    this.rightBtn = rightBtn;
+    this.tabContents = tabContents;
+
+    this.tabCounter = 0;
+    this.VIZ_CONFIGS = [];
+    this.currentTicket = null;
+    this.firstVizLoaded = false;
+
+    this.refreshTimer = null;
+    this.reloadTimer = null;
+
+    // 左右箭頭
+    this.leftBtn.addEventListener('click', ()=>{ this.tabsScroll.scrollBy({ left:-200, behavior:'smooth' }); this.updateArrows(); });
+    this.rightBtn.addEventListener('click', ()=>{ this.tabsScroll.scrollBy({ left:200, behavior:'smooth' }); this.updateArrows(); });
+    this.updateArrows();
+    this.tabsScroll.addEventListener('scroll', ()=>window.requestAnimationFrame(()=>this.updateArrows()));
+    window.addEventListener('resize', ()=>this.updateArrows());
+
+    // 🔹 頁面可見性
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.stopTimers();
+      else this.startTimers();
+    });
+  }
+
+  // ----------------- Tab / Viz -----------------
+  bindTabEvents(tab){ tab.addEventListener('click', ()=>this.activateTab(tab)); }
+
+  activateTab(tab){
+    this.tabsContainer.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    this.tabContents.querySelectorAll('.tab-pane.viz').forEach(p=>p.classList.remove('active'));
+
+    tab.classList.add('active');
+    const pane = document.getElementById(tab.dataset.target);
+    if(pane) pane.classList.add('active');
+
+    this.scrollTabIntoView(tab);
+    this.updateArrows();
+
+    const cfg = this.VIZ_CONFIGS.find(c=>c.id===tab.dataset.target);
+    if(cfg) this.initViz(cfg);
+
+    this.cleanupOldViz();
+  }
+
+  addTab(tabText){
+    this.tabCounter++;
+    const tabId = "tab"+this.tabCounter;
+
+    const defaultPage = document.getElementById('default-page');
+    if(defaultPage) defaultPage.remove();
+
+    const newTab = document.createElement('div');
+    newTab.className = 'tab';
+    newTab.dataset.target = tabId;
+    newTab.textContent = tabText;
+    this.tabsContainer.appendChild(newTab);
+    this.bindTabEvents(newTab);
+
+    const newPane = document.createElement('div');
+    newPane.id = tabId;
+    newPane.className = 'tab-pane viz';
+    this.tabContents.appendChild(newPane);
+
+    this.VIZ_CONFIGS.push({ id: tabId, loaded: false });
+
+    this.cleanupOldViz();
+    this.activateTab(newTab);
+  }
+
+  scrollTabIntoView(tab){
+    const tabRect = tab.getBoundingClientRect();
+    const containerRect = this.tabsScroll.getBoundingClientRect();
+    const offset = (tabRect.left+tabRect.right)/2-(containerRect.left+containerRect.right)/2;
+    this.tabsScroll.scrollBy({ left: offset, behavior:'smooth' });
+  }
+
+  updateArrows(){
+    const scrollLeft = this.tabsScroll.scrollLeft;
+    const maxScroll = this.tabsScroll.scrollWidth - this.tabsScroll.clientWidth;
+    if(maxScroll<=1){ this.leftBtn.style.display='none'; this.rightBtn.style.display='none'; }
+    else { this.leftBtn.style.display=(scrollLeft>5)?'block':'none'; this.rightBtn.style.display=(scrollLeft<maxScroll-5)?'block':'none'; }
+  }
+
+  async getnewticket(){ return "99999"; }
+
+  async initViz(cfg){
+    if(cfg.loaded) return;
+    const container = document.getElementById(cfg.id);
+    container.innerHTML = "";
+
+    const viz = document.createElement("tableau-viz");
+    viz.style.width="100%";
+    viz.style.height="80vh";
+    container.appendChild(viz);
+
+    if(!this.firstVizLoaded){
+      if(!this.currentTicket) this.currentTicket = await this.getnewticket();
+      viz.src='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';
+      this.firstVizLoaded = true;
+    } else {
+      viz.src='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';
+    }
+
+    cfg.loaded = true;
+    cfg.el = viz;
+  }
+
+  cleanupOldViz(){
+    const loadedViz = this.VIZ_CONFIGS.filter(c => c.loaded);
+    if(loadedViz.length <= 3) return;
+    const excess = loadedViz.length - 3;
+    for(let i=0;i<excess;i++){
+      const cfg = loadedViz[i];
+      const pane = document.getElementById(cfg.id);
+      if(pane) pane.innerHTML="";
+      cfg.loaded = false;
+    }
+  }
+
+  async safeRefreshViz(vizEl){
+    try{
+      await vizEl.ready;
+      const sheet = vizEl.workbook.activeSheet;
+      if(sheet.sheetType==="worksheet"){
+        await sheet.refreshDataAsync();
+      } else if(sheet.sheetType==="dashboard"){
+        const worksheets = sheet.getWorksheets();
+        for(const ws of worksheets) await ws.refreshDataAsync();
+      }
+      console.log("Refresh completed for",vizEl.id);
+    } catch(err){ console.error("Refresh failed:",err); }
+  }
+
+  async refreshAllViz(){
+    for(const cfg of this.VIZ_CONFIGS){
+      if(!cfg.loaded) continue;
+      if(cfg.el) await this.safeRefreshViz(cfg.el);
+    }
+  }
+
+  async reloadAllViz(){
+    this.currentTicket = await this.getnewticket();
+    if(!this.currentTicket) return;
+
+    this.VIZ_CONFIGS.forEach((cfg,i)=>{
+      if(!cfg.loaded || !cfg.el) return;
+      if(i===0){
+        cfg.el.src='https://public.tableau.com/views/test_20190116Urban_vulnerability_ideasFR_0/mainpage';
+      } else {
+        cfg.el.src='https://public.tableau.com/views/Superstore_embedded_800x800/Overview';
+      }
+      console.log(`Reloaded ${cfg.id} with ticket`, this.currentTicket);
+    });
+  }
+
+  // ----------------- 定時器 -----------------
+  startTimers(){
+    if(!this.refreshTimer){
+      this.refreshTimer = setInterval(()=>this.refreshAllViz(), 10*1000);
+      console.log("Refresh timer started");
+    }
+    if(!this.reloadTimer){
+      this.reloadTimer = setInterval(()=>this.reloadAllViz(), 90*60*1000);
+      console.log("Reload timer started");
+    }
+  }
+
+  stopTimers(){
+    if(this.refreshTimer){ clearInterval(this.refreshTimer); this.refreshTimer=null; console.log("Refresh timer stopped"); }
+    if(this.reloadTimer){ clearInterval(this.reloadTimer); this.reloadTimer=null; console.log("Reload timer stopped"); }
+  }
+}
+
+global.TabsManager = TabsManager;
+})(window);
+
+// ----------------- 使用 -----------------
+const tabsMgr = new TabsManager({
+  tabsContainer: document.getElementById('tabs-container'),
+  tabsScroll: document.querySelector('.tabs-scroll'),
+  leftBtn: document.querySelector('.scroll-left'),
+  rightBtn: document.querySelector('.scroll-right'),
+  tabContents: document.getElementById('tab-contents')
+});
+tabsMgr.addTab('分類 '+(tabsMgr.tabCounter+1))
+tabsMgr.addTab('分類 '+(tabsMgr.tabCounter+1))
+</script>

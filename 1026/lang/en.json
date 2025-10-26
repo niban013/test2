@@ -1,0 +1,18 @@
+{
+  "pageTitleDefault": "ESG Dashboard",
+  "greeting": "Hello, User",
+  "logout": "Logout",
+  "downloading": "Start Download",
+  "menu": "Menu",
+"analyze":"analyze",
+  "welcome": "你好，{0}！歡迎回來！",
+  "greet": "{0}，{1}！",
+  "footerInfo": "&copy; 2025 Green Sustainability Corp - ESG Report Platform<br>Email: info@esgcompany.com",
+  "menuItems": {
+    "sustain": "Sustainability Report",
+    "analysis": "Carbon Analysis",
+    "sub1": "Scope 1 Emission",
+    "sub2": "Scope 2 Emission",
+    "z22": "Dashboard"
+  }
+}

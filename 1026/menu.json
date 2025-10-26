@@ -1,0 +1,23 @@
+[
+  {
+    "title": "menuItems.sustain",
+    "icon": "glyphicon glyphicon-leaf",
+    "target": "z33.html",
+    "tooltip": "menuItems.sustain"
+  },
+  {
+    "title": "menuItems.analysis",
+    "icon": "glyphicon glyphicon-stats",
+    "tooltip": "面板二",
+    "submenu": [
+      { "title": "sub1", "icon": "glyphicon glyphicon-stats", "target": "sub1.html", "tooltip": "子頁 1" },
+      { "title": "sub2", "icon": "glyphicon glyphicon-stats", "target": "sub2.html", "tooltip": "子頁 2" }
+    ]
+  },
+  {
+    "title": "全球總覽",
+    "icon": "glyphicon glyphicon-globe",
+    "target": "z22.html",
+    "tooltip": "Tableau"
+  }
+]
