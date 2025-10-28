@@ -1,0 +1,422 @@
+using System.Collections.Generic;
+using System.Web.Mvc;
+
+namespace YourApp.Controllers
+{
+    public class LocationController : Controller
+    {
+        // 模擬資料（實務上可改成資料庫取值）
+        private static readonly Dictionary<string, List<string>> CountryCityMap = new Dictionary<string, List<string>>
+        {
+            { "台灣", new List<string> { "台北", "台中", "高雄" } },
+            { "日本", new List<string> { "東京", "大阪", "京都" } },
+            { "美國", new List<string> { "紐約", "洛杉磯", "芝加哥" } }
+        };
+
+        // ✅ 提供完整資料 JSON 給前端
+        [HttpGet]
+        public JsonResult GetData()
+        {
+            return Json(CountryCityMap, JsonRequestBehavior.AllowGet);
+        }
+
+        // ✅ 主頁
+        public ActionResult Index()
+        {
+            return View();
+        }
+    }
+}
+
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>🌏 國家 - 城市雙向連動（封裝模組）</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { margin: 10px; padding: 5px; width: 200px; }
+</style>
+</head>
+<body>
+<h2>🌏 國家 - 城市雙向連動（可重選請選項 + 模組封裝）</h2>
+
+<!-- 你可以多組使用 -->
+<div class="location-group" data-group="1">
+  <select class="select-country"></select>
+  <select class="select-city"></select>
+</div>
+
+<hr>
+
+<div class="location-group" data-group="2">
+  <select class="select-country"></select>
+  <select class="select-city"></select>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+/* -------------------------------
+   ✅ 模擬後端資料
+--------------------------------*/
+const locationData = {
+  "台灣": ["台北", "台中", "高雄"],
+  "日本": ["東京", "大阪", "京都"],
+  "美國": ["紐約", "洛杉磯", "芝加哥"]
+};
+
+/* -------------------------------
+   ✅ 封裝模組：LocationSelector
+--------------------------------*/
+class LocationSelector {
+  constructor($group, data) {
+    this.data = data;
+    this.$country = $group.find(".select-country");
+    this.$city = $group.find(".select-city");
+    this.cityToCountry = {};
+
+    // 建立反向索引
+    for (const country in data) {
+      data[country].forEach(city => this.cityToCountry[city] = country);
+    }
+
+    this.initSelect2(this.$country);
+    this.initSelect2(this.$city);
+    this.loadCountries();
+    this.loadCities();
+
+    this.bindEvents();
+  }
+
+  initSelect2($el) {
+    $el.select2({
+      width: '200px',
+      minimumResultsForSearch: Infinity // 隱藏搜尋框
+    });
+  }
+
+  loadCountries(selected = "請選國家") {
+    const $c = this.$country;
+    $c.empty();
+    $c.append(new Option("請選國家", "請選國家", selected === "請選國家", selected === "請選國家"));
+    Object.keys(this.data).forEach(c => {
+      const selectedFlag = c === selected;
+      $c.append(new Option(c, c, selectedFlag, selectedFlag));
+    });
+    $c.val(selected).trigger("change.select2");
+  }
+
+  loadCities(country = "請選國家", selectedCity = "請選城市") {
+    const $c = this.$city;
+    $c.empty();
+    $c.append(new Option("請選城市", "請選城市", selectedCity === "請選城市", selectedCity === "請選城市"));
+
+    let cities = [];
+    if (!country || country === "請選國家") {
+      for (let c in this.data) cities.push(...this.data[c]);
+    } else {
+      cities = this.data[country] || [];
+    }
+
+    cities.forEach(city => {
+      const selectedFlag = city === selectedCity;
+      $c.append(new Option(city, city, selectedFlag, selectedFlag));
+    });
+    $c.val(selectedCity).trigger("change.select2");
+  }
+
+  bindEvents() {
+    this.$country.on("change", () => {
+      const val = this.$country.val();
+      if (val === "請選國家") {
+        this.loadCities("請選國家", "請選城市");
+      } else {
+        this.loadCities(val, "請選城市");
+      }
+    });
+
+    this.$city.on("change", () => {
+      const city = this.$city.val();
+      if (city === "請選城市") {
+        this.loadCountries("請選國家");
+        this.loadCities("請選國家", "請選城市");
+        return;
+      }
+
+      const matchedCountry = this.cityToCountry[city];
+      if (matchedCountry) {
+        this.$country.val(matchedCountry).trigger("change.select2");
+      }
+    });
+  }
+}
+
+/* -------------------------------
+   ✅ 初始化多組下拉
+--------------------------------*/
+$(document).ready(function() {
+  $(".location-group").each(function() {
+    new LocationSelector($(this), locationData);
+  });
+});
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>🌏 國家 - 城市 - 區域 三層連動封裝</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { margin: 10px; padding: 5px; width: 200px; }
+</style>
+</head>
+<body>
+<h2>🌍 國家 - 城市 - 區域 三層連動（可重選請選項 + 模組封裝）</h2>
+
+<!-- 可多組使用 -->
+<div class="location-group" data-group="1">
+  <select class="select-country"></select>
+  <select class="select-city"></select>
+  <select class="select-area"></select>
+</div>
+
+<hr>
+
+<div class="location-group" data-group="2">
+  <select class="select-country"></select>
+  <select class="select-city"></select>
+  <select class="select-area"></select>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+/* -------------------------------
+   ✅ 模擬後端資料
+--------------------------------*/
+const locationData = {
+  "台灣": {
+    "台北": ["中正區", "大安區", "信義區"],
+    "台中": ["北區", "西屯區", "南區"],
+    "高雄": ["苓雅區", "前金區", "左營區"]
+  },
+  "日本": {
+    "東京": ["新宿", "渋谷", "品川"],
+    "大阪": ["梅田", "難波", "心齋橋"],
+    "京都": ["祇園", "嵐山", "伏見"]
+  },
+  "美國": {
+    "紐約": ["曼哈頓", "布魯克林", "皇后區"],
+    "洛杉磯": ["好萊塢", "聖塔莫尼卡", "比佛利山"],
+    "芝加哥": ["市中心", "林肯公園", "海德公園"]
+  }
+};
+
+/* -------------------------------
+   ✅ 封裝模組：LocationSelector 三層
+--------------------------------*/
+class LocationSelector {
+  constructor($group, data) {
+    this.data = data;
+    this.$country = $group.find(".select-country");
+    this.$city = $group.find(".select-city");
+    this.$area = $group.find(".select-area");
+
+    // 建立反向索引
+    this.cityToCountry = {};
+    this.areaToCity = {};
+    for (const country in data) {
+      for (const city in data[country]) {
+        this.cityToCountry[city] = country;
+        data[country][city].forEach(area => this.areaToCity[area] = city);
+      }
+    }
+
+    this.initSelect2(this.$country);
+    this.initSelect2(this.$city);
+    this.initSelect2(this.$area);
+
+    this.loadCountries();
+    this.loadCities();
+    this.loadAreas();
+
+    this.bindEvents();
+  }
+
+  initSelect2($el) {
+    $el.select2({
+      width: '200px',
+      minimumResultsForSearch: Infinity
+    });
+  }
+
+  loadCountries(selected = "請選國家") {
+    const $c = this.$country;
+    $c.empty().append(new Option("請選國家", "請選國家", selected === "請選國家", selected === "請選國家"));
+    Object.keys(this.data).forEach(c => {
+      $c.append(new Option(c, c, c === selected, c === selected));
+    });
+    $c.val(selected).trigger("change.select2");
+  }
+
+  loadCities(country = "請選國家", selectedCity = "請選城市") {
+    const $c = this.$city;
+    $c.empty().append(new Option("請選城市", "請選城市", selectedCity === "請選城市", selectedCity === "請選城市"));
+
+    let cities = [];
+    if (!country || country === "請選國家") {
+      for (let c in this.data) cities.push(...Object.keys(this.data[c]));
+    } else {
+      cities = Object.keys(this.data[country] || {});
+    }
+
+    cities.forEach(city => $c.append(new Option(city, city, city === selectedCity, city === selectedCity)));
+    $c.val(selectedCity).trigger("change.select2");
+  }
+
+  loadAreas(city = "請選城市", selectedArea = "請選區域") {
+    const $a = this.$area;
+    $a.empty().append(new Option("請選區域", "請選區域", selectedArea === "請選區域", selectedArea === "請選區域"));
+
+    let areas = [];
+    if (!city || city === "請選城市") {
+      // 顯示所有區域
+      for (const country in this.data) {
+        for (const c in this.data[country]) {
+          areas.push(...this.data[country][c]);
+        }
+      }
+    } else {
+      const country = this.cityToCountry[city];
+      areas = this.data[country][city] || [];
+    }
+
+    areas.forEach(area => $a.append(new Option(area, area, area === selectedArea, area === selectedArea)));
+    $a.val(selectedArea).trigger("change.select2");
+  }
+
+  bindEvents() {
+    // 國家 → 城市
+    this.$country.on("change", () => {
+      const val = this.$country.val();
+      this.loadCities(val, "請選城市");
+      this.loadAreas("請選城市", "請選區域");
+    });
+
+    // 城市 → 國家 & 區域
+    this.$city.on("change", () => {
+      const city = this.$city.val();
+      if (city === "請選城市") {
+        this.loadCountries("請選國家");
+        this.loadCities("請選國家", "請選城市");
+        this.loadAreas("請選城市", "請選區域");
+        return;
+      }
+
+      const matchedCountry = this.cityToCountry[city];
+      if (matchedCountry) this.$country.val(matchedCountry).trigger("change.select2");
+
+      this.loadAreas(city, "請選區域");
+    });
+
+    // 區域 → 城市 & 國家
+    this.$area.on("change", () => {
+      const area = this.$area.val();
+      if (area === "請選區域") return;
+
+      const city = this.areaToCity[area];
+      if (city) {
+        this.$city.val(city).trigger("change.select2");
+        const country = this.cityToCountry[city];
+        if (country) this.$country.val(country).trigger("change.select2");
+      }
+    });
+  }
+}
+
+/* -------------------------------
+   ✅ 初始化多組下拉
+--------------------------------*/
+$(document).ready(function() {
+  $(".location-group").each(function() {
+    new LocationSelector($(this), locationData);
+  });
+});
+</script>
+</body>
+</html>
+
+
+using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+
+class Program
+{
+    static void Main()
+    {
+        var locationData = new Dictionary<string, Dictionary<string, List<string>>>
+        {
+            ["台灣"] = new Dictionary<string, List<string>>
+            {
+                ["台北"] = new List<string>{ "中正區", "大安區" },
+                ["台中"] = new List<string>{ "北區", "西屯區" }
+            },
+            ["日本"] = new Dictionary<string, List<string>>
+            {
+                ["東京"] = new List<string>{ "新宿", "渋谷" },
+                ["大阪"] = new List<string>{ "梅田", "難波" }
+            },
+            ["美國"] = new Dictionary<string, List<string>>
+            {
+                ["紐約"] = new List<string>{ "曼哈頓", "布魯克林" },
+                ["洛杉磯"] = new List<string>{ "好萊塢", "比佛利山" }
+            }
+        };
+
+        string json = JsonConvert.SerializeObject(locationData, Formatting.Indented);
+        Console.WriteLine(json);
+    }
+}
+
+using System;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+
+class Program
+{
+    static void Main()
+    {
+        var locationData = new Dictionary<string, Dictionary<string, List<string>>>
+        {
+            ["台灣"] = new Dictionary<string, List<string>>
+            {
+                ["台北"] = new List<string>{ "中正區", "大安區" },
+                ["台中"] = new List<string>{ "北區", "西屯區" }
+            },
+            ["日本"] = new Dictionary<string, List<string>>
+            {
+                ["東京"] = new List<string>{ "新宿", "渋谷" },
+                ["大阪"] = new List<string>{ "梅田", "難波" }
+            },
+            ["美國"] = new Dictionary<string, List<string>>
+            {
+                ["紐約"] = new List<string>{ "曼哈頓", "布魯克林" },
+                ["洛杉磯"] = new List<string>{ "好萊塢", "比佛利山" }
+            }
+        };
+
+        string json = JsonConvert.SerializeObject(locationData, Formatting.Indented);
+        Console.WriteLine(json);
+    }
+}
+
+
+
