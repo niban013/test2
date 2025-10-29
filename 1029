@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>Bootstrap 3.3.7 - 動態多Tab Modal</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <style>
+    /* 固定第一個tab隱藏 */
+    #fixedTab {
+      display: none;
+    }
+  </style>
+</head>
+<body class="container" style="margin-top:30px;">
+
+  <h3>動態建立 Modal Tabs 範例</h3>
+  <button id="btnA" class="btn btn-primary">Button A</button>
+  <button id="btnB" class="btn btn-success">Button B</button>
+  <button id="btnC" class="btn btn-info" data-toggle="modal" data-target="#myModal">開啟 Modal</button>
+
+  <!-- Modal -->
+  <div id="myModal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h4 class="modal-title">多Tab Modal</h4>
+        </div>
+
+        <div class="modal-body">
+          <p id="triggerInfo" class="text-info"></p>
+
+          <!-- Nav tabs -->
+          <ul id="tabList" class="nav nav-tabs">
+            <li id="fixedTab"><a href="#fixed" data-toggle="tab">固定 Tab (隱藏)</a></li>
+          </ul>
+
+          <!-- Tab panes -->
+          <div id="tabContent" class="tab-content" style="margin-top:10px;">
+            <div class="tab-pane fade" id="fixed">這是固定Tab內容</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-default" data-dismiss="modal">關閉</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+<script>
+$(function() {
+  let triggerSource = '';
+
+  // 點擊 Button A
+  $('#btnA').on('click', function() {
+    addOrReplaceTab('A');
+  });
+
+  // 點擊 Button B
+  $('#btnB').on('click', function() {
+    addOrReplaceTab('B');
+  });
+
+  // Modal 顯示時，顯示觸發來源
+  $('#myModal').on('show.bs.modal', function() {
+    $('#triggerInfo').text(triggerSource ? '目前 Tab1 由 Button ' + triggerSource + ' 產生' : '尚未建立動態 Tab');
+  });
+
+  // 新增或取代 tab1
+  function addOrReplaceTab(source) {
+    triggerSource = source;
+
+    // 若存在先移除
+    $('#tabList li#tab1').remove();
+    $('#tabContent #tab1').remove();
+
+    // 加入新 tab
+    $('#tabList').append(`
+      <li id="tab1" class="active">
+        <a href="#tab1" data-toggle="tab">Tab1 - ${source}</a>
+      </li>
+    `);
+
+    $('#tabContent').append(`
+      <div class="tab-pane fade in active" id="tab1">
+        <p>這是由 <strong>Button ${source}</strong> 建立的內容。</p>
+      </div>
+    `);
+
+    // 打開 Modal
+    $('#myModal').modal('show');
+  }
+});
+</script>
+
+</body>
+</html>
