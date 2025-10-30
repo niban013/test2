@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>JSON 產生表格 (inline CSS)</title>
+</head>
+<body>
+
+<div id="tableContainer"></div>
+
+<script>
+function renderTableFromJson(data, divId) {
+  const container = document.getElementById(divId);
+  if (!container) {
+    console.error("找不到指定的 div:", divId);
+    return;
+  }
+
+  if (!Array.isArray(data) || data.length === 0) {
+    container.innerHTML = "<p style='color:#999;'>⚠️ 沒有資料可顯示</p>";
+    return;
+  }
+
+  // 取得表頭
+  const headers = Object.keys(data[0]);
+
+  // 建立表格
+  const table = document.createElement("table");
+  table.setAttribute("style", "border-collapse:collapse;width:100%;margin:10px 0;");
+
+  // === 表頭 ===
+  const thead = document.createElement("thead");
+  const trHead = document.createElement("tr");
+  headers.forEach(key => {
+    const th = document.createElement("th");
+    th.textContent = key;
+    th.setAttribute("style", "border:1px solid #999;padding:8px 12px;text-align:left;background:#f5f5f5;");
+    trHead.appendChild(th);
+  });
+  thead.appendChild(trHead);
+  table.appendChild(thead);
+
+  // === 表身 ===
+  const tbody = document.createElement("tbody");
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+    headers.forEach(key => {
+      const td = document.createElement("td");
+      td.textContent = row[key] ?? "";
+      td.setAttribute("style", "border:1px solid #999;padding:8px 12px;text-align:left;");
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  // 掛載
+  container.innerHTML = "";
+  container.appendChild(table);
+}
+
+// === 測試 ===
+const jsonData = [
+  { "姓名": "小明", "年齡": 25, "城市": "台北" },
+  { "姓名": "小華", "年齡": 30, "城市": "高雄" },
+  { "姓名": "小美", "年齡": 22, "城市": "台中" }
+];
+
+renderTableFromJson(jsonData, "tableContainer");
+</script>
+
+</body>
+</html>
