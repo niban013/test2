@@ -674,3 +674,113 @@ console.time('iframeLoad');
 $('#spaFrame').on('load', function(){
     console.timeEnd('iframeLoad');
 });
+
+
+
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Select2 大資料 + 永遠 ALL 選項</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { width: 300px; margin: 10px; }
+</style>
+</head>
+<body>
+<h2>Select2 - 大資料 + ALL選項固定在最前面</h2>
+
+<select id="mySelect"></select>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// 模擬大量資料
+const largeData = [];
+for(let i=1;i<=1000;i++){
+    largeData.push({id:i, text:`選項 ${i}`});
+}
+
+class LargeSelect2 {
+    constructor(selectId, options={}){
+        this.$select = $(`#${selectId}`);
+        this.pageSize = options.pageSize || 50;
+        this.largeData = options.largeData || null;
+        this.url = options.url || null;
+        this.showAllOption = options.showAllOption || false;
+        this.allOptionText = options.allOptionText || "全部";
+
+        const prependAll = (results)=>{
+            if(this.showAllOption && !results.some(r=>r.id==="")){
+                results.unshift({id:"", text:this.allOptionText});
+            }
+            return results;
+        }
+
+        this.$select.select2({
+            placeholder: options.placeholder || "請選",
+            allowClear:true,
+            minimumResultsForSearch:0,
+            ajax: this.largeData || this.url ? {
+                transport: (params, success, failure)=>{
+                    const page = params.data.page || 1;
+                    const term = params.data.q || "";
+
+                    if(this.largeData){
+                        let filtered = this.largeData.filter(x=>x.text.includes(term));
+                        const start=(page-1)*this.pageSize;
+                        const end=start+this.pageSize;
+                        success({
+                            results: prependAll(filtered.slice(start,end)),
+                            pagination:{ more:end<filtered.length }
+                        });
+                    } else if(this.url){
+                        $.ajax({
+                            url: this.url,
+                            dataType:'json',
+                            data:{ q:term, page:page },
+                            success:(data)=>{
+                                success({
+                                    results: prependAll(data.items||data.results||[]),
+                                    pagination:{ more:data.hasMore||false }
+                                });
+                            },
+                            error: failure
+                        });
+                    }
+                },
+                delay:250
+            } : undefined
+        });
+
+        // 初始化時選 ALL
+        if(this.showAllOption){
+            // 這裡選中 ALL，id = ""
+            const initialOption = new Option(this.allOptionText, "", true, true);
+            this.$select.append(initialOption).trigger('change');
+        }
+    }
+
+    getValue(){ return this.$select.val(); }
+
+    onChange(callback){
+        this.$select.on('change', e => callback(e.target.value));
+    }
+}
+
+// 使用範例
+const mySelect2 = new LargeSelect2('mySelect',{
+    largeData,
+    pageSize:50,
+    showAllOption:true,
+    allOptionText:"全部選項"
+});
+
+mySelect2.onChange(val=>{
+    console.log("目前選取值:", val);
+});
+</script>
+</body>
+</html>
