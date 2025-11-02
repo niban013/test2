@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>三層下拉封裝（L1-L2-L3 智慧連動）</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+select { margin:10px; padding:5px; width:200px; }
+</style>
+</head>
+<body>
+<h2>三層下拉封裝（智慧連動 + 自動回推父層）</h2>
+
+<div class="location-group" data-group="1">
+  <select class="select-L1"></select>
+  <select class="select-L2"></select>
+  <select class="select-L3"></select>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+// 模擬資料
+const locationData = {
+  "台灣": { "台北": ["中正區","大安區"], "台中": ["北區","西屯區"] },
+  "日本": { "東京": ["新宿","渋谷"], "大阪": ["梅田","難波"] },
+  "美國": { "紐約": ["曼哈頓","布魯克林"], "洛杉磯": ["好萊塢","比佛利山"] }
+};
+
+class MultiLevelSelector {
+  constructor($group, data, levels, defaultValues){
+    this.data = data;
+    this.levels = levels.map(l=>$group.find(`.select-${l}`));
+    this.levelNames = levels;
+    this.childToParent = {};
+    this.buildChildMap(data);
+    this.initSelect2();
+    this.bindEvents();
+    this.levels.forEach((_, idx)=>this.updateLevel(idx));
+    if(defaultValues) this.setDefaultValues(defaultValues);
+  }
+
+  buildChildMap(obj, parent=null){
+    for(const k in obj){
+      if(parent) this.childToParent[k] = parent;
+      if(typeof obj[k]==='object' && !Array.isArray(obj[k])){
+        this.buildChildMap(obj[k], k);
+      } else if(Array.isArray(obj[k])){
+        obj[k].forEach(v => this.childToParent[v] = k);
+      }
+    }
+  }
+
+  initSelect2(){
+    this.levels.forEach(l => l.select2({ width:'200px', minimumResultsForSearch: Infinity }));
+  }
+
+  allL2(){ 
+    let arr=[]; 
+    for(const l1 in this.data) arr.push(...Object.keys(this.data[l1])); 
+    return arr; 
+  }
+
+  allL3(){ 
+    let arr=[]; 
+    for(const l1 in this.data) Object.values(this.data[l1]).forEach(a=>arr.push(...a)); 
+    return arr; 
+  }
+
+  l2ByL1(l1){ return Object.keys(this.data[l1]||{}); }
+  l3ByL1(l1){ let arr=[]; Object.values(this.data[l1]||{}).forEach(a=>arr.push(...a)); return arr; }
+
+  updateLevel(idx, options=null){
+    const $level=this.levels[idx];
+    const placeholder=`請選${this.levelNames[idx]}`;
+    $level.empty();
+    $level.append(new Option(placeholder, placeholder, true, true));
+
+    if(!options){
+      if(idx===0) options=Object.keys(this.data);
+      else if(idx===1){
+        const l1=this.levels[0].val();
+        if(l1 && !l1.startsWith("請選")) options=this.l2ByL1(l1);
+        else options=this.allL2();
+      }
+      else if(idx===2){
+        const l1=this.levels[0].val();
+        const l2=this.levels[1].val();
+        if(l2 && !l2.startsWith("請選")) options=this.data[l1]?.[l2]||[];
+        else if(l1 && !l1.startsWith("請選")) options=this.l3ByL1(l1);
+        else options=this.allL3();
+      }
+    }
+
+    options.forEach(o=>$level.append(new Option(o,o,false,false)));
+    $level.val(placeholder).trigger("change.select2");
+  }
+
+  bindEvents(){
+    this.levels.forEach((level,i)=>{
+      level.on("change",()=>{
+        const val=level.val();
+
+        // ✅ 所有層選「請選XX」→ 三層全回預設
+        if(val && val.startsWith("請選")){
+          this.levels.forEach((_,idx)=>this.updateLevel(idx));
+          return;
+        }
+
+        // ✅ L1 改變 → 更新 L2、L3
+        if(i===0){
+          this.updateLevel(1);
+          this.updateLevel(2);
+          return;
+        }
+
+        // ✅ L2 改變 → 回推 L1 + 更新 L3
+        if(i===1){
+          const parent=this.childToParent[val];
+          if(parent && this.levels[0].val()!==parent){
+            this.levels[0].val(parent).trigger("change.select2");
+          }
+          const l2Opts=this.l2ByL1(parent);
+          this.updateLevel(1,l2Opts);
+          this.levels[1].val(val).trigger("change.select2");
+          const l3Opts=this.data[parent]?.[val]||[];
+          this.updateLevel(2,l3Opts);
+          return;
+        }
+
+        // ✅ L3 改變 → 回推 L2/L1
+        if(i===2){
+          const parentCity=this.childToParent[val];
+          const parentL1=this.childToParent[parentCity];
+          if(parentL1 && this.levels[0].val()!==parentL1)
+            this.levels[0].val(parentL1).trigger("change.select2");
+          const l2Opts=this.l2ByL1(parentL1);
+          this.updateLevel(1,l2Opts);
+          this.levels[1].val(parentCity).trigger("change.select2");
+          const l3Opts=this.data[parentL1]?.[parentCity]||[];
+          this.updateLevel(2,l3Opts);
+          this.levels[2].val(val).trigger("change.select2");
+        }
+      });
+    });
+  }
+
+  setDefaultValues(values){
+    if(!Array.isArray(values)) return;
+    const applyLevel=(idx)=>{
+      if(idx>=this.levels.length) return;
+      const $level=this.levels[idx];
+      this.updateLevel(idx);
+      setTimeout(()=>{
+        let val=values[idx];
+        if(val && $level.find(`option[value="${val}"]`).length){
+          $level.val(val).trigger("change.select2");
+        }
+        applyLevel(idx+1);
+      },0);
+    };
+    applyLevel(0);
+  }
+}
+
+// 初始化
+$(document).ready(()=>{
+  new MultiLevelSelector(
+    $(".location-group[data-group=1]"),
+    locationData,
+    ['L1','L2','L3'],
+    // ['日本']         // 測試預設值1
+    // ['日本','大阪']  // 測試預設值2
+  );
+});
+</script>
+</body>
+</html>
+
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自適應三列多行 ECharts 容器 (autoDataZoom + 動態 xlabelMode + legendMode)</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5"></script>
+<style>
+body { font-family:"Microsoft JhengHei",sans-serif; margin:20px; background:#FFFFFF; }
+h2 { text-align:center; color:#444; margin-bottom:20px; }
+/* ✅ 修改後的響應式三欄網格 */
+/* ===== 全寬響應式：改用 Flexbox，最多 3 欄，少於 3 個平均分配 ===== */
+.chart-grid {
+  display: flex;
+  flex-wrap: wrap;      /* ✅ 超過三張自動換行 */
+  gap: 20px;
+  width: 100%;
+  box-sizing: border-box;
+  justify-content: flex-start; /* ✅ 靠左排列，不平展 */
+  align-items: stretch;
+}
+
+/* ✅ 每張圖固定佔 1/3（減去間距） */
+.chart-item {
+  flex: 0 0 calc((100% - 40px) / 3); /* 3 欄，每欄寬度平均 */
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  min-height: 300px;
+  padding: 10px;
+  border: none;
+  box-sizing: border-box;
+}
+
+/* ✅ 若只有 1 或 2 張，自動平均分配整列寬度 */
+.chart-grid:has(.chart-item:nth-child(2):last-child) .chart-item {
+  flex: 0 0 calc(50% - 10px);
+}
+.chart-grid:has(.chart-item:only-child) .chart-item {
+  flex: 0 0 100%;
+}
+
+/* ✅ 手機一欄（選擇性） */
+@media (max-width: 600px) {
+  .chart-item { flex: 0 0 100%; }
+}
+
+/* tooltip動畫 */
+.echarts-tooltip, .echarts-tooltip div { white-space: normal !important; }
+.custom-tooltip { font-size: 13px; line-height: 1.5; }
+.tooltip-line { position: relative; padding-bottom: 2px; margin: 2px 0; }
+.tooltip-line .line-underline { position: absolute; bottom: 0; left: 0; height: 2px; width: 100%; background: transparent; }
+.tooltip-line.active-line .line-underline {
+  background: linear-gradient(90deg, transparent, red, transparent);
+  background-size: 200% 100%;
+  animation: underline-flow 1.5s linear infinite;
+}
+@keyframes underline-flow { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<h2>📊 自適應三列多行 ECharts 圖表（autoDataZoom + 動態 xlabelMode + legendMode）</h2>
+<div class="chart-grid" id="chartContainer"></div>
+<!-- Modal -->
+<div class="modal fade" id="chartModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">圖表放大</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modalChart" style="width:100%;height:600px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const ChartUtil = {
+
+  openInModal(cfg, onClose) {
+    // 若 Modal 不存在，自動建立
+    let modalEl = document.getElementById('chartModal');
+    if (!modalEl) {
+      modalEl = document.createElement('div');
+      modalEl.className = 'modal fade';
+      modalEl.id = 'chartModal';
+      modalEl.tabIndex = -1;
+      modalEl.innerHTML = `
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title"></h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div id="modalChart" style="width:100%;height:400px;"></div>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(modalEl);
+    }
+
+    const modalChartEl = modalEl.querySelector('#modalChart');
+    modalEl.querySelector('.modal-title').textContent = cfg.title || '圖表';
+
+    const bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
+
+    // 顯示後初始化 ECharts
+    const shownHandler = () => {
+      if (modalChartEl.chartInstance) {
+        modalChartEl.chartInstance.dispose();
+      }
+      ChartUtil.renderChart(modalChartEl.id, cfg);
+      modalEl.removeEventListener('shown.bs.modal', shownHandler);
+    };
+    modalEl.addEventListener('shown.bs.modal', shownHandler);
+
+    // 關閉後釋放圖表與回呼
+    const hiddenHandler = () => {
+      console.log('Modal 已關閉');
+      if (modalChartEl.chartInstance) {
+        modalChartEl.chartInstance.dispose();
+        modalChartEl.chartInstance = null;
+      }
+      if (typeof onClose === 'function') onClose();
+      modalEl.removeEventListener('hidden.bs.modal', hiddenHandler);
+    };
+    modalEl.addEventListener('hidden.bs.modal', hiddenHandler);
+  },
+  renderChart: function(containerId, config){
+    const container = document.getElementById(containerId);
+    if(container.chartInstance) container.chartInstance.dispose();
+    //const chart = echarts.init(container);
+	
+	 const chart = echarts.init(container, null, {
+  // 自動偵測裝置 pixel ratio
+  renderer: 'canvas',
+  devicePixelRatio: window.devicePixelRatio || 1
+});
+    container.chartInstance = chart;
+    const isMobile = window.innerWidth < 600;
+
+    // === Legend 設定（新增 legendMode 控制）
+    const legendMode = config.legendMode || 'scroll'; // scroll / wrap / none
+    const legendBase = (config.type==='pie')
+      ? (isMobile?{orient:'horizontal',top:'10%',left:'center'}:{orient:'vertical',left:'5%',top:'10%'})
+      : (isMobile?{top:0,left:'center'}:{orient:'horizontal',top:'10%',left:'center'});
+    const legendOption = (legendMode==='none') ? {show:false} : {
+      ...legendBase,
+      type: legendMode==='scroll' ? 'scroll' : 'plain',
+      itemGap: 10,
+      padding: [5,5,5,5],
+      textStyle:{fontSize:12}
+    };
+
+    // === Grid padding
+    const gridPadding = isMobile ? { left:'10%', right:'10%', bottom:'15%', containLabel:true } : { left:'5%', right:'5%', bottom:'10%' , containLabel:true};
+
+    // === XLabel 自動處理
+    function getXAxisLabelOption(categories, mode){
+      const maxLen = 8;
+      if(mode==='auto'){
+        if(categories.length > 10){
+          return { interval:0, rotate: categories.some(v=>v.length>maxLen)?45:30, fontSize:12 };
+        } else return { interval:0, rotate:0, fontSize:12 };
+      }
+      switch(mode){
+        case 'wrap': return {interval:0, rotate:0, formatter:v=>v.length>maxLen?v.match(new RegExp('.{1,'+maxLen+'}','g')).join('\n'):v,fontSize:12};
+        case 'rotate': return {interval:0, rotate: categories.some(v=>v.length>maxLen)?(isMobile?30:45):0,formatter:'{value}',fontSize:12};
+        case 'alternate': return {interval:0, formatter:(v,i)=>i%2===0?v:'\n'+v,fontSize:12};
+        default: return {interval:0,formatter:'{value}',fontSize:12};
+      }
+    }
+
+    // === 計算間距避免 title / legend 疊
+    const titleHeight = config.title?40:0;
+    const legendRows = (legendMode==='wrap')
+      ? Math.ceil((config.series?.length||1)/6)
+      : 1;
+    const legendHeight = (legendMode==='none')?0:(legendRows*30);
+    const gridTop = titleHeight + legendHeight + 30; // +30 提供安全間距
+
+    // === dataZoom
+    let dataZoomOption;
+    if(typeof config.autoDataZoom === 'number'){
+      const N = config.categories.length;
+      if(config.autoDataZoom === -1){
+        dataZoomOption = undefined;
+      } else if(config.autoDataZoom > 0 && N > config.autoDataZoom){
+        const end = (config.autoDataZoom / N) * 100;
+        dataZoomOption = [{ type:'slider', xAxisIndex:0, start:0, end }];
+      }
+    }
+const bgColor = getComputedStyle(document.body).backgroundColor;
+    // === 組合 Option
+	
+	  // 使用 axisTitleMap 設定 title / X / Y 軸
+  const chartTitle = config.axisTitleMap['title'] || config.title ;
+  const xTitle = config.axisTitleMap[config.xlabel] || config.xlabel;
+  const yTitle = config.axisTitleMap[config.ylabel] || config.ylabel;
+
+	// tooltip formatter
+    const formatterFunc = (params) => {
+              let str = `<div class="custom-tooltip"><div class="tooltip-title">${params[0].axisValue}</div>`;
+			   const activeSeries = chart._hoveredSeries || null;
+              params.forEach(p=>{
+                const valueStr = (config.type==='stackedPercent' && p.data.rawValue!==undefined)? `${p.data.rawValue} (${p.value}%)`:p.value;
+                const activeClass = (p.seriesName===activeSeries)?'active-line':'';
+                str += `<div class="tooltip-line ${activeClass}">${p.marker}${p.seriesName}: ${valueStr}<span class="line-underline"></span></div>`;
+              });
+              str += '</div>'; return str;
+            };
+    let option = {};
+    switch(config.type){
+      case 'bar': case 'grouped': case 'stacked': case 'stackedPercent': case 'line': case 'mixed':
+        option = {
+		 backgroundColor: bgColor,
+ 
+          title:{ text: chartTitle, left:'center' },
+          legend: legendOption,
+          grid: Object.assign({}, gridPadding, { top:gridTop }),
+          tooltip:{
+            trigger:'axis',
+            axisPointer:{ type:'shadow'
+			},
+            enterable:true,
+            formatter: formatterFunc
+          },
+          xAxis:{ type:'category', data: config.categories,  nameGap:40,    nameLocation: 'center',name: xTitle, axisLabel:getXAxisLabelOption(config.categories, config.xlabelMode) },
+          yAxis:{ type:'value', name: yTitle, min:0, max: config.type==='stackedPercent'?100:undefined, axisLabel:{  margin: 20,formatter:config.type==='stackedPercent'?'{value}%':'{value}'} },
+          series: config.series.map((s,i)=>({
+            name: s.name,
+            type: s.type || (config.type==='line'?'line':'bar'),
+            stack: (config.type==='stacked' || config.type==='stackedPercent')?'total':undefined,
+            label:{ show:s.type!=='line', position:'top', formatter: config.type==='stackedPercent'?'{c}%':'{c}' },
+            data: s.data,
+            itemStyle:{ color: config.colors?.[i] },
+            smooth: s.type==='line'?true:false
+          })),
+          dataZoom: dataZoomOption
+        };
+        break;
+
+      case 'pie':
+        const pieData = config.series.map((s,i)=>({
+          name:s.name,
+          value:s.data.reduce((a,b)=>a+b,0),
+          itemStyle:{ color: config.colors?.[i] }
+        }));
+        option = {
+          title:{ text: config.title, left:'center' },
+          tooltip:{ trigger:'item', formatter:'{a}<br/>{b}: {c} ({d}%)' },
+          legend: legendOption,
+          series:[{
+            name: config.ylabel||'總和',
+            type:'pie',
+            radius:['40%','70%'],
+            center:isMobile?['50%','55%']:['65%','55%'],
+            data:pieData,
+            label:{formatter:'{b}: {d}%'}
+          }]
+        };
+        break;
+    }
+
+    chart.setOption(option);
+    chart.resize();
+chart.getOption().series.forEach((s, i) => {
+  chart.on('mouseover', function(params){
+    if(params.seriesIndex === i){
+      chart._hoveredSeries = params.seriesName;
+    }
+  });
+  chart.on('mouseout', function(params){
+    if(params.seriesIndex === i){
+      chart._hoveredSeries = null;
+    }
+  });
+});
+    // === 動態調整 XLabel
+    function updateXAxisLabel(el){
+      if(!chart.getOption().xAxis) return;
+      const axis = chart.getOption().xAxis[0];
+      if(!axis) return;
+      let visibleCategories = axis.data;
+      const dz = chart.getOption().dataZoom?.[0];
+      if(dz){
+        const total = axis.data.length;
+        const startIndex = Math.floor(dz.start/100*total);
+        const endIndex = Math.ceil(dz.end/100*total);
+        visibleCategories = axis.data.slice(startIndex,endIndex);
+      }
+      const newLabel = getXAxisLabelOption(visibleCategories, config.xlabelMode);
+      chart.setOption({ xAxis:[{ axisLabel: newLabel }] });
+	  
+	    const resizeObserver = new ResizeObserver(() => chart.resize());
+  resizeObserver.observe(el);
+  // ✅ 預防 SPA 或載入延遲，初次補一刀
+  setTimeout(() => chart.resize(), 100);
+    }
+
+    updateXAxisLabel(container);
+    chart.on('dataZoom', updateXAxisLabel(container));
+	
+	
+    window.addEventListener('resize', ()=>{ chart.resize(); updateXAxisLabel(container); });
+    return chart;
+  }
+};
+
+// 範例資料
+const rawData = [
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"ABp","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"AAc","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHq" },
+  { "ACT_LV1":"ABc","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHy" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AAs","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHd" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"ABc","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHq" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AAk","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHa" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"ABc","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHz" },
+  { "ACT_LV1":"AAb","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"ABc","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHz" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHu" },
+  { "ACT_LV1":"ABp","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"ABe","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHd" },
+  { "ACT_LV1":"AAc","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHq" },
+  { "ACT_LV1":"ABc","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"ABx","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AAxs","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHd" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"ABc","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHq" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AAk","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"ABcz","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"AA","DATA_YM":"202501","EM_TOTAL":3333,"SCOPE":"1","SITE":"AUHz" },
+  { "ACT_LV1":"AAbz","DATA_YM":"202501","EM_TOTAL":4444,"SCOPE":"2","SITE":"AUHC" },
+  { "ACT_LV1":"ABzc","DATA_YM":"202501","EM_TOTAL":5555,"SCOPE":"1","SITE":"AUHC" },
+  { "ACT_LV1":"AB","DATA_YM":"202501","EM_TOTAL":2222,"SCOPE":"2","SITE":"AUHz" }
+]
+
+// === 建立圖表設定 ===
+function buildChartConfig(data, opts={}) {
+  const { valueField='EM_TOTAL', xField='ACT_LV1', groupField='SITE', chartType='bar', title='圖表', axisTitleMap, xlabel=xField, ylabel=valueField, xlabelMode='auto', colors=[], autoDataZoom=0, legendMode='scroll' } = opts;
+  if(!Array.isArray(data)||data.length===0) return { type:chartType, title, categories:[], series:[], autoDataZoom };
+  const categories = [...new Set(data.map(d=>d[xField]))];
+  let series = [];
+  if(chartType==='pie'){
+    const groups = groupField?[...new Set(data.map(d=>d[groupField]))]:categories;
+    series = groups.map(g=>({ name:g, data:[data.filter(d=>groupField?d[groupField]===g:d[xField]===g).reduce((sum,d)=>sum+Number(d[valueField]||0),0)] }));
+  } else {
+    const groups = groupField?[...new Set(data.map(d=>d[groupField]))]:[];
+    if(chartType==='stackedPercent'){
+      series = groups.map(g=>({ name:g, data:categories.map(cat=>{
+        const total = data.filter(d=>d[xField]===cat).reduce((sum,d)=>sum+Number(d[valueField]||0),0);
+        const val = data.filter(d=>d[xField]===cat && d[groupField]===g).reduce((sum,d)=>sum+Number(d[valueField]||0),0);
+        return { value: total?((val/total)*100).toFixed(2):0, rawValue: val };
+      })}));
+    } else {
+      series = groups.map((g,i)=>({ name:g, type: chartType==='mixed' && i===1?'line':undefined, data:categories.map(cat=>data.filter(d=>d[xField]===cat && d[groupField]===g).reduce((sum,d)=>sum+Number(d[valueField]||0),0)) }));
+    }
+  }
+  return { type:chartType, title, xlabel, ylabel, xlabelMode, categories, series, colors, autoDataZoom, legendMode,axisTitleMap };
+}
+const axisMap = {
+  title: '堆疊圖示例',
+  ACT_LV1: '活動等級',
+  EM_TOTAL: '總量',
+  SITE: '站點'
+};
+
+// === 生成圖表 ===
+const charts = [
+  buildChartConfig(rawData,{ chartType:'stacked', title:'堆疊圖示例', legendMode:'wrap', axisTitleMap:axisMap }),
+  buildChartConfig(rawData,{ chartType:'stackedPercent', title:'百分比堆疊圖', autoDataZoom:20, legendMode:'scroll', axisTitleMap:axisMap }), 
+    buildChartConfig(rawData,{ chartType:'grouped', title:'群組直條圖', autoDataZoom:20, axisTitleMap:axisMap }),
+  buildChartConfig(rawData,{ chartType:'pie', title:'圓餅圖示例', legendMode:'scroll', axisTitleMap:axisMap }),
+ // buildChartConfig(rawData,{ chartType:'line', title:'折線圖示例', autoDataZoom:10 }),
+ // buildChartConfig(rawData,{ chartType:'mixed', title:'柱狀+折線混合', colors:['#3b82f6','#f97316'], autoDataZoom:20 })
+];
+
+const container = document.getElementById('chartContainer');
+charts.forEach((cfg,i)=>{
+  const div = document.createElement('div');
+  div.className='chart-item';
+  div.id='chart'+i;
+  container.appendChild(div);
+  const chart= ChartUtil.renderChart(div.id,cfg);
+   
+   // 點擊小圖表 → modal 放大
+  div.addEventListener('click', ()=>{
+   ChartUtil.openInModal(cfg, () => {
+    console.log('使用者關閉 Modal');
+  });
+  });
+  
+  
+});
+
+ 
+</script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>SPA iframe cache</title>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<style>
+#menu { padding: 10px; }
+#menu button { margin-right: 10px; }
+#iframeContainer { width: 100%; height: 500px; border: 1px solid #ccc; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+  <button data-url="page1.html">載入 Page 1</button>
+  <button data-url="page2.html">載入 Page 2</button>
+  <button id="clearCache">清除快取</button>
+</div>
+
+<div id="iframeContainer">
+  <iframe id="spaFrame" src="" width="100%" height="100%" frameborder="0"></iframe>
+</div>
+
+<script>
+(function($){
+
+  // --- 快取物件 ---
+  const iframeCache = {};
+
+  // --- 快取載入器 ---
+  function loadPageWithCache(url){
+    const $iframe = $('#spaFrame');
+
+    if(iframeCache[url]) {
+      console.log('✅ 使用快取:', url);
+      // 直接用 Blob URL 替代載入（不再重新請求）
+      const blob = new Blob([iframeCache[url]], {type: 'text/html'});
+      const blobUrl = URL.createObjectURL(blob);
+      $iframe.attr('src', blobUrl);
+    } else {
+      console.log('🌐 從伺服器載入:', url);
+      $.get(url, function(html){
+        iframeCache[url] = html; // 存入快取
+        const blob = new Blob([html], {type: 'text/html'});
+        const blobUrl = URL.createObjectURL(blob);
+        $iframe.attr('src', blobUrl);
+      }).fail(()=>{
+        alert('載入失敗：' + url);
+      });
+    }
+  }
+
+  // --- 綁定事件 ---
+  $('#menu button[data-url]').on('click', function(){
+    const url = $(this).data('url');
+    loadPageWithCache(url);
+  });
+
+  $('#clearCache').on('click', function(){
+    Object.keys(iframeCache).forEach(k => delete iframeCache[k]);
+    alert('快取已清除');
+  });
+
+})(jQuery);
+</script>
+
+</body>
+</html>
+console.time('iframeLoad');
+$('#spaFrame').on('load', function(){
+    console.timeEnd('iframeLoad');
+});
