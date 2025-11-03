@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>三層下拉封裝（L1-L2-L3 智慧連動）</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+select { margin:10px; padding:5px; width:200px; }
+</style>
+</head>
+<body>
+<h2>三層下拉封裝（智慧連動 + 關聯保護 + 不回推父層）</h2>
+
+<div class="location-group" data-group="1">
+  <select class="select-L1"></select>
+  <select class="select-L2"></select>
+  <select class="select-L3"></select>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+// 模擬資料
+const locationData = {
+  "A": { "F": ["G","H"], "K": ["L","M"] },
+  "B": { "S": ["T","U"], "F": ["G","H"] },
+  "C": { "F": ["T","U"], "Z": ["G","H"] }
+};
+
+class MultiLevelSelector {
+  constructor($group, data, levels, defaultValues){
+    this.data = data;
+    this.levels = levels.map(l=>$group.find(`.select-${l}`));
+    this.levelNames = levels;
+    this.initSelect2();
+    this.bindEvents();
+    this.levels.forEach((_, idx)=>this.updateLevel(idx));
+    if(defaultValues) this.setDefaultValues(defaultValues);
+  }
+
+  initSelect2(){
+    this.levels.forEach(l => l.select2({ width:'200px', minimumResultsForSearch: Infinity }));
+  }
+
+  allOptionsAtLevel(idx){
+    if(idx===0) return Object.keys(this.data);
+    let options=[];
+    const traverse=(obj, depth)=>{
+      if(depth===idx){
+        if(Array.isArray(obj)) options.push(...obj);
+        else if(typeof obj==='object') options.push(...Object.keys(obj));
+      } else {
+        for(const k in obj){
+          traverse(obj[k], depth+1);
+        }
+      }
+    };
+    traverse(this.data,0);
+    return [...new Set(options)];
+  }
+
+  l2ByL1(l1){ return Object.keys(this.data[l1]||{}); }
+
+  l3ByL2(l11,l2){
+    // ✅ 合併所有 L1 下對應 L2 的值
+    let result = [];
+    for(const l1 in this.data){
+//	if(l1==l11){
+	 if(this.data[l1][l2]){
+        result.push(...this.data[l1][l2]);
+      }
+//	}
+      
+    }
+    return [...new Set(result)];
+  }
+
+  updateLevel(idx, options=null){
+    const $level=this.levels[idx];
+    const placeholder=`請選${this.levelNames[idx]}`;
+    const prevVal=$level.val();
+    $level.empty().append(new Option(placeholder, placeholder, true, true));
+
+    if(!options){
+      if(idx===0){
+        options=this.allOptionsAtLevel(0);
+      } else if(idx===1){
+        const l1=this.levels[0].val();
+        if(l1 && !l1.startsWith("請選")) options=this.l2ByL1(l1);
+        else options=this.allOptionsAtLevel(1);
+      } else if(idx===2){
+        const l1=this.levels[0].val();
+        const l2=this.levels[1].val();
+        if(l2 && !l2.startsWith("請選")){
+		const l1=this.levels[0].val();
+          options=this.l3ByL2(l1,l2);
+        } else if(l1 && !l1.startsWith("請選")) {
+          // ✅ L1 選擇時，顯示該 L1 下所有 L2 的 L3
+          options=[];
+          Object.values(this.data[l1]||{}).forEach(a=>options.push(...a));
+          options=[...new Set(options)];
+        } else {
+          options=this.allOptionsAtLevel(2);
+        }
+      }
+    }
+
+    [...new Set(options)].forEach(o=>$level.append(new Option(o,o,false,false)));
+    $level.val(prevVal && $level.find(`option[value="${prevVal}"]`).length ? prevVal : placeholder)
+           .trigger("change.select2");
+  }
+
+  bindEvents(){
+    this.levels.forEach((level,i)=>{
+      level.on("change",()=>{
+        const val=level.val();
+        if(val && val.startsWith("請選")){
+          this.levels.forEach((_,idx)=>this.updateLevel(idx));
+          return;
+        }
+        // 更新下層，不回推父層
+        for(let j=i+1;j<this.levels.length;j++){
+          this.updateLevel(j);
+        }
+      });
+    });
+  }
+
+  setDefaultValues(values){
+    if(!Array.isArray(values)) return;
+    const applyLevel=(idx)=>{
+      if(idx>=this.levels.length) return;
+      const $level=this.levels[idx];
+      this.updateLevel(idx);
+      setTimeout(()=>{
+        let val=values[idx];
+        if(val && $level.find(`option[value="${val}"]`).length){
+          $level.val(val).trigger("change.select2");
+        }
+        applyLevel(idx+1);
+      },0);
+    };
+    applyLevel(0);
+  }
+}
+
+// 初始化
+$(document).ready(()=>{
+  new MultiLevelSelector(
+    $(".location-group[data-group=1]"),
+    locationData,
+    ['L1','L2','L3']
+    // ['L1','L2'] // 可切換兩層
+  );
+});
+</script>
+</body>
+</html>
