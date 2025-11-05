@@ -1,3 +1,50 @@
+   const iframe = this.iframe;
+    let ro; // ResizeObserver
+
+    const tryResize = () => {
+        try {
+            const inner = iframe.contentDocument || iframe.contentWindow.document;
+            if (!inner || !inner.body) {
+                setTimeout(tryResize, 100);
+                return;
+            }
+
+            const header = inner.querySelector(headerSelector);
+            const footer = inner.querySelector(footerSelector);
+
+            const headerHeight = header ? header.getBoundingClientRect().height : 0;
+            const footerHeight = footer ? footer.getBoundingClientRect().height : 0;
+
+            // body scrollHeight 扣掉 header/footer
+            const bodyHeight = inner.body.scrollHeight;
+            iframe.style.height = Math.max(bodyHeight - headerHeight - footerHeight, 100) + "px";
+        } catch (e) {
+            console.warn("iframe resize error", e);
+        }
+    };
+
+    const setupObserver = () => {
+        try {
+            const inner = iframe.contentDocument || iframe.contentWindow.document;
+            if (!inner || !inner.body) return;
+
+            // 解除舊 observer 避免重複
+            if (ro) ro.disconnect();
+
+            ro = new ResizeObserver(tryResize);
+            ro.observe(inner.body);
+        } catch (e) { /* ignore */ }
+    };
+
+    // 初始 resize
+    tryResize();
+    setupObserver();
+
+    // 延遲再計算幾次，處理圖片/圖表渲染
+    [200, 500, 1000, 1500].forEach(t => setTimeout(tryResize, t));
+}
+
+------------------------------
 v1
 
 <!DOCTYPE html>
