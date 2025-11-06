@@ -9,3 +9,1249 @@ FROM A
 LEFT JOIN B
     ON A.address = B.address
    AND A.Q = B.Q;
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ESG Dashboard - 帶浮動子選單</title>
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <!--<script src="./i18n.js"></script>-->
+    <style>
+        html, body {
+            padding: 0;
+            height: 100%;
+            overflow: hidden !important; /* ✅ 禁用外層 scrollbar */
+            /*overflow-x: hidden;*/
+            margin: 0;
+            background-color: #f4f8f5; /* 柔和綠底 */
+            font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+        }
+
+        #content-frame {
+            flex: 1 1 auto;
+            border: none;
+            width: 100%;
+            overflow: auto; /* 內容 scroll 在 iframe 內，不影響 body */
+        }
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 240px;
+            height: 100%;
+            background: linear-gradient(180deg, #2b593f 0%, #1e3a2b 100%); /* 深綠漸層 */
+            color: #e9f5ee;
+            transition: all .3s ease-in-out;
+            z-index: 1040;
+            overflow-y: auto;
+            box-shadow: 2px 0 6px rgba(0,0,0,0.2);
+        }
+
+            .sidebar a {
+                color: #d2f0de;
+                display: block;
+                padding: 10px 15px;
+                text-decoration: none;
+                transition: all .2s;
+            }
+
+                .sidebar a:hover, .sidebar a.active {
+                    background: #5cb85c; /* 綠色主調 */
+                    color: #fff;
+                }
+
+            /* Submenu */
+            .sidebar .submenu {
+                display: none;
+                padding-left: 25px;
+            }
+
+                .sidebar .submenu a {
+                    font-size: 0.9em;
+                    color: #c6e8d1;
+                }
+
+                    .sidebar .submenu a:hover {
+                        background: rgba(255,255,255,0.1);
+                    }
+            /* 防止展開時 hover 或 active 變白 */
+            .sidebar .has-submenu.open > a,
+            .sidebar .has-submenu > a:hover {
+                background: #2b593f !important;
+                color: #fff !important;
+            }
+            /* Sidebar 縮起 */
+            .sidebar.collapsed {
+                width: 60px;
+                overflow: visible;
+            }
+
+                .sidebar.collapsed a span.text {
+                    display: none;
+                }
+
+                /* ✅ 浮動子選單（縮進狀態下顯示） */
+                .sidebar.collapsed .has-submenu:hover > .submenu {
+                    display: block !important;
+                    position: absolute;
+                    left: 60px;
+                    top: 0;
+                    background: #2f5c43;
+                    border-radius: 0 4px 4px 0;
+                    box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
+                    width: 180px;
+                    padding: 5px 0;
+                    z-index: 1050;
+                }
+
+        /* Main Panel */
+        #main-panel {
+            margin-left: 240px;
+            background-color: #f4f8f5;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+            #main-panel.full {
+                margin-left: 60px;
+            }
+
+        /* Header */
+        #main-header {
+            background: #e9f5ee;
+            border-bottom: 1px solid #c8e3d0;
+            height: 50px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+            #main-header .btn {
+                background-color: #5cb85c;
+                color: #fff;
+                border: none;
+                transition: background .2s;
+            }
+
+                #main-header .btn:hover {
+                    background-color: #4cae4c;
+                }
+
+            #main-header .header-title {
+                flex: 1;
+                text-align: center;
+                margin: 0;
+                font-size: 17px;
+                font-weight: 600;
+                color: #2e4634;
+                letter-spacing: 1px;
+            }
+
+            #main-header .user-info {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 13px;
+                color: #2b3b2b;
+            }
+
+        #logoutBtn {
+            background-color: #e26a5c;
+            border: none;
+            color: #fff;
+        }
+
+            #logoutBtn:hover {
+                background-color: #c9574c;
+            }
+
+        /* Content */
+        #content-container {
+            padding: 25px 35px;
+            background: #f8fbf9;
+            border-radius: 6px;
+            margin: 15px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.05);
+        }
+
+        /* Accordion Footer */
+        .accordion-footer {
+            margin-top: 30px;
+        }
+
+            .accordion-footer .panel-heading {
+                background: #d9f0df;
+                border-top: 1px solid #b6dec0;
+                cursor: pointer;
+            }
+
+            .accordion-footer .panel-title a {
+                display: block;
+                text-decoration: none;
+                color: #2b3b2b;
+                font-weight: 500;
+            }
+
+            .accordion-footer .panel-body {
+                background: #f4f8f5;
+                border-top: 1px solid #cde7d5;
+            }
+
+        .nav > li > a:focus {
+            background-color: #5cb85c !important;
+            text-decoration: none !important;
+        }
+
+        .nav > li > a:hover {
+            background-color: #5cb85c !important;
+            text-decoration: none !important;
+        }
+        /* ---------------------------
+           Sidebar Icon 與文字樣式
+        --------------------------- */
+
+        /* li a 置中對齊容器 */
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* icon 與文字間隔 */
+            transition: all 0.2s ease;
+        }
+
+            /* Icon */
+            .sidebar a span.glyphicon {
+                flex-shrink: 0;
+                font-size: 16px;
+                width: 20px;
+                text-align: center;
+                transition: all 0.2s ease;
+            }
+
+        /* 收合時放大並置中 */
+        .sidebar.collapsed a span.glyphicon {
+            font-size: 24px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* 收合時隱藏文字 */
+        .sidebar.collapsed a span.text {
+            display: none;
+        }
+
+        /* 二級 submenu li */
+        .sidebar .submenu a {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-left: 30px;
+            transition: all 0.2s ease;
+        }
+
+        /* 收合時 submenu 也置中 icon、隱藏文字 */
+        .sidebar.collapsed .submenu a span.text {
+            display: none;
+        }
+
+        .sidebar.collapsed .submenu a {
+            justify-content: center;
+        }
+
+        /* 收合時所有子選單隱藏，僅浮動時顯示 */
+        .sidebar.collapsed .submenu {
+            display: none !important;
+        }
+
+        /* 浮動子選單（滑鼠 hover） */
+        .sidebar.collapsed .has-submenu:hover > .submenu {
+            display: block !important;
+            position: absolute;
+            left: 60px;
+            top: 0;
+            background: #2f5c43;
+            border-radius: 0 4px 4px 0;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.4);
+            width: 100px;
+            padding: 5px 0;
+            z-index: 1050;
+        }
+
+        /* 收合時 hover 效果，icon 放大 */
+        .sidebar.collapsed a:hover span.glyphicon,
+        .sidebar.collapsed .submenu a:hover span.glyphicon {
+            font-size: 24px;
+        }
+
+        /* ✅ 浮動右側下載進度面板 */
+        #download-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 280px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: all .3s ease;
+            z-index: 1060;
+        }
+
+            /* header */
+            #download-panel .panel-header {
+                background: #2b593f;
+                color: #fff;
+                padding: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                font-weight: 600;
+            }
+
+                #download-panel .panel-header:hover {
+                    background: #36744e;
+                }
+
+            /* 內容區 */
+            #download-panel .panel-body {
+                max-height: 240px;
+                overflow-y: auto;
+                background: #f8fbf9;
+                padding: 10px;
+            }
+
+        /* 單筆下載項目 */
+        .download-item {
+            padding: 6px 0;
+            border-bottom: 1px solid #dbe9e0;
+        }
+
+            .download-item:last-child {
+                border-bottom: none;
+            }
+
+            .download-item .file-name {
+                font-size: 13px;
+                color: #2b3b2b;
+                margin-bottom: 4px;
+            }
+
+            .download-item .progress {
+                height: 6px;
+                margin: 0;
+            }
+
+            .download-item .progress-bar {
+                background-color: #5cb85c;
+            }
+
+        /* 收合狀態 */
+        #download-panel.collapsed {
+            height: 42px;
+            width: 200px;
+        }
+
+            #download-panel.collapsed .panel-body {
+                display: none;
+            }
+
+        /* 收合按鈕圖示 */
+        #download-toggle {
+            font-size: 16px;
+        }
+        /* 手機模式 Sidebar */
+        @media (max-width:767px) {
+            .sidebar {
+                width: 80%;
+                max-width: 300px;
+                transform: translateX(-110%);
+                background: rgba(34,73,53,0.97);
+                box-shadow: 3px 0 15px rgba(0,0,0,0.3);
+                transition: transform .3s ease, opacity .3s ease;
+                opacity: 0;
+            }
+
+                .sidebar.show {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+
+            #main-panel {
+                margin-left: 0 !important;
+            }
+        }
+
+        #adminlte-footer-box {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            z-index: 1060;
+            transition: height 0.3s ease;
+        }
+
+            #adminlte-footer-box.collapsed-box {
+                height: 40px; /* 只有 header 高度 */
+            }
+
+            #adminlte-footer-box .box-header {
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background: #36744e;
+                color: #fff;
+                padding: 0 15px;
+                cursor: pointer;
+                position: relative;
+                z-index: 1061;
+            }
+
+            #adminlte-footer-box .box-body {
+                position: absolute;
+                bottom: 40px; /* 從 header 上方展開 */
+                width: 100%;
+                display: none;
+                background: #f4f8f5;
+                color: #2b3b2b;
+                max-height: 200px;
+                overflow-y: auto;
+                padding: 15px;
+                box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+                z-index: 1059;
+            }
+
+            #adminlte-footer-box.expanded .box-body {
+                display: block;
+            }
+        /* 固定在 sidebar 底部 */
+        .sidebar-bottom-btn {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 1050;
+        }
+
+            /* 按鈕樣式 */
+            .sidebar-bottom-btn button {
+                width: 80%;
+                white-space: nowrap;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }
+
+        /* 收合時只顯示 icon */
+        .sidebar.collapsed .sidebar-bottom-btn button .text {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar">
+        <div class="text-center" style="padding:10px;">
+            <a href="#" id="portal" style="color:#fff;text-decoration:none;font-weight:600;" data-i18n="menu"><strong>選單</strong></a>
+        </div>
+        <ul class="nav nav-pills nav-stacked" id="menu">
+            <li><a href="#" data-target="Portal/tableau" data-toggle="tooltip" title="面板一"><span class="glyphicon glyphicon-leaf"></span> <span class="text" data-i18n="menuItems.sustain">永續報告</span></a></li>
+            <li class="has-submenu">
+                <a href="#" data-toggle="tooltip" title="面板二"><span class="glyphicon glyphicon-stats"></span> <span class="text">碳排分析 ▾</span></a>
+                <ul class="submenu nav">
+                    <li><a href="#" data-target="Portal/sub1" data-toggle="tooltip" title="sub1"><span class="glyphicon glyphicon-stats"></span> <span class="text">sub1</span></a></li>
+                    <li><a href="#" data-target="Portal/tableau" data-toggle="tooltip" title="sub2"><span class="glyphicon glyphicon-stats"></span> <span class="text">sub2</span></a></li>
+                </ul>
+            </li>
+            <li><a href="#" data-target="Portal/TestSuccess" data-toggle="tooltip" title="Tableau"><span class="glyphicon glyphicon-globe"></span> <span class="text">z22</span></a></li>
+        </ul>
+        <!-- 底部按鈕 -->
+        <div class="sidebar-bottom-btn">
+            <button id="sidebar-action-btn" class="btn btn-sm btn-success" title="設定">
+                <span class="glyphicon glyphicon-cog"></span>
+                <span class="text">設定</span>
+            </button>
+        </div>
+    </div>
+
+
+    <!-- Main Panel -->
+    <div id="main-panel">
+        <!-- Header -->
+        <div id="main-header">
+            <button id="toggleSidebar" class="btn btn-sm">☰</button>
+            <h5 id="page-title" class="header-title"></h5>
+            <div class="user-info">
+                <span>你好, 使用者</span>
+                <button class="btn btn-xs" id="logoutBtn">登出</button>
+                <button id="testDownload" class="btn btn-primary">開始模擬下載</button>
+            </div>
+            <!-- ✅ 新增語言選擇 -->
+            <select id="langSelect" class="form-control input-sm" style="width:100px;display:inline-block;">
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+            </select>
+        </div>
+
+        <!--<iframe id="content-frame" class="flex-grow-1 overflow-auto"
+            style="width:100%; height: calc(100vh - 80px); border:none; background:white;"></iframe>-->
+        <iframe id="content-frame"
+                style="width:100%; height: calc(100vh - 50px - 40px); border:none; overflow:auto; background:white;"></iframe>
+
+
+        <!-- AdminLTE 固定底部 Footer -->
+        <!-- Footer Box -->
+        <!-- AdminLTE Footer Box -->
+        <div id="adminlte-footer-box" class="box collapsed-box">
+            <div class="box-header">
+                <span class="box-title">📄 ESG Footer</span>
+                <button id="footer-toggle-btn" type="button" class="btn btn-box-tool">
+                    <i class="fa fa-plus"></i>
+                </button>
+            </div>
+            <div class="box-body">
+                <p>這裡是可展開的 Footer 內容，可放下載進度、公告或其他資訊。</p>
+            </div>
+        </div>
+
+
+    </div>
+
+    <!-- ✅ 右側浮動下載進度清單 -->
+    <div id="download-panel" class="collapsed">
+        <div class="panel-header">
+            <span>📥 下載進度</span>
+            <span id="download-toggle" class="glyphicon glyphicon-chevron-up"></span>
+        </div>
+        <div class="panel-body">
+
+        </div>
+    </div>
+
+    <script>
+        // 底部按鈕事件
+
+
+        // ================================
+        // AdminLTE Footer 控制封裝
+        // ================================
+        const AdminLTEFooterBox = (function () {
+            let $box = null;
+            let $toggleBtn = null;
+            let pagesToShow = [];
+            let collapseTimer = null;
+
+            return {
+                init: function (boxSelector = "#adminlte-footer-box", toggleBtnSelector = "#footer-toggle-btn", showPages = []) {
+                    $box = $(boxSelector);
+                    $toggleBtn = $(toggleBtnSelector);
+                    pagesToShow = showPages;
+
+                    if (!$box.length || !$toggleBtn.length) return;
+
+                    // 預設 collapsed
+                    $box.addClass("collapsed-box").removeClass("expanded");
+                    $toggleBtn.find("i").removeClass("fa-minus").addClass("fa-plus");
+
+                    // toggle 按鈕事件
+                    $toggleBtn.on("click", e => {
+                        e.stopPropagation();
+                        this.toggle();
+                    });
+
+                    // header 點擊也可 toggle
+                    $box.find(".box-header").on("click", e => {
+                        if (!$(e.target).is($toggleBtn)) this.toggle();
+                    });
+
+                    // hover 離開 footer body 時 5 秒後自動 collapse
+                    $box.on("mouseenter", () => this._clearCollapseTimer());
+                    $box.on("mouseleave", () => this._startCollapseTimer());
+                },
+
+                expand: function () {
+                    if (!$box || !$toggleBtn) return;
+                    $box.removeClass("collapsed-box").addClass("expanded");
+                    $toggleBtn.find("i").removeClass("fa-plus").addClass("fa-minus");
+                },
+
+                collapse: function () {
+                    if (!$box || !$toggleBtn) return;
+                    $box.addClass("collapsed-box").removeClass("expanded");
+                    $toggleBtn.find("i").removeClass("fa-minus").addClass("fa-plus");
+                },
+
+                toggle: function () {
+                    if (!$box || !$toggleBtn) return;
+                    if ($box.hasClass("expanded")) {
+                        this.collapse();
+                    } else {
+                        this.expand();
+                    }
+                },
+
+                checkDisplay: function (pageName) {
+                    if (!$box) return;
+                    if (pagesToShow.includes(pageName)) {
+                        $box.show();
+                    } else {
+                        $box.hide();
+                    }
+                },
+
+                setPages: function (pages) {
+                    pagesToShow = pages;
+                },
+
+                _startCollapseTimer: function () {
+                    this._clearCollapseTimer();
+                    collapseTimer = setTimeout(() => this.collapse(), 500); // 5 秒自動收合
+                },
+
+                _clearCollapseTimer: function () {
+                    if (collapseTimer) {
+                        clearTimeout(collapseTimer);
+                        collapseTimer = null;
+                    }
+                }
+            };
+        })();
+
+
+        // -------------------------------
+        // IndexedDB 快取工具
+        // -------------------------------
+        class CacheDB {
+            constructor(dbName = "IFrameCacheDB") {
+                this.dbName = dbName;
+                this.storeName = "cacheStore";
+                this.dbPromise = this._openDB();
+            }
+
+            _openDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(this.dbName, 1);
+                    req.onerror = e => reject(e);
+                    req.onupgradeneeded = e => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName))
+                            db.createObjectStore(this.storeName, { keyPath: "target" });
+                    };
+                    req.onsuccess = e => resolve(e.target.result);
+                });
+            }
+
+            async get(target) {
+                const db = await this.dbPromise;
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(this.storeName, "readonly");
+                    const store = tx.objectStore(this.storeName);
+                    const req = store.get(target);
+                    req.onsuccess = e => resolve(e.target.result);
+                    req.onerror = e => reject(e);
+                });
+            }
+
+            async put(target, html, version) {
+                const db = await this.dbPromise;
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(this.storeName, "readwrite");
+                    const store = tx.objectStore(this.storeName);
+                    store.put({ target, html, version, saveTime: Date.now() });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = e => reject(e);
+                });
+            }
+
+            async clearOld(maxItems) {
+                const db = await this.dbPromise;
+                const tx = db.transaction(this.storeName, "readwrite");
+                const store = tx.objectStore(this.storeName);
+                const req = store.getAllKeys();
+                req.onsuccess = async e => {
+                    const keys = e.target.result;
+                    if (keys.length > maxItems) {
+                        for (let i = 0; i < keys.length - maxItems; i++) store.delete(keys[i]);
+                    }
+                };
+            }
+        }
+
+        // -------------------------------
+        // IFrameLoader 完整整合版
+        // -------------------------------
+        class IFrameLoader {
+            constructor(iframeId, menuSelector, options = {}) {
+                this.iframeId = iframeId;
+                this.menuSelector = menuSelector;
+                this.cacheExpireMs = options.cacheExpireMs || 30 * 60 * 1000;
+                this.maxCacheItems = options.maxCacheItems || 10;
+                this.debugMode = options.debugMode || false;
+                this.iframe = document.getElementById(iframeId);
+                this.db = new CacheDB();
+
+                if (!this.iframe) throw new Error("Iframe element not found: " + iframeId);
+
+                // popstate 支援前進/後退
+                window.addEventListener("popstate", e => {
+                    if (e.state?.url) this.load(e.state.url, false);
+                });
+
+                // menu click
+                $(document).on("click", `${menuSelector} a[data-target]`, e => {
+                    e.preventDefault();
+                    const $a = $(e.currentTarget);
+                    const target = $a.data("target");
+                    this.setActiveMenu($a);
+                    localStorage.setItem("activePage", target);
+                    this.load(target, true);
+                });
+
+                // expose globally
+                window.loader = this;
+
+                // load last page
+                const savedPage =
+                    localStorage.getItem("activePage") ||
+                    $(menuSelector + " a[data-target]").first().data("target");
+
+                this.setActiveMenu($(`${menuSelector} a[data-target='${savedPage}']`));
+                this.load(savedPage, false);
+            }
+
+            setActiveMenu($a) {
+                $(`${this.menuSelector} a`).removeClass("active");
+                if ($a && $a.length) $a.addClass("active");
+            }
+
+            async load(target, pushToHistory = true) {
+                this.showLoading();
+
+                if (this.debugMode) {
+                    this.iframe.src = target;
+
+                    // <<< 新增：讓 iframe 子頁知道自己的 URL
+                    this.iframe.onload = () =>
+                        this.iframe.contentWindow.__PAGE_URL__ = target;
+
+                    if (pushToHistory) history.pushState({ url: target }, "", "");
+                    this._attachOnLoadHandlers();
+                    this._applyAutoResize();
+                    return;
+                }
+
+                try {
+                    const cached = await this.db.get(target);
+
+                    // Assembly version from server
+                    let currentVersion = "";
+                    try {
+                        const res = await fetch("/Meta/Version", { cache: "no-cache" });
+                        if (res.ok) currentVersion = await res.text();
+                    } catch (e) { currentVersion = ""; }
+
+                    const now = Date.now();
+                    const cacheValid = cached && ((now - (cached.saveTime || 0)) < this.cacheExpireMs);
+
+                    // background update cache
+                    this._backgroundUpdateCache(target, currentVersion);
+
+                    if (cached && cacheValid && cached.version === currentVersion) {
+                        this.iframe.srcdoc = cached.html;
+
+                        // <<< 新增：讓 iframe 子頁知道自己的 URL
+                        setTimeout(() => {
+                            this.iframe.contentWindow.__PAGE_URL__ = target;
+                        }, 10);
+
+                        this._attachOnLoadHandlers();
+                        this._applyAutoResize();
+                        if (pushToHistory) history.pushState({ url: target }, "", "");
+                        return;
+                    }
+
+                    // fetch latest html
+                    const resp = await fetch(target, { cache: "no-cache" });
+                    const html = await resp.text();
+                    this.iframe.srcdoc = html;
+
+                    // <<< 新增：讓 iframe 子頁知道自己的 URL
+                    setTimeout(() => {
+                        this.iframe.contentWindow.__PAGE_URL__ = target;
+                    }, 10);
+
+                    await this.db.put(target, html, currentVersion);
+                    await this.db.clearOld(this.maxCacheItems);
+
+                    this._attachOnLoadHandlers();
+                    this._applyAutoResize();
+                    if (pushToHistory) history.pushState({ url: target }, "", "");
+                } catch (err) {
+                    console.error("IFrameLoader.load error:", err);
+                    try { this.iframe.src = target; } catch (_) { }
+                }
+            }
+
+            async _backgroundUpdateCache(target, version) {
+                try {
+                    const resp = await fetch(target, { cache: "no-cache" });
+                    if (!resp.ok) return;
+                    const html = await resp.text();
+                    const cached = await this.db.get(target);
+                    if (!cached || cached.version !== version || cached.html !== html) {
+                        await this.db.put(target, html, version);
+                        await this.db.clearOld(this.maxCacheItems);
+                        console.log(`Background cache updated: ${target}`);
+                    }
+                } catch (e) {
+                    console.warn("Background update failed:", e);
+                }
+            }
+
+            _attachOnLoadHandlers() {
+                const iframe = this.iframe;
+                const self = this;
+                iframe.onload = function () {
+                    try {
+                        self.hideLoading();
+                        self._updateTitle();
+                        self._observeTitle();
+                    } catch (e) { console.warn("onload handler error", e); }
+                };
+            }
+
+            _updateTitle() {
+                try {
+                    const inner = this.iframe.contentDocument || this.iframe.contentWindow.document;
+                    const titleEl = inner.querySelector(".page-title");
+                    $("#page-title").text(titleEl ? titleEl.textContent.trim() : "ESG Dashboard");
+                } catch (e) { $("#page-title").text("ESG Dashboard"); }
+            }
+
+            _observeTitle() {
+                try {
+                    const inner = this.iframe.contentDocument || this.iframe.contentWindow.document;
+                    const titleEl = inner.querySelector(".page-title");
+                    if (!titleEl) return;
+                    const mo = new MutationObserver(() => this._updateTitle());
+                    mo.observe(titleEl, { childList: true, characterData: true, subtree: true });
+                } catch (e) { }
+            }
+
+            /**
+   * 自動調整 iframe 高度，扣除主頁 header 和 footer
+   * header 在 parent DOM: #main-header
+   * footer 在 parent DOM: #adminlte-footer-box
+   */
+            _applyAutoResize(headerSelector = "#main-header", footerSelector = "#adminlte-footer-box") {
+                const iframe = this.iframe;
+
+                const resize = () => {
+                    try {
+                        const header = document.querySelector(headerSelector);
+                        const footer = document.querySelector(footerSelector);
+
+                        const headerHeight = header ? header.getBoundingClientRect().height : 0;
+
+                        let footerHeight = 0;
+                        if (footer) {
+                            // 只有非 collapsed-box 才計入高度
+                            footerHeight = footer.classList.contains("collapsed-box") ? 0 : footer.getBoundingClientRect().height;
+                        }
+
+                        const availableHeight = window.innerHeight - headerHeight - footerHeight;
+
+                        iframe.style.height = `${availableHeight}px`;
+                        iframe.style.maxHeight = `${availableHeight}px`; // 避免被拉超過
+                    } catch (e) {
+                        console.warn("iframe auto resize error", e);
+                    }
+                };
+
+                resize();
+
+                // 監控視窗 resize
+                window.addEventListener("resize", resize);
+
+                // 監控 footer transition 及點擊
+                const footer = document.querySelector(footerSelector);
+                if (footer) {
+                    footer.addEventListener("transitionend", resize);
+                    footer.addEventListener("click", () => setTimeout(resize, 10));
+                }
+
+                // MutationObserver 監控 footer class 或尺寸變化
+                if (footer) {
+                    const observer = new MutationObserver(resize);
+                    observer.observe(footer, { attributes: true, attributeFilter: ["class", "style"] });
+                }
+
+                // 預防 iframe 內容異步改變大小
+                [100, 250, 500, 1000].forEach(t => setTimeout(resize, t));
+            }
+
+
+
+            showLoading() {
+                if ($("#loading-mask").length === 0) {
+                    $("body").append(`
+        <div id="loading-mask" style="position:fixed;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,.25);z-index:2000;display:flex;
+            align-items:center;justify-content:center;">
+            <div class="spinner-border"></div>
+            <span style="color:white;font-size:18px;margin-left:10px;">Loading...</span>
+        </div>
+    `);
+                } else $("#loading-mask").show();
+            }
+
+            hideLoading() {
+                $("#loading-mask").fadeOut(200);
+            }
+        }
+
+
+
+
+
+
+
+        $(async function () {
+            var $sidebar = $("#sidebar"),
+                $main = $("#main-panel"),
+                $content = $("#content-container");
+
+            $("#download-panel").hide(); // 一開始隱藏
+
+            // 1️⃣ 初始化
+            // 初始化 Loader
+            const loader = new IFrameLoader("content-frame", "#menu", {
+                cacheExpireMs: 30 * 60 * 1000, // 30 分鐘
+                maxCacheItems: 10,
+                debugMode: true
+            });
+            AdminLTEFooterBox.init("#adminlte-footer-box", "#footer-toggle-btn", ["Portal/sub1", "sub1.html"]);
+
+
+            // 初始化語言
+            //await i18n.init();
+            // 初始化語言選單
+            //$("#langSelect").val(i18n.getLang());
+
+            //// 語言切換
+            //$("#langSelect").on("change", async function () {
+            //    const lang = $(this).val();
+            //    await i18n.setLang(lang);
+            //    // 再次套用翻譯
+            //    i18n.apply(document);
+            //});
+            //console.log(i18n.t("welcome", "王小明"));  // 你好，王小明！
+            // 多參數
+            //console.log(i18n.t("greet", "王小明", "早上好")); // 王小明，早上好！
+            // 提供給子頁面 a.html 呼叫
+            function navigateTo(pageUrl) {
+                //  loadPanel(pageUrl);
+                loader.load(pageUrl)
+            }
+
+            // 將函式掛到全域，a.html 可以呼叫
+            window.navigateTo = navigateTo;
+
+
+
+            // ✅ 新增下載面板開關
+            $("#download-panel .panel-header").on("click", function () {
+                $("#download-panel").toggleClass("collapsed");
+                $("#download-toggle")
+                    .toggleClass("glyphicon-chevron-down glyphicon-chevron-up");
+            });
+            // 🔸 二級選單展開/收合（不會變白）
+            $("#menu").on("click", ".has-submenu > a", function (e) {
+                e.preventDefault();
+
+                // 不改變 active 狀態（防止變白）
+                var $submenu = $(this).next(".submenu");
+                var isOpen = $submenu.is(":visible");
+
+                // 收合其他 submenu
+                $("#menu .submenu").not($submenu).slideUp(200);
+                $("#menu .has-submenu").not($(this).parent()).removeClass("open");
+
+                // 切換當前 submenu
+                $submenu.slideToggle(200);
+                $(this).parent().toggleClass("open", !isOpen);
+            });
+            function loadPanelWithFooter(targetPage) {
+                loader.load(targetPage); // 你的原 loadPanel
+                AdminLTEFooterBox.checkDisplay(targetPage);
+            }
+
+            // 點擊切換內容
+            $("#menu").on("click", "a[data-target]", function (e) {
+                e.preventDefault();
+                // 只讓「非 has-submenu 的項目」變 active
+                if (!$(this).closest(".has-submenu").length) {
+                    $("#menu a").removeClass("active");
+                    $(this).addClass("active");
+                } else {
+                    // 是子項的話，也要設 active
+                    $("#menu a").removeClass("active");
+                    $(this).addClass("active");
+                }
+                var target = $(this).data("target");
+                loadPanelWithFooter(target);//loadPanel(target);
+                if ($(window).width() < 768) $sidebar.removeClass("show");
+                localStorage.setItem("activePage", target);
+            });
+
+            // 自動載入上次頁面
+            var saved = localStorage.getItem("activePage") || "Portal";
+            $("#menu a[data-target='" + saved + "']").addClass("active");
+            //loadPanel(saved);
+            loader.load(saved)
+            // Sidebar 切換
+            $("#portal, #toggleSidebar").on("click", function () {
+                if ($(window).width() < 768) {
+                    $sidebar.toggleClass("show");
+                } else {
+                    $sidebar.toggleClass("collapsed");
+                    $main.toggleClass("full");
+                }
+            });
+
+            // 登出
+            $("#logoutBtn").click(function () {
+                $("#adminlte-footer-box").show(); // 顯示
+                alert("已登出！");
+            });
+        });
+
+        $(function () {
+            // ✅ 模擬/真實進度更新
+            function updateProgress($bar, id, fileName) {
+                const timer = setInterval(() => {
+                    $.get(`http://localhost:57216/Download/Progress?id=${id}`, function (res) {
+                        const pct = res.progress;
+                        $bar.css("width", pct + "%").text(pct + "%");
+                        if (pct >= 100) {
+                            clearInterval(timer);
+                            $bar.removeClass("progress-bar-success").addClass("progress-bar-info");
+                            $bar.closest(".download-item").find(".file-name").append(" ✅");
+
+                            // 進度到100後自動 stream 下載
+                            streamDownload(fileName);
+                        }
+                    });
+                }, 800);
+            }
+
+            // ✅ 刪除按鈕事件
+            $(document).on("click", ".delete-btn", function () {
+                const $item = $(this).closest(".download-item");
+                $item.slideUp(200, function () {
+                    $item.remove();
+                    if ($("#download-panel .download-item").length === 0) {
+                        $("#download-panel").fadeOut(300);
+                    }
+                });
+            });
+
+
+            // ✅ 新增下載任務
+            window.addDownloadTask2 = function (fileName) {
+                $("#download-panel").show().removeClass("collapsed");
+                const $newItem = $(`
+              <div class="download-item">
+                <div class="file-name">${fileName}</div>
+                <div class="progress">
+                  <div class="progress-bar progress-bar-success" style="width:0%">0%</div>
+                </div>
+                <div id="downloadSpeed" style="font-size:12px;color:#555;"></div>
+                <button class="btn btn-xs btn-danger delete-btn" style="float:right;margin-top:-18px;">✕</button>
+              </div>
+            `);
+                $("#download-panel .panel-body").append($newItem.hide().slideDown(200));
+
+                // 開始流式下載
+                streamDownload2(fileName);
+            };
+
+
+            // ✅ 新增下載任務（整合後端）
+            window.addDownloadTask = function (fileName) {
+                $("#download-panel").show().removeClass("collapsed");
+                const $newItem = $(`
+              <div class="download-item">
+                <div class="file-name">${fileName}</div>
+                <div class="progress"><div class="progress-bar progress-bar-success" style="width:0%">0%</div></div>
+                <button class="btn btn-xs btn-danger delete-btn" style="float:right;margin-top:-18px;">✕</button>
+              </div>
+            `);
+                $("#download-panel .panel-body").append($newItem.hide().slideDown(200));
+
+                const $bar = $newItem.find(".progress-bar");
+
+                // 呼叫後端開始下載
+                $.post("http://localhost:57216/Download/Start", { fileName: fileName }, function (res) {
+                    if (res.success) {
+                        updateProgress($bar, res.id, fileName);
+                    }
+                });
+            };
+
+            // ✅ Stream 下載函式（可多任務）
+            async function streamDownload2(fileName) {
+                try {
+                    const response = await fetch(`http://localhost:57216/Download/GetFileStream?fileName=${encodeURIComponent(fileName)}`);
+                    if (!response.ok) throw new Error("下載失敗");
+
+                    const contentLength = response.headers.get("Content-Length");
+                    const totalSize = contentLength ? parseInt(contentLength, 10) : null;
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    let received = 0;
+                    let startTime = Date.now();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        received += value.length;
+                        // 計算進度百分比
+                        if (totalSize) {
+                            const pct = Math.round((received / totalSize) * 100);
+                            $("#downloadProgress").css("width", pct + "%").text(pct + "%");
+                        }
+
+                        // 計算下載速度 (Bytes/s)
+                        const elapsed = (Date.now() - startTime) / 1000; // 秒
+                        const speed = received / elapsed; // Bytes/s
+                        let speedText = "";
+                        if (speed > 1024 * 1024) speedText = (speed / (1024 * 1024)).toFixed(2) + " MB/s";
+                        else if (speed > 1024) speedText = (speed / 1024).toFixed(2) + " KB/s";
+                        else speedText = speed.toFixed(0) + " B/s";
+
+                        // 顯示在進度條上或旁邊
+                        $("#downloadSpeed").text(speedText);
+
+
+
+                        // 更新該檔案的進度
+                        const pct = contentLength ? Math.round((received / contentLength) * 100) : 0;
+                        $(`.download-item:contains("${fileName}") .progress-bar`)
+                            .css("width", pct + "%")
+                            .text(pct + "%");
+
+
+
+                    }
+
+                    const blob = new Blob(chunks, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = fileName + ".xlsx";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+
+                    // 完成後更新標記
+                    $(`.download-item:contains("${fileName}") .file-name`).append(" ✅");
+                    $(`.download-item:contains("${fileName}") .progress-bar`)
+                        .removeClass("progress-bar-success")
+                        .addClass("progress-bar-info");
+                    $("#downloadSpeed").text("完成"); // 可選
+                } catch (e) {
+                    alert("下載失敗：" + e.message);
+                }
+            }
+
+
+
+            // ✅ Stream 下載函式
+            async function streamDownload(fileName) {
+                try {
+                    const response = await fetch(`http://localhost:57216/Download/GetFile?fileName=${encodeURIComponent(fileName)}`);
+                    if (!response.ok) throw new Error("下載失敗");
+
+                    const contentLength = response.headers.get("Content-Length");
+                    const reader = response.body.getReader();
+                    const chunks = [];
+                    let received = 0;
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        received += value.length;
+
+                        if (contentLength) {
+                            const pct = Math.round((received / contentLength) * 100);
+                            // 可選：更新整個 panel 進度（或各自進度）
+                            $("#downloadProgress").css("width", pct + "%").text(pct + "%");
+                        }
+                    }
+
+                    const blob = new Blob(chunks);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = fileName + ".txt"; // 或原檔名
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    alert("下載失敗：" + e.message);
+                }
+            }
+
+            // ✅ 可手動測試
+            $("#testDownload").on("click", function () {
+                $("#adminlte-footer-box").hide(); // 完全隱藏
+                //  addDownloadTask2("ESG_Report_2025");
+            });
+        });
+        $("#sidebar-action-btn").on("click", function () {
+            alert("你點了底部按鈕！");
+            // 這裡可以放任何功能，例如打開設定面板
+        });
+
+        // Sidebar 收合/展開
+        $("#portal, #toggleSidebar").on("click", function () {
+            if ($(window).width() < 768) {
+                $("#sidebar").toggleClass("show");
+            } else {
+                $("#sidebar").toggleClass("collapsed");
+                $("#main-panel").toggleClass("full");
+
+                // 收合時自動浮動底部按鈕置中
+                if ($("#sidebar").hasClass("collapsed")) {
+                    $(".sidebar-bottom-btn").css("text-align", "center");
+                } else {
+                    $(".sidebar-bottom-btn").css("text-align", "right"); // 或 default
+                }
+            }
+        });
+        // 手動控制
+        //AdminLTEFooter.expand();   // 展開
+        //dminLTEFooter.collapse(); // 收合
+        //AdminLTEFooter.toggle();   // 切換
+        //AdminLTEFooter.show();   // 顯示 footer
+        //AdminLTEFooter.hide();   // 隱藏 footer
+        //AdminLTEFooter.toggle(); // 開合切換
+        //AdminLTEFooter.setPages(["page1.html","page2.html"]); // 更新顯示頁面列表
+
+    </script>
+</body>
+</html>
