@@ -1,0 +1,11 @@
+SELECT
+    A.address,
+    A.Q,
+    COALESCE(B.C, A.C) AS C,
+    COALESCE(B.D, A.D) AS D,
+    A.E,
+    A.F
+FROM A
+LEFT JOIN B
+    ON A.address = B.address
+   AND A.Q = B.Q;
