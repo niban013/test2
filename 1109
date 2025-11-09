@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>ECharts 無資料佔位範例</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    #chart {
+      width: 600px;
+      height: 400px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+<div id="chart"></div>
+
+<script>
+  const chart = echarts.init(document.getElementById('chart'));
+
+  const categories = ["Jan", "Feb", "Mar", "Apr"];
+
+  /** 🔥 測試資料 (切換這段看效果) **/
+  // ✅ 有資料 → 正常畫圖
+  // const seriesData = [12, 25, 18, 30];
+
+  // ⛔ 無資料 → 顯示 No Data
+  const seriesData = [];
+
+  const noData = !seriesData || seriesData.length === 0;
+
+  const option = {
+    title: {
+      text: "📊 銷售統計",
+      left: "center"
+    },
+    xAxis: {
+      type: "category",
+      name: "月份",
+      data: categories // X 軸仍然存在
+    },
+    yAxis: {
+      type: "value",
+      name: "銷售量"
+    },
+    tooltip: { trigger: "axis" },
+
+    /** ✅ 若沒資料 series = [] */
+    series: noData
+      ? []  // 不畫圖
+      : [{
+          type: "bar",
+          data: seriesData
+        }],
+
+    /** ✅ 無資料顯示佔位文字 */
+    graphic: noData
+      ? {
+          type: "text",
+          left: "center",
+          top: "middle",
+          style: {
+            text: "No Data",
+            fontSize: 30,
+            fontWeight: "bold",
+            fill: "#999"
+          }
+        }
+      : null
+  };
+
+  chart.setOption(option);
+</script>
+
+</body>
+</html>
