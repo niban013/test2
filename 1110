@@ -1,0 +1,13 @@
+// 子頁 JS
+window.parent.loader.load("pages/report.html");
+
+// 例如：子頁想讓左側選單 highlight 某個項目
+const link = window.parent.document.querySelector(`a[data-target='pages/report.html']`);
+window.parent.loader.setActiveMenu($(link));
+
+
+function loadPage(target) {
+    if (window.parent && window.parent.loader) {
+        window.parent.loader.load(target);
+    }
+}
