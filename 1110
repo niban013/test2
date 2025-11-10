@@ -11,3 +11,183 @@ function loadPage(target) {
         window.parent.loader.load(target);
     }
 }
+
+
+async load(target, pushToHistory = true) {
+    this.showLoading();
+
+    if (this.debugMode) {
+        this.iframe.src = target;
+        this.iframe.onload = () => this.iframe.contentWindow.__PAGE_URL__ = target;
+        if (pushToHistory) history.pushState({ url: target }, "", "");
+        this._attachOnLoadHandlers();
+        this._applyAutoResize();
+        return;
+    }
+
+    try {
+        const cached = await this.db.get(target);
+
+        // 🔸 只用 version.txt 來判斷快取是否失效
+        let currentVersion = "";
+        try {
+            const res = await fetch("/version.txt", { method: "GET", cache: "no-store" });
+            if (res.ok) {
+                const etag = res.headers.get("ETag");
+                const lastMod = res.headers.get("Last-Modified");
+                currentVersion = etag || lastMod || "";
+            }
+        } catch (e) {
+            console.warn("Failed to fetch version.txt:", e);
+        }
+
+        const now = Date.now();
+        const cacheValid = cached && ((now - (cached.saveTime || 0)) < this.cacheExpireMs);
+
+        // 背景更新快取（非同步）
+        this._backgroundUpdateCache(target, currentVersion);
+
+        if (cached && cacheValid && cached.version === currentVersion) {
+            this.iframe.srcdoc = cached.html;
+            setTimeout(() => this.iframe.contentWindow.__PAGE_URL__ = target, 10);
+            this._attachOnLoadHandlers();
+            this._applyAutoResize();
+            if (pushToHistory) history.pushState({ url: target }, "", "");
+            return;
+        }
+
+        // ⚙️ 沒快取或版本變更 → 重新抓取
+        const resp = await fetch(target, { cache: "no-cache" });
+        const html = await resp.text();
+        this.iframe.srcdoc = html;
+        setTimeout(() => this.iframe.contentWindow.__PAGE_URL__ = target, 10);
+
+        await this.db.put(target, html, currentVersion);
+        await this.db.clearOld(this.maxCacheItems);
+
+        this._attachOnLoadHandlers();
+        this._applyAutoResize();
+        if (pushToHistory) history.pushState({ url: target }, "", "");
+    } catch (err) {
+        console.error("IFrameLoader.load error:", err);
+        try { this.iframe.src = target; } catch (_) { }
+    }
+}
+
+
+if (this.debugMode && currentVersion) {
+    console.log("🔹 version.txt:", currentVersion);
+}
+
+你只需要 新增兩個方法：
+
+showVersionUpdating()
+
+hideVersionUpdating()
+
+並在 detect version change 的地方呼叫。
+
+✔ Step 1：在 class 裡新增 Overlay UI（放在最後 methods 區）
+
+把這段直接貼到 IFrameLoader class 裡任意位置（建議貼在 showLoading/hideLoading 底下）：
+
+// 顯示「Updating version」提示
+showVersionUpdating() {
+    if ($("#version-update-mask").length === 0) {
+        $("body").append(`
+            <div id="version-update-mask" style="
+                position: fixed; top: 0; left: 0;
+                width: 100%; height: 100%;
+                background: rgba(0,0,0,.6);
+                z-index: 3000; display: flex;
+                align-items: center; justify-content: center;
+                flex-direction: column; color: white;
+                font-size: 22px; font-weight: bold;
+            ">
+                <div class="spinner-border"></div>
+                <span style="margin-top: 12px;">Updating version...</span>
+            </div>
+        `);
+    } else {
+        $("#version-update-mask").show();
+    }
+}
+
+hideVersionUpdating() {
+    $("#version-update-mask").fadeOut(200);
+}
+
+✔ Step 2：在 load() 加入版本變動判斷
+
+找到你 load() 裡的：
+
+if (cached && cacheValid && cached.version === currentVersion) {
+
+
+改成：
+
+if (cached && cacheValid && cached.version === currentVersion) {
+    // ✔ 快取有效，直接載入
+    this.iframe.srcdoc = cached.html;
+
+    setTimeout(() => {
+        this.iframe.contentWindow.__PAGE_URL__ = target;
+    }, 10);
+
+    this._attachOnLoadHandlers();
+    this._applyAutoResize();
+    if (pushToHistory) history.pushState({ url: target }, "", "");
+    return;
+}
+else if (cached && cached.version !== currentVersion) {
+    // ❗版本變動：顯示 Updating animation
+    this.showVersionUpdating();
+}
+
+✔ Step 3：當完成抓最新 HTML 後，消除 overlay
+
+在 load() 的 fetch 後面（成功更新快取後），加入：
+
+await this.db.put(target, html, currentVersion);
+await this.db.clearOld(this.maxCacheItems);
+
+// ✅ 版本更新處理完成
+this.hideVersionUpdating();
+
+✅ 完整版本變動流程
+階段	事件
+1	fetch /version.txt 的 ETag / Last-Modified
+2	與 IndexedDB 快取版本比對
+3	🚨 若版本不同 → showVersionUpdating()
+4	抓新的 HTML
+5	更新 IndexedDB
+6	✅ hideVersionUpdating()
+🔥 Debug Mode 支援
+
+若 debugMode=true（開發模式），仍會直接載入 iframe.src = target
+不會使用快取，用於調試。
+
+若需要 ETag fallback or Last-Modified 優先比較，也可再補強：
+currentVersion = etag || lastMod || Date.now();
+
+🎉 最後結果
+
+你現在擁有：
+
+✅ 前端僅依 version.txt 判斷 cache 是否失效
+
+✅ 版本變動自動顯示 Updating 動畫
+
+✅ zero backend 改動（你只要更新 version.txt timestamp）
+
+✅ 不讀 version.txt 內容，只讀 Header
+
+✅ 最高效率：無須 HEAD，只用 GET
+
+如果你願意，我可以再提供：
+
+CacheDB schema + IndexedDB 可視化工具
+
+如何加上 md5(html) → 強制比較內容差異
+
+加入 ServiceWorker → 全站 AppCache
