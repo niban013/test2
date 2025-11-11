@@ -1,3 +1,151 @@
+明白，我幫你改寫之前的整合版，完全移除本地 /Account/Login，改成直接導向第三方 SSO Login URL，同時保留 ReturnUrl + 403 自動導向，全域套用。
+
+1️⃣ 自訂 ActionFilter + AuthorizeAttribute
+using System;
+using System.Web;
+using System.Web.Mvc;
+
+public class SSOAuthorizeAttribute : AuthorizeAttribute
+{
+    // 第三方 SSO 登入 URL
+    public string SsoLoginUrl { get; set; } = "https://sso.company.com/login";
+
+    public override void OnAuthorization(AuthorizationContext filterContext)
+    {
+        var session = filterContext.HttpContext.Session;
+
+        // 如果已登入就放行
+        if (session["User"] != null)
+            return;
+
+        RedirectToSso(filterContext);
+    }
+
+    protected override void HandleUnauthorizedRequest(AuthorizationContext filterContext)
+    {
+        RedirectToSso(filterContext);
+    }
+
+    public override void OnActionExecuted(ActionExecutedContext filterContext)
+    {
+        // 如果 Action 返回 403，統一導向 SSO Login
+        if (filterContext.Result is HttpStatusCodeResult httpResult && httpResult.StatusCode == 403)
+        {
+            RedirectToSso(filterContext);
+        }
+
+        base.OnActionExecuted(filterContext);
+    }
+
+    private void RedirectToSso(ControllerContext filterContext)
+    {
+        string currentUrl = filterContext.HttpContext.Request.RawUrl;
+
+        // 避免 redirect loop
+        if (!currentUrl.Contains("sso", StringComparison.OrdinalIgnoreCase))
+        {
+            string redirectUrl = $"{SsoLoginUrl}?ReturnUrl={HttpUtility.UrlEncode(currentUrl)}";
+            filterContext.Result = new RedirectResult(redirectUrl);
+        }
+    }
+}
+
+2️⃣ SSO Module（處理 Token / Session）
+using System;
+using System.Web;
+
+public class SSOAuthModule : IHttpModule
+{
+    public void Init(HttpApplication context)
+    {
+        context.AuthenticateRequest += OnAuthenticateRequest;
+        context.EndRequest += OnEndRequest;
+    }
+
+    private void OnAuthenticateRequest(object sender, EventArgs e)
+    {
+        var app = (HttpApplication)sender;
+        var ctx = app.Context;
+
+        // 第三方 SSO 登入成功後會帶 token
+        var token = ctx.Request.QueryString["token"];
+        if (!string.IsNullOrEmpty(token))
+        {
+            // 驗證 token 後建立 Session
+            ctx.Session["User"] = token;
+        }
+    }
+
+    private void OnEndRequest(object sender, EventArgs e)
+    {
+        var app = (HttpApplication)sender;
+
+        if (app.Response.StatusCode == 403)
+        {
+            string returnUrl = HttpUtility.UrlEncode(app.Request.RawUrl);
+            if (!app.Request.RawUrl.Contains("sso", StringComparison.OrdinalIgnoreCase))
+            {
+                app.Response.Clear();
+                app.Response.Redirect($"https://sso.company.com/login?ReturnUrl={returnUrl}", true);
+            }
+        }
+    }
+
+    public void Dispose() { }
+}
+
+Web.config 註冊 Module
+<system.webServer>
+  <modules>
+    <add name="SSOAuthModule" type="SSOAuthModule" />
+  </modules>
+</system.webServer>
+
+3️⃣ 全域套用 ActionFilter
+// FilterConfig.cs
+public class FilterConfig
+{
+    public static void RegisterGlobalFilters(GlobalFilterCollection filters)
+    {
+        filters.Add(new SSOAuthorizeAttribute
+        {
+            SsoLoginUrl = "https://sso.company.com/login" // 第三方 SSO URL
+        });
+        filters.Add(new HandleErrorAttribute());
+    }
+}
+
+// Global.asax.cs
+protected void Application_Start()
+{
+    FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
+}
+
+4️⃣ 流程說明
+步驟	說明
+1	使用者訪問受保護頁面
+2	ActionFilter 偵測 Session["User"] 不存在 → Redirect 到 https://sso.company.com/login?ReturnUrl=原頁
+3	使用者在第三方 SSO 登入成功 → SSO 會帶 token 回 MVC 專案
+4	SSOAuthModule 接收 token，驗證後建立 Session["User"]
+5	使用者自動回到原本的頁面（ReturnUrl）
+6	如果 Controller 或 Action 返回 403 → Filter / Module 自動 Redirect 到 SSO Login
+
+這樣就 完全不需要本地 /Account/Login，也可以處理：
+
+403 自動導向 SSO
+
+ReturnUrl 回原頁
+
+Session / Token 驗證
+
+全域套用，不需每個 Controller 標註
+
+
+
+
+
+
+
 // 子頁 JS
 window.parent.loader.load("pages/report.html");
 
