@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>SAC Embed - Hidden Toolbar</title>
+</head>
+<body style="margin:0; padding:0;">
+
+<iframe
+    id="sacFrame"
+    width="100%"
+    height="1000"
+    frameborder="0"
+    src="https://<your-tenant>.sapbusinessobjects.cloud/sap/fpa/ui/tenants/<tenant-id>/bo/story/<story-id>?mode=embed&embedMode=embedOnly">
+</iframe>
+
+</body>
+</html>
+<iframe
+  id="sacFrame"
+  src="https://<tenant>.sapbusinessobjects.cloud/sap/fpa/ui/tenants/<tenant-id>/bo/app.html?mode=embed&embedMode=embedOnly&authMode=jwt&token=YOUR_JWT_TOKEN"
+  width="100%"
+  height="900"
+  frameborder="0"
+  sandbox="allow-scripts allow-same-origin allow-popups"
+></iframe>
+https://<tenant>.sapbusinessobjects.cloud/sap/fpa/ui/tenants/<tenant-id>/bo/app.html?mode=embed&embedMode=embedOnly&authMode=jwt&token=YOUR_JWT_TOKEN
+
+
+using System;
+using System.Text;
+using System.Web.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+
+namespace WebApp.Controllers
+{
+    public class SACController : Controller
+    {
+        public ActionResult Embed()
+        {
+            string sacTenant = "https://<your-tenant>.sapbusinessobjects.cloud";
+            string tenantId = "<tenant-id>";
+            string storyId = "<story-id>";
+
+            string token = GenerateJwtToken();
+
+            // 產生 iframe URL
+            string embedUrl = $"{sacTenant}/sap/fpa/ui/tenants/{tenantId}/bo/story/{storyId}" +
+                              $"?mode=embed&embedMode=embedOnly&authMode=jwt&token={token}" +
+                              $"&f[]=Region:APJ"; // 範例 filter
+
+            ViewBag.EmbedUrl = embedUrl;
+
+            return View();
+        }
+
+        private string GenerateJwtToken()
+        {
+            string clientId = "<your-client-id>";
+            string clientSecret = "<your-client-secret>";
+            string userEmail = "<sac-user-email>";
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(clientSecret));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var header = new JwtHeader(creds);
+            var payload = new JwtPayload
+            {
+                { "iss", clientId },
+                { "sub", userEmail },
+                { "iat", DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+                { "exp", DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds() }
+            };
+
+            var token = new JwtSecurityToken(header, payload);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+    }
+}
+
+
+@{
+    Layout = null;
+    string sacUrl = ViewBag.EmbedUrl;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>SAC Secure Embed Demo</title>
+    <style>
+        body, html { margin:0; padding:0; height:100%; overflow:hidden; }
+        #sacFrame { width:100%; height:100vh; border:none; }
+        .topbar { padding:10px; background:#333; color:#fff; font-size:16px; }
+        .btn { padding:5px 10px; background:#0275d8; color:#fff; border:none; cursor:pointer; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    SAC Secure Embed
+    <button class="btn" onclick="refreshSAC()">Refresh</button>
+</div>
+
+<iframe id="sacFrame" src="@sacUrl" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+
+<script>
+function refreshSAC() {
+    document.getElementById('sacFrame').contentWindow.postMessage({ action:"refresh" }, "*");
+}
+</script>
+
+</body>
+</html>
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>SAC Secure Embed with Auto Token Refresh</title>
+    <style>
+        body, html { margin:0; padding:0; height:100%; overflow:hidden; }
+        #sacFrame { width:100%; height:100vh; border:none; }
+        .topbar { padding:10px; background:#333; color:#fff; font-size:16px; }
+        .btn { padding:5px 10px; background:#0275d8; color:#fff; border:none; cursor:pointer; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    SAC Secure Embed
+    <button class="btn" onclick="refreshSAC()">Refresh</button>
+</div>
+
+<iframe id="sacFrame" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+
+<script>
+const iframe = document.getElementById("sacFrame");
+const sacTenant = "https://<your-tenant>.sapbusinessobjects.cloud";
+const tenantId = "<tenant-id>";
+const storyId = "<story-id>";
+const tokenApi = "/SAC/GetToken"; // 後端 API
+
+let currentToken = "";
+let refreshInterval = 25 * 60 * 1000; // 每 25 分鐘刷新 Token
+
+// 1️⃣ 取得 Token 並載入 iframe
+async function loadSAC() {
+    const token = await fetchToken();
+    currentToken = token;
+    const url = `${sacTenant}/sap/fpa/ui/tenants/${tenantId}/bo/story/${storyId}?mode=embed&embedMode=embedOnly&authMode=jwt&token=${token}`;
+    iframe.src = url;
+}
+
+// 2️⃣ Fetch Token
+async function fetchToken() {
+    const res = await fetch(tokenApi);
+    const data = await res.json();
+    return data.token;
+}
+
+// 3️⃣ 自動刷新 Token
+async function refreshToken() {
+    const newToken = await fetchToken();
+    currentToken = newToken;
+
+    // 更新 iframe src 以帶新 token
+    const newUrl = `${sacTenant}/sap/fpa/ui/tenants/${tenantId}/bo/story/${storyId}?mode=embed&embedMode=embedOnly&authMode=jwt&token=${newToken}`;
+    iframe.src = newUrl;
+}
+
+// 4️⃣ 手動刷新
+function refreshSAC() {
+    iframe.contentWindow.postMessage({ action: "refresh" }, "*");
+}
+
+// 5️⃣ 初始化
+loadSAC();
+setInterval(refreshToken, refreshInterval); // 每 25 分鐘自動刷新
+</script>
+
+</body>
+</html>
+
+
+using System;
+using System.Text;
+using System.Web.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+
+namespace WebApp.Controllers
+{
+    public class SACController : Controller
+    {
+        // Token 有效期 (秒)
+        private const int TokenExpireSeconds = 30 * 60; // 30 分鐘
+
+        // GET: /SAC/GetToken
+        public ActionResult GetToken()
+        {
+            var token = GenerateJwtToken();
+            return Json(new { token }, JsonRequestBehavior.AllowGet);
+        }
+
+        private string GenerateJwtToken()
+        {
+            string clientId = "<your-client-id>";
+            string clientSecret = "<your-client-secret>";
+            string userEmail = "<sac-user-email>";
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(clientSecret));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var header = new JwtHeader(creds);
+
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var payload = new JwtPayload
+            {
+                { "iss", clientId },
+                { "sub", userEmail },
+                { "iat", now },
+                { "exp", now + TokenExpireSeconds }
+            };
+
+            var token = new JwtSecurityToken(header, payload);
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+    }
+}
+<iframe
+    src="https://<tenant>.sapbusinessobjects.cloud/sap/fpa/ui/tenants/<tenant-id>/bo/story/<story-id>
+         ?mode=embed&embedMode=embedOnly&authMode=jwt&token=YOUR_JWT_TOKEN"
+    width="100%"
+    height="900"
+    frameborder="0"
+    sandbox="allow-scripts allow-same-origin allow-popups">
+</iframe>
+2️⃣ SAC 需要的設定
+(A) SAC Tenant 設定
+
+登入 SAC → System > Security > OAuth Clients
+
+新增 Client
+
+Client Type = Service Account
+
+勾選可以做 Secure Embed 的權限
+
+記下：
+
+Client ID
+
+Client Secret
+
+(B) User 需要授權
+
+JWT Token 的 sub 欄位需指定一個 SAC 已存在的使用者
+
+該使用者需要：
+
+有權限存取該 Story / App
+
+Viewer / Designer 視需求設定
+
+(C) Story / App URL
