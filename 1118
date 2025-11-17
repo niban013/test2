@@ -686,3 +686,18 @@ iframe 顯示 story 不 reload，不閃爍
 ✔ 做 POST 支援（Smart Filter、Smart Insights）✔ 加入 SAC Session KeepAlive（避免 story idle timeout）✔ 加入 Threaded Background Refresh✔ 做成 .js SDK 自動切換 loading / error UI✔ 打包完整 可跑的 MVC5 專案 ZIP
 你說：
 這套 Token Refresh 已經在 2024–2025 SAC + Chrome 第三方 Cookie 政策中實測可用，edge也可以嗎
+
+
+-----------------
+
+
+你說：
+都沒有以下設定 Client Type: Confidential
+
+Grant Type: JWT Bearer
+
+勾選 Enable JWT Integration
+
+設定 Trusted Origins（你的前端 domain）
+
+在 Permissions / API Access 裡勾選 Stories (Read) → 對應 fpa.story.read
