@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>封裝 Select2 大資料分頁搜尋</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { width: 300px; margin: 10px; }
+</style>
+</head>
+<body>
+<h2>封裝 Select2 - 大資料分頁 + 搜尋</h2>
+
+<select id="mySelect"></select>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// 模擬大量資料
+const largeData = [];
+for(let i=1;i<=1000;i++){
+    largeData.push({id: i, text: `選項 ${i}`});
+}
+(function ($) {
+    $.fn.largeSelect2 = function (options) {
+
+        const settings = $.extend({
+            placeholder: "請選擇",
+            allowClear: true,
+            pageSize: 50,
+            initValue: null,          // 可為 {id, text} 或 [ {id,text}, ... ]
+            dataSource: null,
+            delay: 250,
+            enableSearch: true,
+
+            localSearchOnly: false,
+            serverSearchOnly: false,
+
+            minSearchLength: 0,
+            multiple: false           // 🔥 新增：支援多選
+        }, options);
+
+        const $select = $(this);
+
+        // ---------------------
+        // 初始化 Select2
+        // ---------------------
+        function init() {
+            const config = {
+                placeholder: settings.placeholder,
+                allowClear: settings.allowClear,
+                multiple: settings.multiple     // 🔥 套用多選
+            };
+
+            // ------------------------------------------------------
+            // 🔥 enableSearch = false → 無搜尋，不用 AJAX
+            // ------------------------------------------------------
+            if (!settings.enableSearch) {
+                config.minimumResultsForSearch = Infinity;
+
+                if (settings.serverSearchOnly) {
+                    console.warn("largeSelect2: enableSearch=false 無法 serverSearchOnly → 改為使用 local");
+                }
+
+                config.data = getAllLocalItems();
+
+            } else {
+                config.ajax = buildAjax();
+            }
+
+            $select.select2(config);
+
+            // 初始化預設值
+            if (settings.initValue) {
+                if (Array.isArray(settings.initValue)) {
+                    setValues(settings.initValue);
+                } else {
+                    setValue(settings.initValue.id, settings.initValue.text);
+                }
+            }
+        }
+
+        // 用於 enableSearch=false 時直接提供 data
+        function getAllLocalItems() {
+            let source = [];
+
+            if (Array.isArray(settings.dataSource)) {
+                source = settings.dataSource;
+            } else if (typeof settings.dataSource === "function") {
+                console.warn("largeSelect2: enableSearch=false → dataSource 必須是 array，function 將被忽略");
+            }
+
+            return source;
+        }
+
+        // ---------------------
+        // Select2 Ajax Transport
+        // ---------------------
+        function buildAjax() {
+            return {
+                transport: async function (params, success, failure) {
+                    const page = params.data.page || 1;
+                    const search = params.data.q || "";
+
+                    // 搜尋字數不足，回傳空
+                    if (settings.minSearchLength > 0 && search.length < settings.minSearchLength) {
+                        return success({ results: [], pagination: { more: false } });
+                    }
+
+                    try {
+                        const result = await fetchData(search, page);
+                        success(result);
+                    } catch (err) {
+                        failure(err);
+                    }
+                },
+                delay: settings.delay
+            };
+        }
+
+        // ---------------------
+        // 資料模式邏輯
+        // ---------------------
+        async function fetchData(search, page) {
+
+            // 1️⃣ localSearchOnly
+            if (settings.localSearchOnly) {
+                const source = settings.dataSource || [];
+                let filtered = search
+                    ? source.filter(x => x.text.includes(search))
+                    : source;
+
+                return paginate(filtered, page);
+            }
+
+            // 2️⃣ serverSearchOnly
+            if (settings.serverSearchOnly) {
+                if (typeof settings.dataSource !== "function") {
+                    console.error("serverSearchOnly requires dataSource to be a function");
+                    return paginate([], page);
+                }
+                return await settings.dataSource({ search, page, pageSize: settings.pageSize });
+            }
+
+            // 3️⃣ Hybrid / Auto
+            if (typeof settings.dataSource === "function") {
+                return await settings.dataSource({ search, page, pageSize: settings.pageSize });
+            } else {
+                const source = settings.dataSource || [];
+                let filtered = search
+                    ? source.filter(x => x.text.includes(search))
+                    : source;
+
+                return paginate(filtered, page);
+            }
+        }
+
+        // ---------------------
+        // 本地分頁工具
+        // ---------------------
+        function paginate(list, page) {
+            const pageSize = settings.pageSize;
+            const start = (page - 1) * pageSize;
+            const end = start + pageSize;
+
+            return {
+                results: list.slice(start, end),
+                pagination: { more: end < list.length }
+            };
+        }
+
+        // ---------------------
+        // Public API
+        // ---------------------
+        function getValue() {
+            return $select.val();
+        }
+
+        // 單筆選擇
+        function setValue(id, text) {
+            const option = new Option(text, id, true, true);
+            $select.append(option).trigger("change");
+        }
+
+        // 多選版本
+        function setValues(items) {
+            if (!Array.isArray(items)) return;
+
+            items.forEach(({ id, text }) => {
+                const option = new Option(text, id, true, true);
+                $select.append(option);
+            });
+
+            $select.trigger("change");
+        }
+
+        function clear() {
+            $select.val(null).trigger("change");
+        }
+
+        function updateSource(newSource) {
+            settings.dataSource = newSource;
+            refresh();
+        }
+
+        function refresh() {
+            destroy();
+            init();
+        }
+
+        function destroy() {
+            $select.off();
+            $select.select2("destroy");
+        }
+
+        // Expose API
+        $select.data("largeSelect2", {
+            getValue,
+            setValue,
+            setValues,
+            clear,
+            updateSource,
+            refresh,
+            destroy
+        });
+
+        init();
+        return this;
+    };
+})(jQuery);
+
+
+// 使用範例
+$("#mySelect").largeSelect2({
+    multiple: true,
+    dataSource: largeData,
+    placeholder: "請選擇項目"
+});
+// 監聽變化
+$('#mySelect').on('change', function () {
+    console.log('改變:', $(this).val());
+	
+	const api = $('#mySelect').data('largeSelect2');
+
+console.log("目前值:", api.getValue());
+});
+</script>
+</body>
+</html>
