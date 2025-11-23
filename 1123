@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>封裝 Select2 大資料分頁搜尋</title>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+  select { width: 300px; margin: 10px; }
+</style>
+</head>
+<body>
+<h2>封裝 Select2 - 大資料分頁 + 搜尋</h2>
+
+<select id="mySelect"></select>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// 模擬大量資料
+const largeData = [];
+for(let i=1;i<=1000;i++){
+    largeData.push({id: i, text: `選項 ${i}`});
+}
+(function ($) {
+    $.fn.largeSelect2 = function (options) {
+
+        const settings = $.extend({
+            placeholder: "請選擇",
+            allowClear: true,
+            pageSize: 50,
+            initValue: null,          // 可為 {id, text} 或 [ {id,text}, ... ]
+            dataSource: null,
+            delay: 250,
+            enableSearch: false,
+
+            localSearchOnly: false,
+            serverSearchOnly: false,
+
+            minSearchLength: 0,
+            multiple: false           // 🔥 新增：支援多選
+        }, options);
+
+        const $select = $(this);
+
+        // ---------------------
+        // 初始化 Select2
+        // ---------------------
+        function init() {
+            const config = {
+                placeholder: settings.placeholder,
+                allowClear: settings.allowClear,
+                multiple: settings.multiple     // 🔥 套用多選
+            };
+
+            // ------------------------------------------------------
+            // 🔥 enableSearch = false → 無搜尋，不用 AJAX
+            // ------------------------------------------------------
+            if (!settings.enableSearch) {
+                config.minimumResultsForSearch = Infinity;
+
+                if (settings.serverSearchOnly) {
+                    console.warn("largeSelect2: enableSearch=false 無法 serverSearchOnly → 改為使用 local");
+                }
+
+                config.data = getAllLocalItems();
+
+            } else {
+                config.ajax = buildAjax();
+            }
+
+            $select.select2(config);
+
+            // 初始化預設值
+            if (settings.initValue) {
+                if (Array.isArray(settings.initValue)) {
+                    setValues(settings.initValue);
+                } else {
+                    setValue(settings.initValue.id, settings.initValue.text);
+                }
+            }
+        }
+
+        // 用於 enableSearch=false 時直接提供 data
+        function getAllLocalItems() {
+            let source = [];
+
+            if (Array.isArray(settings.dataSource)) {
+                source = settings.dataSource;
+            } else if (typeof settings.dataSource === "function") {
+                console.warn("largeSelect2: enableSearch=false → dataSource 必須是 array，function 將被忽略");
+            }
+
+            return source;
+        }
+
+        // ---------------------
+        // Select2 Ajax Transport
+        // ---------------------
+        function buildAjax() {
+            return {
+                transport: async function (params, success, failure) {
+                    const page = params.data.page || 1;
+                    const search = params.data.q || "";
+
+                    // 搜尋字數不足，回傳空
+                    if (settings.minSearchLength > 0 && search.length < settings.minSearchLength) {
+                        return success({ results: [], pagination: { more: false } });
+                    }
+
+                    try {
+                        const result = await fetchData(search, page);
+                        success(result);
+                    } catch (err) {
+                        failure(err);
+                    }
+                },
+                delay: settings.delay
+            };
+        }
+
+        // ---------------------
+        // 資料模式邏輯
+        // ---------------------
+        async function fetchData(search, page) {
+
+            // 1️⃣ localSearchOnly
+            if (settings.localSearchOnly) {
+                const source = settings.dataSource || [];
+                let filtered = search
+                    ? source.filter(x => x.text.includes(search))
+                    : source;
+
+                return paginate(filtered, page);
+            }
+
+            // 2️⃣ serverSearchOnly
+            if (settings.serverSearchOnly) {
+                if (typeof settings.dataSource !== "function") {
+                    console.error("serverSearchOnly requires dataSource to be a function");
+                    return paginate([], page);
+                }
+                return await settings.dataSource({ search, page, pageSize: settings.pageSize });
+            }
+
+            // 3️⃣ Hybrid / Auto
+            if (typeof settings.dataSource === "function") {
+                return await settings.dataSource({ search, page, pageSize: settings.pageSize });
+            } else {
+                const source = settings.dataSource || [];
+                let filtered = search
+                    ? source.filter(x => x.text.includes(search))
+                    : source;
+
+                return paginate(filtered, page);
+            }
+        }
+
+        // ---------------------
+        // 本地分頁工具
+        // ---------------------
+        function paginate(list, page) {
+            const pageSize = settings.pageSize;
+            const start = (page - 1) * pageSize;
+            const end = start + pageSize;
+
+            return {
+                results: list.slice(start, end),
+                pagination: { more: end < list.length }
+            };
+        }
+
+        // ---------------------
+        // Public API
+        // ---------------------
+        function getValue() {
+            return $select.val();
+        }
+
+        // 單筆選擇
+        function setValue(id, text) {
+            const option = new Option(text, id, true, true);
+            $select.append(option).trigger("change");
+        }
+
+        // 多選版本
+        function setValues(items) {
+            if (!Array.isArray(items)) return;
+
+            items.forEach(({ id, text }) => {
+                const option = new Option(text, id, true, true);
+                $select.append(option);
+            });
+
+            $select.trigger("change");
+        }
+
+        function clear() {
+            $select.val(null).trigger("change");
+        }
+
+        function updateSource(newSource) {
+            settings.dataSource = newSource;
+            refresh();
+        }
+
+        function refresh() {
+            destroy();
+            init();
+        }
+
+        function destroy() {
+            $select.off();
+            $select.select2("destroy");
+        }
+
+        // Expose API
+        $select.data("largeSelect2", {
+            getValue,
+            setValue,
+            setValues,
+            clear,
+            updateSource,
+            refresh,
+            destroy
+        });
+
+        init();
+        return this;
+    };
+})(jQuery);
+
+
+// 使用範例
+$("#mySelect").largeSelect2({
+    multiple: true,enableSearch:true,minSearchLength:0,
+ //   dataSource: largeData,
+    placeholder: "請選擇項目"
+});
+
+const api = $('#mySelect').data('largeSelect2');
+
+
+api.updateSource(largeData)
+
+//api.setValue(5, "選項 5");
+api.setValues([{ id:5, text:"選項 5" },{ id:2, text:"選項 2" }]); 
+// 監聽變化
+$('#mySelect').on('change', function () {
+    console.log('改變:', $(this).val());
+	
+	const api = $('#mySelect').data('largeSelect2');
+
+console.log("目前值:", api.getValue());
+});
+</script>
+</body>
+</html>
+
+using System.Linq;
+using System.Web.Mvc;
+
+public class ApiController : Controller
+{
+    // 模擬資料庫
+    private static List<Item> items = new List<Item>
+    {
+        new Item { Id = 1, Name = "蘋果" },
+        new Item { Id = 2, Name = "香蕉" },
+        new Item { Id = 3, Name = "葡萄" },
+        new Item { Id = 4, Name = "芒果" },
+        new Item { Id = 5, Name = "鳳梨" },
+        // ... 可大量資料
+    };
+
+    [HttpGet]
+    public ActionResult Items(string keyword = "", int page = 1, int pageSize = 50)
+    {
+        // 🔍 搜尋
+        var query = items.AsQueryable();
+
+        if (!string.IsNullOrEmpty(keyword))
+        {
+            query = query.Where(x => x.Name.Contains(keyword));
+        }
+
+        // 📄 分頁
+        int skip = (page - 1) * pageSize;
+        var pagedData = query.Skip(skip).Take(pageSize).ToList();
+
+        // 是否還有下一頁
+        bool hasMore = query.Count() > skip + pageSize;
+
+        // 🔄 Select2 格式
+        var result = new
+        {
+            results = pagedData.Select(x => new
+            {
+                id = x.Id,
+                text = x.Name
+            }),
+
+            pagination = new { more = hasMore }
+        };
+
+        return Json(result, JsonRequestBehavior.AllowGet);
+    }
+}
+
+// 模型
+public class Item
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+// =========================
+//   Download Manager 工具
+// =========================
+const DownloadManager = (function () {
+
+    // 面板 DOM
+    let $panel
+    let $body
+
+    // 初始化按鈕事件（只需一次）
+    function init() {
+        $panel = $("#download-panel");
+        $body = $("#download-panel .panel-body");
+        $("#download-panel .panel-header").on("click", function () {
+            $panel.toggleClass("collapsed");
+            $("#download-toggle")
+                .toggleClass("glyphicon-chevron-down glyphicon-chevron-up");
+        });
+
+        // 監聽刪除按鈕（事件委派）
+        $(document).on("click", ".download-item .delete-btn", function () {
+            const $item = $(this).closest(".download-item");
+            $item.slideUp(200, function () {
+                $item.remove();
+
+                if ($(".download-item").length === 0)
+                    $panel.fadeOut(300);
+            });
+        });
+    }
+
+    // 建立單筆 UI
+    function createItem(fileName) {
+        const id = "dl_" + Date.now();
+
+        const $item = $(`
+      <div class="download-item" data-id="${id}">
+        <div class="file-name">${fileName}</div>
+
+        <div class="progress">
+          <div class="progress-bar progress-bar-success" style="width:0%">0%</div>
+        </div>
+
+        <div class="speed" style="font-size:12px;color:#555;">--</div>
+
+        <button class="btn btn-xs btn-danger delete-btn" 
+                style="float:right;margin-top:-18px;">✕</button>
+      </div>
+    `);
+
+        $body.append($item.hide().slideDown(200));
+        $panel.show().removeClass("collapsed");
+
+        return id;
+    }
+
+    // 更新 UI
+    function updateProgress(id, pct, speedText) {
+        const $item = $(`.download-item[data-id="${id}"]`);
+        $item.find(".progress-bar")
+            .css("width", pct + "%")
+            .text(pct + "%");
+
+        $item.find(".speed").text(speedText);
+    }
+
+    // 完成 UI
+    function finishItem(id) {
+        const $item = $(`.download-item[data-id="${id}"]`);
+
+        $item.find(".file-name").append(" ✅");
+        $item.find(".progress-bar")
+            .removeClass("progress-bar-success")
+            .addClass("progress-bar-info");
+
+        $item.find(".speed").text("完成");
+    }
+
+    // 流式下載
+    async function streamDownload(id, fileName, url) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("下載失敗");
+
+            const contentLength = res.headers.get("Content-Length");
+            const totalSize = contentLength ? parseInt(contentLength, 10) : null;
+
+            const reader = res.body.getReader();
+            const chunks = [];
+            let received = 0;
+            let start = Date.now();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                chunks.push(value);
+                received += value.length;
+
+                // 計算進度
+                let pct = totalSize
+                    ? Math.round((received / totalSize) * 100)
+                    : 0;
+
+                // 計算速度
+                const seconds = (Date.now() - start) / 1000;
+                const bps = received / seconds;
+                let speed = "";
+                if (bps > 1024 * 1024) speed = (bps / 1024 / 1024).toFixed(2) + " MB/s";
+                else if (bps > 1024) speed = (bps / 1024).toFixed(2) + " KB/s";
+                else speed = bps.toFixed(0) + " B/s";
+
+                updateProgress(id, pct, speed);
+            }
+
+            // 下載完成 -> 生成 Blob
+            const blob = new Blob(chunks);
+            const link = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = link;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(link);
+
+            finishItem(id);
+
+        } catch (err) {
+            alert("下載錯誤: " + err.message);
+        }
+    }
+
+    // 對外 API ------------------------------------
+    return {
+        init,
+        addTask(fileName, url) {
+            const id = createItem(fileName);
+            streamDownload(id, fileName, url);
+            return id;
+        }
+    };
+})();
+
+// 初始化（只需一次）
+$(document).ready(() => {
+    DownloadManager.init();
+});
+
+        $("#testDownload").on("click", function () {
+            $("#adminlte-footer-box").hide(); // 完全隱藏
+            let fileName = "ESG_Report_2025"
+            DownloadManager.addTask(
+                fileName,
+                `http://localhost:57216/Download/GetFileStream?fileName=${encodeURIComponent(fileName)}`
+            );
+            //  addDownloadTask2("ESG_Report_2025");
+        });  
+
+
+        /* ✅ 浮動右側下載進度面板 */
+        #download-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 280px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: all .3s ease;
+            z-index: 1060;
+        }
+
+            /* header */
+            #download-panel .panel-header {
+                background: #2b593f;
+                color: #fff;
+                padding: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                font-weight: 600;
+            }
+
+                #download-panel .panel-header:hover {
+                    background: #36744e;
+                }
+
+            /* 內容區 */
+            #download-panel .panel-body {
+                max-height: 240px;
+                overflow-y: auto;
+                background: #f8fbf9;
+                padding: 10px;
+            }
+
+        /* 單筆下載項目 */
+        .download-item {
+            padding: 6px 0;
+            border-bottom: 1px solid #dbe9e0;
+        }
+
+            .download-item:last-child {
+                border-bottom: none;
+            }
+
+            .download-item .file-name {
+                font-size: 13px;
+                color: #2b3b2b;
+                margin-bottom: 4px;
+            }
+
+            .download-item .progress {
+                height: 6px;
+                margin: 0;
+            }
+
+            .download-item .progress-bar {
+                background-color: #5cb85c;
+            }
+
+        /* 收合狀態 */
+        #download-panel.collapsed {
+            height: 42px;
+            width: 200px;
+        }
+
+            #download-panel.collapsed .panel-body {
+                display: none;
+            }
+
+        /* 收合按鈕圖示 */
+        #download-toggle {
+            font-size: 16px;
+        }
