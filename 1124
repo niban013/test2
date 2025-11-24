@@ -1,0 +1,165 @@
+using log4net;
+using log4net.Repository.Hierarchy;
+using log4net.Appender;
+using log4net.Layout;
+using log4net.Core;
+using System;
+using System.Web;
+
+public static class LogHelper
+{
+    // 確保每個使用者有自己的 logger
+    public static void Info(string message)
+    {
+        GetUserLogger().Info(message);
+    }
+
+    public static void Warn(string message)
+    {
+        GetUserLogger().Warn(message);
+    }
+
+    public static void Error(string message, Exception ex = null)
+    {
+        if (ex == null)
+            GetUserLogger().Error(message);
+        else
+            GetUserLogger().Error(message, ex);
+    }
+
+    // ----------------------------------------
+    // 取得針對使用者的 Logger（每個使用者自己的檔案）
+    // ----------------------------------------
+    private static ILog GetUserLogger()
+    {
+        string userName = GetCurrentUserName();
+
+        // logger name = username
+        string loggerName = $"UserLogger_{userName}";
+
+        var log = LogManager.Exists(loggerName);
+        if (log != null)
+            return log;
+
+        // 若 logger 不存在 → 建立專屬 logger
+        return CreateUserLogger(loggerName, userName);
+    }
+
+    // ----------------------------------------
+    // 建立使用者的專屬 Logger + FileAppender
+    // ----------------------------------------
+    private static ILog CreateUserLogger(string loggerName, string userName)
+    {
+        var hierarchy = (Hierarchy)LogManager.GetRepository();
+
+        var patternLayout = new PatternLayout
+        {
+            ConversionPattern = "%date %-5level %message%newline"
+        };
+        patternLayout.ActivateOptions();
+
+        var appender = new RollingFileAppender
+        {
+            Name = $"{userName}_FileAppender",
+
+            // ★ 每位使用者一個獨立 log 檔
+            File = HttpContext.Current.Server.MapPath($"~/App_Data/logs/{userName}.log"),
+
+            AppendToFile = true,
+            RollingStyle = RollingFileAppender.RollingMode.Date,
+            DatePattern = "yyyyMMdd",
+            StaticLogFileName = true,
+            Layout = patternLayout,
+            LockingModel = new FileAppender.MinimalLock(), // ★ 避免 IO 搶占
+            MaxSizeRollBackups = 10,
+        };
+
+        appender.ActivateOptions();
+        hierarchy.Root.AddAppender(appender);
+
+        var logger = hierarchy.GetLogger(loggerName);
+        logger.Level = Level.All;
+
+        hierarchy.Configured = true;
+
+        return new LogImpl(logger);
+    }
+
+    // ----------------------------------------
+    // 取得登入者名稱
+    // ----------------------------------------
+    private static string GetCurrentUserName()
+    {
+        // MVC 使用者
+        var name = HttpContext.Current?.User?.Identity?.Name;
+        if (!string.IsNullOrEmpty(name))
+            return SanitizeFileName(name);
+
+        // 匿名
+        return "Anonymous";
+    }
+
+    // 避免登入帳號是 email 或含非法檔名字元
+    private static string SanitizeFileName(string name)
+    {
+        foreach (var c in System.IO.Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+
+        return name;
+    }
+}
+
+
+protected void Application_Start()
+{
+    log4net.Config.XmlConfigurator.Configure();
+}
+
+<configuration>
+  <configSections>
+    <section name="log4net" type="log4net.Config.Log4NetConfigurationSectionHandler, log4net" />
+  </configSections>
+
+  <log4net>
+    <root>
+      <level value="ALL" />
+    </root>
+  </log4net>
+</configuration>
+
+✅ 方案 2：在通用介面中建立「能力」介面（Capability Pattern）
+
+如果你希望「是否支援 A()」可以被動態檢查 → 用介面分能力。
+
+介面：
+public interface IService { }
+
+public interface ISupportA
+{
+    void A(ARequest req);
+}
+
+一般 Service（沒有 A）
+public class LogService : IService
+{
+}
+
+支援 A 的 Service
+public class BigDataService : IService, ISupportA
+{
+    public void A(ARequest req) { }
+}
+
+呼叫端可以動態判斷：
+if (service is ISupportA aService)
+{
+    aService.A(new ARequest("x"));
+}
+
+
+✔ 適合「部分 service 才支援某功能」
+✔ 適合 plug-in、模組化架構
+✔ 不會強迫全部 service 實作 A()
+
+
+
