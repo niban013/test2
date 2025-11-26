@@ -1,0 +1,237 @@
+using System.Collections.Generic;
+
+public class DataTablesRequest
+{
+    public int Draw { get; set; }
+    public int Start { get; set; }
+    public int Length { get; set; }
+
+    // 搜尋字串
+    public string SearchValue { get; set; }
+
+    // DataTables Columns
+    public List<DataTablesColumn> Columns { get; set; } = new List<DataTablesColumn>();
+
+    // 排序欄位
+    public List<DataTablesOrder> Order { get; set; } = new List<DataTablesOrder>();
+
+    // 其它動態欄位
+    public Dictionary<string, string> Fields { get; set; } = new Dictionary<string, string>();
+}
+
+public class DataTablesColumn
+{
+    public string Data { get; set; }
+    public string Name { get; set; }
+    public bool Searchable { get; set; }
+    public bool Orderable { get; set; }
+    public string SearchValue { get; set; }
+}
+
+public class DataTablesOrder
+{
+    public int Column { get; set; }
+    public string Dir { get; set; } // asc / desc
+}
+
+using System.Web.Mvc;
+using System.Linq;
+
+public class DataTablesRequestBinder : IModelBinder
+{
+    public object BindModel(ControllerContext controllerContext, ModelBindingContext bindingContext)
+    {
+        var req = controllerContext.HttpContext.Request;
+        var model = new DataTablesRequest();
+
+        // 基本欄位
+        int.TryParse(req["draw"], out var draw);
+        int.TryParse(req["start"], out var start);
+        int.TryParse(req["length"], out var length);
+
+        model.Draw = draw;
+        model.Start = start;
+        model.Length = length;
+
+        // Search
+        model.SearchValue = req["search[value]"];
+
+        // 解析 columns
+        int colIndex = 0;
+        while (req[$"columns[{colIndex}][data]"] != null)
+        {
+            model.Columns.Add(new DataTablesColumn
+            {
+                Data = req[$"columns[{colIndex}][data]"],
+                Name = req[$"columns[{colIndex}][name]"],
+                Searchable = req[$"columns[{colIndex}][searchable]"] == "true",
+                Orderable = req[$"columns[{colIndex}][orderable]"] == "true",
+                SearchValue = req[$"columns[{colIndex}][search][value]"]
+            });
+            colIndex++;
+        }
+
+        // 解析 order
+        int orderIndex = 0;
+        while (req[$"order[{orderIndex}][column]"] != null)
+        {
+            model.Order.Add(new DataTablesOrder
+            {
+                Column = int.Parse(req[$"order[{orderIndex}][column]"]),
+                Dir = req[$"order[{orderIndex}][dir]"]
+            });
+            orderIndex++;
+        }
+
+        // 解析自訂欄位：排除 DataTables 內建欄位
+        foreach (var key in req.Form.AllKeys)
+        {
+            if (key == null) continue;
+
+            if (key.StartsWith("columns[") ||
+                key.StartsWith("order[") ||
+                key.StartsWith("search[") ||
+                key == "draw" || key == "start" || key == "length")
+                continue;
+
+            model.Fields[key] = req.Form[key];
+        }
+
+        return model;
+    }
+}
+
+
+using System;
+using System.Linq;
+using System.Linq.Expressions;
+
+public static class IQueryableExtensions
+{
+    public static IQueryable<T> ApplyOrdering<T>(this IQueryable<T> query, DataTablesRequest req)
+    {
+        bool first = true;
+
+        foreach (var order in req.Order)
+        {
+            var col = req.Columns[order.Column].Data;
+            if (string.IsNullOrEmpty(col)) continue;
+
+            var param = Expression.Parameter(typeof(T), "x");
+            var property = Expression.Property(param, col);
+            var lambda = Expression.Lambda(property, param);
+
+            string method = (first ? "OrderBy" : "ThenBy") +
+                            (order.Dir == "desc" ? "Descending" : "");
+
+            query = typeof(Queryable).GetMethods()
+                .First(m => m.Name == method && m.GetParameters().Length == 2)
+                .MakeGenericMethod(typeof(T), property.Type)
+                .Invoke(null, new object[] { query, lambda }) as IQueryable<T>;
+
+            first = false;
+        }
+
+        return query;
+    }
+}
+
+
+
+public ActionResult List(DataTablesRequest req)
+{
+    var db = new MyEntities();
+
+    // 基礎查詢
+    var query = db.Users.AsQueryable();
+
+    // 全域搜尋：search[value]
+    if (!string.IsNullOrEmpty(req.SearchValue))
+    {
+        string keyword = req.SearchValue.Trim();
+        query = query.Where(x =>
+            x.Name.Contains(keyword) ||
+            x.Email.Contains(keyword));
+    }
+
+    // 動態欄位篩選（你前端可增加自訂欄位）
+    if (req.Fields.ContainsKey("status"))
+    {
+        string status = req.Fields["status"];
+        query = query.Where(x => x.Status == status);
+    }
+
+    var recordsTotal = query.Count();
+
+    // 排序（多欄位）
+    query = query.ApplyOrdering(req);
+
+    // 分頁
+    var data = query.Skip(req.Start).Take(req.Length).ToList();
+
+    // 回傳 DataTables 格式
+    return Json(new
+    {
+        draw = req.Draw,
+        recordsTotal,
+        recordsFiltered = recordsTotal,
+        data
+    }, JsonRequestBehavior.AllowGet);
+}
+
+
+$("#myTable").DataTable({
+    serverSide: true,
+    processing: true,
+    ajax: {
+        url: "/Home/List",
+        type: "POST",
+        data: function (d) {
+            d.status = $("#ddlStatus").val(); // 動態欄位
+        }
+    },
+    columns: [
+        { data: "Id" },
+        { data: "Name" },
+        { data: "Email" },
+        { data: "Status" }
+    ]
+});
+
+public static class DataTableExtensions
+{
+    public static IQueryable<Dictionary<string, object>> ToQueryable(this DataTable table)
+    {
+        var list = new List<Dictionary<string, object>>();
+
+        foreach (DataRow row in table.Rows)
+        {
+            var dict = new Dictionary<string, object>();
+            foreach (DataColumn col in table.Columns)
+                dict[col.ColumnName] = row[col];
+
+            list.Add(dict);
+        }
+
+        return list.AsQueryable();
+    }
+}
+var query = dataTable.ToQueryable();
+
+// 全域搜尋
+if (!string.IsNullOrEmpty(req.SearchValue))
+{
+    query = query.Where(x =>
+        x["Name"].ToString().Contains(req.SearchValue) ||
+        x["Email"].ToString().Contains(req.SearchValue)
+    );
+}
+
+// 排序（用你前面 ApplyOrdering）
+query = query.ApplyOrdering(req);
+
+// 分頁
+var page = query.Skip(req.Start).Take(req.Length).ToList();
+
+
+
