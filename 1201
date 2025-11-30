@@ -1,0 +1,780 @@
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+ 
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> <!-- ← 必加 -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+ 
+<style>
+  #jsonOutput {
+    white-space: pre-wrap;
+    font-size: 13px;
+  }
+</style>
+ 
+  <!-- ⭐ TAB 標籤 -->
+  <ul class="nav nav-tabs" id="myTab" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-setting" data-bs-toggle="tab" data-bs-target="#settingTab" type="button" role="tab">
+        設定模式
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-result" data-bs-toggle="tab" data-bs-target="#resultTab" type="button" role="tab">
+        套用結果
+      </button>
+    </li>
+	 <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-json" data-bs-toggle="tab" data-bs-target="#jsonTab" type="button" role="tab">
+        json
+      </button>
+    </li>
+  </ul>
+
+  <!-- ⭐ TAB 內容 -->
+  <div class="tab-content">
+<button id="btnLoadJson" class="btn btn-secondary btn-sm">載入 JSON</button>
+
+    <!-- 🔶 TAB1：設定模式 -->
+    <div class="tab-pane fade show active p-3" id="settingTab" role="tabpanel">
+   <!-- 🔹下拉設定 -->
+      <div class="mb-3">
+        <label class="form-label">選擇欄位設定</label>
+        <select id="configSelector" class="form-select form-select-sm" style="width:200px;">
+          <option value="default">預設設定</option>
+          <option value="simple">簡易版 (ID + Name)</option>
+          <option value="hr">HR 版本 (Name + Department)</option>
+        </select>
+      </div>
+      <!-- 🔹額外設定 -->
+      <div class="card p-3 mb-3">
+        <h5 class="mb-2">額外設定</h5>
+        <div class="row g-3">
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkHeader" class="form-check-input">
+            <label for="chkHeader" class="form-check-label me-2">表頭啟用</label>
+            <input type="text" id="txtHeaderName" class="form-control form-control-sm w-auto">
+          </div>
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkBody" class="form-check-input">
+            <label for="chkBody" class="form-check-label me-2">表身啟用</label>
+            <input type="text" id="txtBodyName" class="form-control form-control-sm w-auto">
+          </div>
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkPopup" class="form-check-input">
+            <label for="chkPopup" class="form-check-label me-2">彈跳啟用</label>
+            <input type="text" id="txtPopupName" class="form-control form-control-sm w-auto">
+       
+          </div>
+
+        </div>
+      </div>
+
+   
+
+      <!-- 🔹欄位設定表 -->
+      <h5>欄位設定</h5>
+      <table id="fieldTable" class="table table-bordered align-middle table-sm">
+        <thead>
+          <tr class="table-light">
+            <th style="width:50px;">拖曳</th>
+            <th>欄位</th>
+            <th style="width:120px;">型態</th>
+            <th style="width:80px;">搜尋啟用</th>
+            <th style="width:80px;">顯示啟用</th>
+            <th style="width:90px;">排序</th>
+            <th>條件</th>
+            <th style="width:60px;">刪除</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <button id="btnAdd" class="btn btn-outline-primary btn-sm">
+        <i class="fa fa-plus"></i> 新增欄位
+      </button>
+      <button id="btnApply" class="btn btn-success btn-sm">
+        <i class="fa fa-play"></i> 套用設定
+      </button>
+
+    </div>
+
+    <!-- 🔶 TAB2：套用結果 -->
+    <div class="tab-pane fade p-3" id="resultTab" role="tabpanel">
+
+      <h5>查詢結果</h5>
+
+      <div class="row">
+        <div class="col-md-12">
+          <table id="dataTable" class="display w-100">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+       
+      </div>
+
+    </div>
+	   <div class="tab-pane fade p-3" id="jsonTab" role="tabpanel">
+
+      <h5>查詢結果</h5>
+
+      <div class="row">
+        <div class="col-md-12">
+         <pre id="jsonOutput" class="border p-2 bg-light" style="height:500px; overflow:auto;"></pre>
+        </div>
+
+       
+      </div>
+
+    </div>
+	 
+
+  </div>
+
+</div>
+
+
+<div class="modal fade" id="myModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h4 class="modal-title">點選格子資訊</h4>
+      </div>
+
+      <div class="modal-body">
+        <p><b>欄位 Index：</b> <span id="modalColIndex"></span></p>
+        <p><b>欄位名稱：</b> <span id="modalColName"></span></p>
+        <p><b>欄位值：</b> <span id="modalCellValue"></span></p>
+        <hr>
+        <pre id="modalRowJson"></pre>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let table;
+let fields =[];
+const allConfigs = [
+  {
+	  key: 'default',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		{ index: 0, name: 'ID', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+		{ index: 1, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'asc', condition: '', type: 'text' },
+		{ index: 2, name: 'Department', searchEnabled: false, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown' },
+		{ index: 3, name: 'HireDate', searchEnabled: true, displayEnabled: true, sort: 'desc', condition: '', type: 'text' },
+	  ] 
+  },
+   {
+	  key: 'simple',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		 { index: 0, name: 'ID', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+         { index: 1, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'asc', condition: '', type: 'text' },
+	  ] 
+  }, 
+   {
+	  key: 'hr',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		   { index: 0, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+          { index: 1, name: 'Department', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown' },
+	  ] 
+  } 
+];
+
+
+function loadConfig(key) {
+    const cfg = allConfigs.find(x => x.key === key);
+    if (!cfg) return;
+
+    // 套用 extra
+    $("#chkHeader").prop("checked", cfg.extra.header.enabled);
+    $("#txtHeaderName").val(cfg.extra.header.name);
+
+    $("#chkBody").prop("checked", cfg.extra.body.enabled);
+    $("#txtBodyName").val(cfg.extra.body.name);
+
+    $("#chkPopup").prop("checked", cfg.extra.popup.enabled);
+    $("#txtPopupName").val(cfg.extra.popup.name);
+
+    // 套用 fields
+    fields = cfg.fields.map(f => ({ ...f }));
+
+    renderFields();
+    syncDataTableOrder();
+}
+
+
+
+
+
+
+
+$("#configSelector").change(function () {
+  const key = $(this).val(); 
+  loadConfig(key) 
+});
+
+
+$("#chkPopup, #txtPopupName").on("change input", function () {
+    updateJSON();
+});
+ 
+
+// 更新 JSON
+function updateJSON() {
+
+const key = $("#configSelector").val(); 
+ const extraSetting = {
+    header: {
+      enabled: $("#chkHeader").prop("checked"),
+      name: $("#txtHeaderName").val()
+    },
+    body: {
+      enabled: $("#chkBody").prop("checked"),
+      name: $("#txtBodyName").val()
+    },
+    popup: {
+      enabled: $("#chkPopup").prop("checked"),
+      name: $("#txtPopupName").val()
+    }
+  };
+  const fieldSetting = fields.map(f => ({
+    index: f.index,
+    name: f.name,
+    type: f.type,
+    searchEnabled: f.searchEnabled,
+    displayEnabled: f.displayEnabled,
+    sort: f.sort,
+    condition: f.condition
+  }));
+  const singleConfig  = {
+    key: key,               // ← 你要的識別 key
+    extra: extraSetting,
+    fields: fieldSetting
+  };
+
+
+const idx = allConfigs.findIndex(x => x.key === key);
+
+if (idx >= 0) {
+    allConfigs[idx] = singleConfig;  // 覆蓋
+} else {
+    allConfigs.push(singleConfig);   // 新增
+}
+
+  $("#jsonOutput").text(JSON.stringify(singleConfig, null, 2));
+}
+function getSortIcon(sort) {
+  if (sort === "asc") return '<i class="fa fa-arrow-up"></i>';
+  if (sort === "desc") return '<i class="fa fa-arrow-down"></i>';
+  return '<i class="fa fa-minus"></i>';
+}
+
+// ✅ 產生欄位列
+function renderFields() {
+  const $tb = $("#fieldTable tbody");
+  $tb.empty();
+  fields.forEach((f, i) => {
+    $tb.append(`
+      <tr data-index="${i}">
+        <td class="text-center cursor-move"><i class="fa fa-bars"></i></td>
+        <td class="editable">${f.name}</td>
+	    <td>
+          <select class="form-select form-select-sm field-type">
+            <option value="text" ${f.type ==='text'? "selected" : ""}>Text</option>
+            <option value="dropdown" ${f.type ==='dropdown'? "selected" : ""}>Dropdown</option>
+            <option value="checkbox" ${f.type ==='checkbox'? "selected" : ""}>Checkbox</option>
+          </select>
+        </td>
+       <td class="text-center">
+          <input type="checkbox" class="form-check-input searchChk" ${f.searchEnabled?"checked":""}>
+        </td>
+        <td class="text-center">
+          <input type="checkbox" class="form-check-input displayChk" ${f.displayEnabled?"checked":""}>
+        </td>
+        <td class="text-center">
+          <button class="btn btn-outline-secondary btn-sm sortBtn" data-sort="${f.sort}">
+            ${getSortIcon(f.sort)}
+          </button>
+        </td>
+        <td><input type="text" class="form-control form-control-sm condInput" value="${f.condition}"></td>
+        <td class="text-center">
+          <button class="btn btn-outline-danger btn-sm delBtn"><i class="fa fa-trash"></i></button>
+        </td>
+      </tr>
+    `);
+  });
+  updateJSON();
+}
+
+// ✅ 雙擊編輯欄位名稱
+$(document).on("dblclick", ".editable", function() {
+  const $td = $(this);
+  const oldText = $td.text().trim();
+  $td.html(`<input type="text" class="form-control form-control-sm editInput" value="${oldText}"/>`);
+  $td.find("input").focus().select();
+});
+
+// ✅ 編輯結束（防重名與空值）
+$(document).on("blur", ".editInput", function() {
+  const $input = $(this);
+  const newText = $input.val().trim();
+  const $td = $input.closest("td");
+  const idx = $td.closest("tr").data("index");
+  const oldText = fields[idx].name;
+
+  // 檢查重名或空值
+  const exists = fields.some((f, i) => i !== idx && f.name.toLowerCase() === newText.toLowerCase());
+  if (!newText) {
+    alert("欄位名稱不可為空！");
+    $td.text(oldText);
+  } else if (exists) {
+    alert(`欄位名稱「${newText}」已存在！`);
+    $td.text(oldText);
+  } else {
+    fields[idx].name = newText;
+    $td.text(newText);
+  }
+  
+  updateJSON();
+})
+
+$(document).on("keypress", ".editInput", function(e) {
+  if (e.which === 13) $(this).blur();
+});
+
+// 型態變更
+$(document).on("change", ".field-type", function(){
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].type = $(this).val();
+  updateJSON();
+});
+// ✅ 排序切換
+$(document).on("click", ".sortBtn", function() {
+  const $btn = $(this);
+  const idx = $btn.closest("tr").data("index");
+  const cur = fields[idx].sort;
+  const next = cur === "none" ? "asc" : cur === "asc" ? "desc" : "none";
+  fields[idx].sort = next;
+  $btn.html(getSortIcon(next)).attr("data-sort", next);
+  updateJSON();
+});
+
+// 搜尋啟用
+$(document).on("click", ".searchChk", function(){
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].searchEnabled = this.checked;
+  updateJSON();
+});
+
+// 顯示啟用
+$(document).on("click", ".displayChk", function(){
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].displayEnabled = this.checked;
+  updateJSON();
+});
+
+
+// ✅ 條件輸入
+$(document).on("input", ".condInput", function() {
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].condition = $(this).val();
+  updateJSON();
+});
+
+// ✅ 刪除列
+$(document).on("click", ".delBtn", function() {
+  const idx = $(this).closest("tr").data("index");
+  fields.splice(idx, 1);
+  // 更新 index
+  fields.forEach((f, i) => f.index = i);
+  renderFields();
+  syncDataTableOrder();
+});
+
+// ✅ 新增欄位
+$("#btnAdd").click(() => {
+  let idx = 1;
+  let newName;
+  do {
+    newName = "NewField" + idx++;
+  } while (fields.some(f => f.name === newName));
+
+  fields.push({ index: fields.length, name: newName, searchEnabled: true, displayEnabled: true, sort: "none", condition: "", type: "text" });
+  renderFields();
+  syncDataTableOrder();
+});
+// ✅ 拖曳排序（保持資料正確）
+new Sortable(document.querySelector("#fieldTable tbody"), {
+  handle: ".cursor-move",
+  animation: 150,
+  onEnd: e => {
+    const moved = fields.splice(e.oldIndex, 1)[0];
+    fields.splice(e.newIndex, 0, moved);
+     // 更新 index
+    fields.forEach((f, i) => f.index = i);
+    renderFields();
+    syncDataTableOrder(); // 🔹 同步 DataTable 欄位順序
+  }
+});
+
+// 🧩 模擬後端查詢
+function fakeFetchData(filter) {
+  const allData = [
+    { ID: 1, Name: "John", Department: "IT", HireDate: "2020-05-01" },
+    { ID: 2, Name: "Mary", Department: "HR", HireDate: "2019-07-15" },
+    { ID: 3, Name: "Alex", Department: "Sales", HireDate: "2021-03-20" },
+    { ID: 4, Name: "Lisa", Department: "IT", HireDate: "2022-01-05" },
+  ];
+
+  let result = allData;
+  filter.forEach(f => {
+    if (f.condition) result = result.filter(x => String(x[f.name]).includes(f.condition));
+  });
+
+  const sortField = filter.find(f => f.sort !== "none");
+  if (sortField) {
+    result.sort((a, b) =>
+      sortField.sort === "asc"
+        ? a[sortField.name] > b[sortField.name] ? 1 : -1
+        : a[sortField.name] < b[sortField.name] ? 1 : -1
+    );
+  }
+
+  return result;
+}
+
+// ✅ 套用設定（查詢 + DataTable 顯示）
+$("#btnApply").click(() => {
+  const filterFields = fields.filter(f=>f.searchEnabled);
+  const displayFields = fields.filter(f=>f.displayEnabled);
+  const filter = filterFields.map(f => ({
+    name: f.name,
+    condition: f.condition,
+    sort: f.sort
+  }));
+
+  // 模擬查詢結果
+  const data = fakeFetchData(filter);
+
+  // ✅ 保證每筆資料都含有目前啟用的欄位（即使 fakeFetchData 沒有）
+  data.forEach(row => {
+    displayFields.forEach(f => {
+      if (!(f.name in row)) row[f.name] = ""; // 加入空欄位
+    });
+  });
+
+  const columns = displayFields.map(f => ({ title: f.name, data: f.name }));
+
+  // DataTable order: index + asc/desc
+  const order = [];
+  displayFields.forEach((f, i) => {
+    if (f.sort !== "none") {
+      order.push([i, f.sort]); // [columnIndex, 'asc'|'desc']
+    }
+  }); 
+  
+  if ($.fn.DataTable.isDataTable("#dataTable")) {
+    table.clear().destroy();
+    $("#dataTable").empty();
+  }
+
+  table = $("#dataTable").DataTable({
+    data: data,
+    columns: columns,
+    order: order,       // 🔹 套用排序
+    pageLength: 5,
+    responsive: true,
+  });
+
+// 在你 new DataTable(...) 之後加入：
+//$("#dataTable tbody").off("click.popupRow").on("click.popupRow", "tr", function () {
+  // 如果還沒啟用 popup，直接 return
+//  if (!$("#chkPopup").is(":checked")) return;
+
+  // 取得 data（DataTable row 物件）
+  //const row = table.row(this);//
+  //if (!row) return;
+  //const rowData = row.data();
+
+  // 呼叫打開 modal 的函式
+  //openPopupWithRowData(rowData);
+//});
+
+
+
+
+$('#dataTable tbody').on('click', 'td', function () {
+
+    const table = $('#dataTable').DataTable();
+
+    // ✔ 取得欄位 index
+    const cellIndex = table.cell(this).index().column;
+
+    // ✔ 取得欄位名稱（如果 columns 裡面的 data 有寫）
+    const colName = table.settings()[0].aoColumns[cellIndex].data;
+
+    // ✔ 取得整列資料（物件 or 陣列）
+    const rowData = table.row($(this).closest('tr')).data();
+
+    // ✔ 取得此格子的值
+    const cellValue = table.cell(this).data();
+
+    // 開啟 modal
+    openPopupRowCol(rowData, cellIndex, colName, cellValue);
+});
+
+function openPopupRowCol(rowData, colName, cellValue) {
+
+    $.ajax({
+        url: "/YourController/LoadPopup",
+        type: "POST",
+        data: {
+            rowJson: JSON.stringify(rowData),
+            columnName: colName,
+            cellValue: cellValue
+        },
+        success: function (html) {
+
+            // 把部分視圖放到 Modal Content
+            $("#myModalBody").html(html);
+
+            $("#myModal").modal("show");
+        }
+    });
+}
+
+[HttpPost]
+public ActionResult LoadPopup(string rowJson, string columnName, string cellValue)
+{
+    var rowData = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(rowJson);
+
+    var model = new PopupViewModel
+    {
+        RowData = rowData,
+        ColumnName = columnName,
+        CellValue = cellValue
+    };
+
+    return PartialView("_PopupDetail", model);
+}
+@model YourNamespace.PopupViewModel
+
+<div>
+    <h4>欄位：@Model.ColumnName</h4>
+
+    <p>值：@Model.CellValue</p>
+
+    <h5>整列資料：</h5>
+    <pre>@Newtonsoft.Json.JsonConvert.SerializeObject(Model.RowData, Newtonsoft.Json.Formatting.Indented)</pre>
+
+    <!-- 你也可以放任何你要的 MVC 控件 -->
+    <input type="text" value="@Model.CellValue" class="form-control" />
+</div>
+
+
+<div class="modal fade" id="myModal">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h4 class="modal-title">資料詳情</h4>
+      </div>
+
+      <div class="modal-body" id="myModalBody">
+        <!-- 部分視圖會被載入到這裡 -->
+      </div>
+
+    </div>
+  </div>
+</div>
+
+function savePopup() {
+    const newValue = $("#popupValue").val();
+
+    const rowIdx = $("#myModal").data("rowIdx");
+    const colIdx = $("#myModal").data("colIdx");
+
+    const table = $("#dataTable").DataTable();
+
+    table.cell(rowIdx, colIdx).data(newValue).draw(false);
+
+    $("#myModal").modal("hide");
+}
+
+function savePopup() {
+    const id = $("#popup-id").val();   // 來自 partial hidden field
+    const name = $("#popup-name").val();
+    const status = $("#popup-status").val();
+
+    $.post("/YourController/Save", {
+        id,
+        name,
+        status
+    }, function (res) {
+
+        if (res.success) {
+
+            // 1. 找到真正的那筆資料
+            const table = $("#myTable").DataTable();
+            const row = table
+                .rows()
+                .indexes()
+                .filter((idx) => table.row(idx).data().Id == id);
+
+            if (row.length > 0) {
+                // 2. 更新 DataTable 該行資料
+                const data = table.row(row[0]).data();
+                data.Name = name;
+                data.Status = status;
+
+                table.row(row[0]).data(data).draw(false);
+            }
+
+            $("#popupModal").modal("hide");
+        }
+    });
+}
+
+
+
+
+
+
+
+  
+  updateJSON();
+});
+
+function openPopupRowCol(rowData, colIndex, colName, cellValue) {
+
+    $("#modalRowJson").text(JSON.stringify(rowData, null, 2));
+    $("#modalColIndex").text(colIndex);
+    $("#modalColName").text(colName);
+    $("#modalCellValue").text(cellValue);
+
+    $("#myModal").modal("show");
+}
+
+  function safeId(name){
+  return 'popup_' + String(name).replace(/\W+/g, '_');
+}
+// ============================================
+// ⭐ 依欄位設定，自動產生彈跳視窗內容
+// ============================================
+function openPopupWithRowData(rowData){
+  // 清空
+  $("#popupModalBody").empty();
+
+  // 依 fields 陣列產生 UI（保留欄位順序）
+  fields.forEach(f => {
+    // 只處理 displayEnabled 欄位或你想要全部欄位都顯示可改這裡
+    // if (!f.displayEnabled) return;
+
+    const colName = f.name;
+    const id = safeId(colName);
+    const value = rowData && (colName in rowData) ? rowData[colName] : "";
+
+    let html = `<div class="mb-3">
+                  <label class="form-label">${colName}</label>`;
+
+    if (f.type === 'dropdown'){
+      // 這裡示範簡單選項；若想用動態選項可從 f.options 取值
+      html += `<select class="form-select" id="${id}">
+                 <option value="">請選擇</option>
+                 <option value="A" ${value === 'A' ? 'selected' : ''}>A</option>
+                 <option value="B" ${value === 'B' ? 'selected' : ''}>B</option>
+               </select>`;
+    } else if (f.type === 'checkbox'){
+      html += `<div class="form-check">
+                 <input class="form-check-input" type="checkbox" id="${id}" ${value ? 'checked' : ''}>
+               </div>`;
+    } else if (f.type === 'number'){
+      html += `<input type="number" class="form-control" id="${id}" value="${value}">`;
+    } else {
+      // default -> text
+      // escape value roughly to avoid breaking attributes
+      const escaped = String(value).replace(/"/g, '&quot;');
+      html += `<input type="text" class="form-control" id="${id}" value="${escaped}">`;
+    }
+
+    html += `</div>`;
+    $("#popupModalBody").append(html);
+  });
+
+  // modal 標題
+  const title = $("#txtPopupName").val() || "彈跳視窗";
+  $("#popupModalTitle").text(title);
+
+  // show modal
+  const modalEl = document.getElementById('popupModal');
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+}
+
+
+// --- 同步 DataTable 欄位順序 → JSON ---
+function syncDataTableOrder(){
+$("#btnApply").click();
+}
+
+// 初始化
+loadConfig('default')
+renderFields();
+updateJSON();
+$("#chkHeader, #chkBody, #chkPopup").change(updateJSON);
+$("#txtHeaderName, #txtBodyName, #txtPopupName").on("input", updateJSON);
+</script>
