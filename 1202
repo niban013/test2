@@ -1,0 +1,93 @@
+ [HttpPost]
+ public ActionResult ExportExcel(int year, string type)
+ {
+     //var bytes = ExcelHelper.Export(year, type);
+
+     //Response.ContentType = "application/octet-stream";
+     //Response.AddHeader("Content-Length", bytes.Length.ToString());
+     //Response.AddHeader("Content-Disposition", "attachment; filename=report.xlsx");
+     //Response.OutputStream.Write(bytes, 0, bytes.Length);
+     //Response.Flush();
+     //Response.End();
+     return new EmptyResult();
+ }
+
+   async function streamDownload(id, fileName, url, postData = {}) {
+      try {
+          const res = await fetch(url, {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json"
+              },
+              body: JSON.stringify(postData)
+          });
+          if (!res.ok) throw new Error("下載失敗");
+
+          const contentLength = res.headers.get("Content-Length");
+          const totalSize = contentLength ? parseInt(contentLength, 10) : null;
+
+          const reader = res.body.getReader();
+          const chunks = [];
+          let received = 0;
+          let start = Date.now();
+
+          while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              chunks.push(value);
+              received += value.length;
+
+              // 計算進度
+              let pct = totalSize
+                  ? Math.round((received / totalSize) * 100)
+                  : 0;
+
+              // 計算速度
+              const seconds = (Date.now() - start) / 1000;
+              const bps = received / seconds;
+              let speed = "";
+              if (bps > 1024 * 1024) speed = (bps / 1024 / 1024).toFixed(2) + " MB/s";
+              else if (bps > 1024) speed = (bps / 1024).toFixed(2) + " KB/s";
+              else speed = bps.toFixed(0) + " B/s";
+
+              updateProgress(id, pct, speed);
+          }
+
+          // 下載完成 -> 生成 Blob
+          const blob = new Blob(chunks);
+          const link = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = link;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(link);
+
+          finishItem(id);
+
+      } catch (err) {
+          alert("下載錯誤: " + err.message);
+      }
+  }
+
+  // 對外 API ------------------------------------
+  return {
+      init,
+      addTask(fileName, url, postData = {}) {
+          const id = createItem(fileName);
+          streamDownload(id, fileName, url, postData);
+          return id;
+      }
+  };
+
+    $("#testDownload").on("click", function () {
+      $("#adminlte-footer-box").hide(); // 完全隱藏
+      let fileName = "ESG_Report_2025"
+      DownloadManager.addTask(
+          fileName,
+          `http://localhost:57216/Download/ExportExcel`, { year: 2025, type: "A" }   // POST body
+      );
+      //  addDownloadTask2("ESG_Report_2025");
+  });  
