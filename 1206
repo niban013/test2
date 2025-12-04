@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>ECharts Log Scale 完整範例</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <style>
+        #chart {
+            width: 900px;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="chart"></div>
+
+<script>
+// ======================
+// 1. 假資料（含極端值）
+// ======================
+const rawData = [5, 8, 12, 5000, 15];
+
+// ======================
+// 2. wrap 資料，保留原始值供 tooltip 用
+// ======================
+const data = rawData.map(v => ({
+    value: v,      // Y 軸 log scale 自動處理
+    rawValue: v    // 原始值
+}));
+
+// ======================
+// 3. 初始化圖表
+// ======================
+const chartDom = document.getElementById('chart');
+const myChart = echarts.init(chartDom);
+
+// ======================
+// 4. ECharts Option
+// ======================
+const option = {
+    title: {
+        text: 'Log Scale 柱狀圖（含 tooltip 原始值）'
+    },
+
+    tooltip: {
+        trigger: 'axis',
+        formatter: function (params) {
+            const p = params[0];
+            const raw = p.data.rawValue;
+            const logVal = Math.log10(raw).toFixed(2);
+
+            return `
+<b>${p.name}</b><br/>
+${p.marker} 原始值：${raw}<br/>
+${p.marker} log10(原始值)：${logVal}
+`;
+        }
+    },
+
+    xAxis: {
+        type: 'category',
+        data: rawData.map((_, i) => 'Item ' + (i + 1))
+    },
+
+    yAxis: {
+        type: 'log',
+        logBase: 10,
+        min: 1,  // 避免 log(0)
+        name: 'log scale'
+    },
+
+    series: [{
+        type: 'bar',
+        data: data,
+        barWidth: 40
+    }]
+};
+
+// ======================
+// 5. 顯示圖表
+// ======================
+myChart.setOption(option);
+</script>
+
+</body>
+</html>
