@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Bootstrap 3 Tab 切換範例</title>
+  <!-- Bootstrap 3 CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <link href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+   <!-- AdminLTE CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@2.4.18/dist/css/AdminLTE.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@2.4.18/dist/css/skins/skin-blue.min.css">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- iCheck flat-blue CSS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/iCheck/1.0.3/skins/flat/blue.css" rel="stylesheet">
+
+<!-- 修正版 iCheck（支援 jQuery 3.x） -->
+<script src="https://cdn.jsdelivr.net/gh/fronteed/icheck@master/icheck.min.js"></script>
+
+<!-- Bootstrap 3 JS -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+	<!-- AdminLTE JS -->
+	<script src="https://cdn.jsdelivr.net/npm/admin-lte@2.4.18/dist/js/adminlte.min.js"></script>
+  <style>
+    .tab-content {
+      margin-top: 20px;
+    }
+	      /* 讓內容置中且有基本寬度 */
+        .content-area {
+            max-width: 1400px;
+            margin: 20px auto;
+        }
+
+        /* 一列 6 欄 */
+        #field-container {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            padding: 10px;
+        }
+
+        .field-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        select {
+            padding: 5px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+        }
+    
+   #jsonOutput {
+    white-space: pre-wrap;
+    font-size: 13px;
+  }
+  
+.icheck-field-wrapper {
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.icheck-field-wrapper label {
+    margin-left: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+  .field-wrapper {
+            margin-bottom: 10px;
+        }
+
+        /* checkbox label 底下文字對齊 */
+        .icheck-field {
+            display: flex;
+            align-items: center;
+        }
+        .icheck-field label {
+            margin-left: 8px;
+            cursor: pointer;
+        }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>Bootstrap 3 Tab 範例</h2>
+
+  <!-- Nav tabs -->
+  <ul class="nav nav-tabs" role="tablist">
+    <li class="active"><a href="#home" role="tabpanel" data-toggle="tab">首頁</a></li>
+    <li><a href="#profile" role="tabpanel" data-toggle="tab">個人資料</a></li>
+    <li><a href="#messages" role="tabpanel" data-toggle="tab">訊息</a></li>
+  </ul>
+
+  <!-- Tab panes -->
+  <div class="tab-content">
+    <div class="tab-pane fade in active" id="home">
+     <!-- 🔹下拉設定 -->
+      <div class="mb-3">
+        <label class="form-label">選擇欄位設定</label>
+        <select id="configSelector" class="form-select form-select-sm" style="width:200px;">
+          <option value="default">預設設定</option>
+          <option value="simple">簡易版 (ID + Name)</option>
+          <option value="hr">HR 版本 (Name + Department)</option>
+        </select>
+      </div>
+      <!-- 🔹額外設定 -->
+      <div class="card p-3 mb-3">
+        <h5 class="mb-2">額外設定</h5>
+        <div class="row g-3">
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkHeader" class="form-check-input">
+            <label for="chkHeader" class="form-check-label me-2">表頭啟用</label>
+            <input type="text" id="txtHeaderName" class="form-control form-control-sm w-auto">
+          </div>
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkBody" class="form-check-input">
+            <label for="chkBody" class="form-check-label me-2">表身啟用</label>
+            <input type="text" id="txtBodyName" class="form-control form-control-sm w-auto">
+          </div>
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkPopup" class="form-check-input">
+            <label for="chkPopup" class="form-check-label me-2">彈跳啟用</label>
+            <input type="text" id="txtPopupName" class="form-control form-control-sm w-auto">
+       
+          </div>
+
+        </div>
+      </div>
+
+   
+
+      <!-- 🔹欄位設定表 -->
+      <h5>欄位設定</h5>
+      <table id="fieldTable" class="table table-bordered align-middle table-sm">
+        <thead>
+          <tr class="table-light">
+            <th style="width:50px;">拖曳</th>
+            <th>欄位</th>
+            <th style="width:120px;">型態</th>
+            <th style="width:80px;">搜尋啟用</th>
+            <th style="width:80px;">顯示啟用</th>
+            <th style="width:90px;">排序</th>
+            <th>條件</th>
+            <th style="width:60px;">刪除</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <button id="btnAdd" class="btn btn-outline-primary btn-sm">
+        <i class="fa fa-plus"></i> 新增欄位
+      </button>
+      <button id="btnApply" class="btn btn-success btn-sm">
+        <i class="fa fa-play"></i> 套用設定
+      </button>
+    </div>
+    <div class="tab-pane fade" id="profile">
+    <div class="content-area">
+  
+        <!-- ⭐ 折疊 Panel -->
+        <div class="box box-primary">
+            <div class="box-header with-border">
+                <h3 class="box-title">查詢條件</h3>
+
+                <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="box-body">
+                <div id="field-container"></div>
+            </div>
+        </div>
+
+   
+</div>
+
+<div class="content-area">
+   
+        <!-- ⭐ 折疊 Panel -->
+        <div class="box box-primary">
+            <div class="box-header with-border">
+                <h3 class="box-title">查詢結果</h3>
+
+                <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="box-body">
+               <div class="row">
+					<div class="col-md-12">
+					  <table id="dataTable" class="display w-100"  style="width:100% !important;">
+						<thead><tr></tr></thead>
+						<tbody></tbody>
+					  </table>
+				 
+					</div> 
+			   </div>
+            </div>
+        </div>
+
+    
+</div>
+    </div>
+    <div class="tab-pane fade" id="messages">
+         <h5>查詢結果</h5>
+
+      <div class="row">
+        <div class="col-md-12">
+         <pre id="jsonOutput" class="border p-2 bg-light" style="height:500px; overflow:auto;"></pre>
+        </div>
+
+       
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="popupModal" class="modal fade" tabindex="-1" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title" id="popupModalTitle">彈跳視窗</h4>
+      </div>
+
+      <div class="modal-body" id="popupModalBody">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">關閉</button>
+        <button class="btn btn-primary" id="btnSavePopup">儲存</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+class LargeSelect2 {
+    constructor(selectId, options={}){
+        this.$select = $(`#${selectId}`);
+        this.pageSize = options.pageSize || 50;
+        this.largeData = options.largeData || null;
+        this.url = options.url || null;
+        this.showAllOption = options.showAllOption || false;
+        this.allOptionText = options.allOptionText || "全部";
+
+        const prependAll = (results)=>{
+            if(this.showAllOption && !results.some(r=>r.id==="")){
+                results.unshift({id:"", text:this.allOptionText});
+            }
+            return results;
+        }
+
+        this.$select.select2({
+            placeholder: options.placeholder || "請選",
+            allowClear:true,
+            minimumResultsForSearch:0,
+            ajax: this.largeData || this.url ? {
+                transport: (params, success, failure)=>{
+                    const page = params.data.page || 1;
+                    const term = params.data.q || "";
+
+                    if(this.largeData){
+                        let filtered = this.largeData.filter(x=>x.text.includes(term));
+                        const start=(page-1)*this.pageSize;
+                        const end=start+this.pageSize;
+                        success({
+                            results: prependAll(filtered.slice(start,end)),
+                            pagination:{ more:end<filtered.length }
+                        });
+                    } else if(this.url){
+                        $.ajax({
+                            url: this.url,
+                            dataType:'json',
+                            data:{ q:term, page:page },
+                            success:(data)=>{
+                                success({
+                                    results: prependAll(data.items||data.results||[]),
+                                    pagination:{ more:data.hasMore||false }
+                                });
+                            },
+                            error: failure
+                        });
+                    }
+                },
+                delay:250
+            } : undefined
+        });
+
+        // 初始化時選 ALL
+        if(this.showAllOption){
+            // 這裡選中 ALL，id = ""
+            const initialOption = new Option(this.allOptionText, "", true, true);
+            this.$select.append(initialOption).trigger('change');
+        }
+    }
+
+    getValue(){ return this.$select.val(); }
+
+    onChange(callback){
+        this.$select.on('change', e => callback(e.target.value));
+    }
+}
+ // ============================
+// ✔ ICheckFieldBuilder 工具類
+// ============================
+class ICheckFieldBuilder {
+
+    /**
+     * 動態加入 checkbox (iCheck flat-blue)
+     * @param container DOM 或 jQuery 容器
+     * @param name 欄位名稱（用於顯示 + ID）
+     * @param checked 預設是否勾選
+     */
+    static addCheckbox(container, name, checked = false) {
+        const safeId = `dyn_${name.replace(/\s+/g, '_')}`;
+
+        // 外層 DIV
+        let wrap = document.createElement("div");
+        wrap.className = "icheck-field-wrapper";
+
+        // checkbox input
+        let checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = safeId;
+        checkbox.className = "icheck-flat-blue";
+        if (checked) checkbox.checked = true;
+
+        // label
+        let label = document.createElement("label");
+        label.setAttribute("for", safeId);
+        label.textContent = name;
+
+        // append
+        wrap.appendChild(checkbox);
+        wrap.appendChild(label);
+
+        // 插入容器
+        container.appendChild(wrap);
+
+        // 套用 iCheck
+        $(checkbox).iCheck({
+            checkboxClass: "icheckbox_flat-blue"
+        });
+    }
+}
+
+
+class FieldBuilder {
+
+    /** 產生安全 id */
+    static safeId(name) {
+        return "fld_" + name.replace(/\s+/g, "_");
+    }
+
+    /** === 建立文字框 ================================= */
+    static addText(container, name, value = "") {
+        const id = FieldBuilder.safeId(name);
+
+        const wrap = document.createElement("div");
+        wrap.className = "field-wrapper form-group";
+
+        wrap.innerHTML = `
+            <label class="control-label" for="${id}">${name}</label>
+            <input type="text" id="${id}" class="form-control" value="${value}">
+        `;
+
+        container.appendChild(wrap);
+        return id;
+    }
+	 static addDropdown(container, name, value = "") {
+	 
+	    const id = FieldBuilder.safeId(name);
+
+        const wrap = document.createElement("div");
+	 	wrap.className = "field-item";
+	 
+	 	let label = document.createElement("label");
+			label.textContent = name;
+
+			let select = document.createElement("select");
+			select.setAttribute("id",  `sel${name}`);
+	 
+			wrap.appendChild(label);
+			wrap.appendChild(select); 
+		
+			container.appendChild(wrap);
+			
+				
+				 new LargeSelect2(select.id,{
+				largeData,
+				pageSize:50,
+				showAllOption:true,
+			   allOptionText:"全部選項"
+			});
+	 
+  return id;
+	 
+	 
+	 
+	 }
+    /** === 建立數字框 ================================= */
+    static addNumber(container, name, value = 0) {
+        const id = FieldBuilder.safeId(name);
+
+        const wrap = document.createElement("div");
+        wrap.className = "field-wrapper form-group";
+
+        wrap.innerHTML = `
+            <label class="control-label" for="${id}">${name}</label>
+            <input type="number" id="${id}" class="form-control" value="${value}">
+        `;
+
+        container.appendChild(wrap);
+        return id;
+    }
+
+    /** === 建立 iCheck checkbox（flat-blue） ============= */
+    static addCheckbox(container, name, checked = false) {
+        const id = FieldBuilder.safeId(name);
+
+        const wrap = document.createElement("div");
+        wrap.className = "field-wrapper icheck-field";
+
+        wrap.innerHTML = `
+            <input type="checkbox" id="${id}" ${checked ? "checked" : ""}>
+            <label for="${id}">${name}</label>
+        `;
+
+        container.appendChild(wrap);
+
+        // 套用 iCheck
+        $(`#${id}`).iCheck({
+            checkboxClass: "icheckbox_flat-blue"
+        });
+
+        return id;
+    }
+}
+
+
+let table;
+let fields =[];
+let fields1 =[];
+const allConfigs = [
+  {
+	  key: 'default',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		{ index: 0, name: 'ID', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown',disabled: true },
+		{ index: 1, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'asc', condition: '', type: 'checkbox',disabled: true  },
+		{ index: 2, name: 'Department', searchEnabled: false, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown' },
+		{ index: 3, name: 'HireDate', searchEnabled: true, displayEnabled: true, sort: 'desc', condition: '', type: 'text' },
+	  ] 
+  },
+   {
+	  key: 'simple',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		 { index: 0, name: 'ID', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+         { index: 1, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'asc', condition: '', type: 'text' },
+	  ] 
+  }, 
+   {
+	  key: 'hr',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		   { index: 0, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+          { index: 1, name: 'Department', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown' },
+	  ] 
+  } 
+];
+
+
+let largeData = [];
+for(let i=1;i<=3;i++){
+    largeData.push({id:i, text:`選項 ${i}`});
+}
+// Dropdown options
+//const dropdownOptions = [
+  //  { value: "A", text: "選項 A" },
+    //{ value: "B", text: "選項 B" },
+  //  { value: "C", text: "選項 C" }
+//];
+function getSortIcon(sort) {
+  if (sort === "asc") return '<i class="fa fa-arrow-up"></i>';
+  if (sort === "desc") return '<i class="fa fa-arrow-down"></i>';
+  return '<i class="fa fa-minus"></i>';
+}
+// 產生欄位
+function generateFields() {
+    const container = document.getElementById("field-container");
+document.getElementById("field-container").innerHTML = "";
+    fields1.forEach(item => {
+		  if (item.type === "checkbox") {
+			FieldBuilder.addCheckbox(container, item.name, true);
+
+			}
+    if (item.type === "text") {
+			FieldBuilder.addText(container,  item.name, "Tom");
+			}
+			
+				 if (item.type === "dropdown") {
+			FieldBuilder.addDropdown(container,  item.name, "");		    
+				      			
+	 }
+			   if (item.type === "number") {
+			FieldBuilder.addNumber(container, item.name, true);
+
+			}
+	   
+        
+    });
+}
+function renderFields() {
+  const $tb = $("#fieldTable tbody");
+  $tb.empty();
+  fields.forEach((f, i) => {
+    $tb.append(`
+      <tr data-index="${i}">
+        <td class="text-center cursor-move"><i class="fa fa-bars"></i></td>
+        <td class="editable">${f.name}</td>
+	    <td>
+          <select class="form-select form-select-sm field-type">
+            <option value="text" ${f.type ==='text'? "selected" : ""}>Text</option>
+            <option value="dropdown" ${f.type ==='dropdown'? "selected" : ""}>Dropdown</option>
+            <option value="checkbox" ${f.type ==='checkbox'? "selected" : ""}>Checkbox</option>
+          </select>
+        </td>
+       <td class="text-center">
+          <input type="checkbox" class="form-check-input searchChk" ${f.searchEnabled?"checked":""}>
+        </td>
+        <td class="text-center">
+          <input type="checkbox" class="form-check-input displayChk" ${f.displayEnabled?"checked":""}>
+        </td>
+        <td class="text-center">
+          <button class="btn btn-outline-secondary btn-sm sortBtn" data-sort="${f.sort}">
+            ${getSortIcon(f.sort)}
+          </button>
+        </td>
+        <td><input type="text" class="form-control form-control-sm condInput" value="${f.condition}"></td>
+        <td class="text-center">
+          <button class="btn btn-outline-danger btn-sm delBtn"><i class="fa fa-trash"></i></button>
+        </td>
+      </tr>
+    `);
+  });
+  updateJSON();
+}
+function syncDataTableOrder(){
+	$("#btnApply").click();
+}
+
+function buildColumns(showfields) {
+    const cols = [];
+
+    // 👉 第一欄：動態加入編輯 + 刪除按鈕
+    cols.push({
+        data: null,
+        orderable: false,
+        searchable: false,
+        render: function (data, type, row) {
+            return `
+                <button class="btn btn-xs btn-info edit-btn" data-id="${row.id}">
+                    <i class="fa fa-edit"></i>
+                </button>
+                <button class="btn btn-xs btn-danger delete-btn" data-id="${row.id}">
+                    <i class="fa fa-trash"></i>
+                </button>
+            `;
+        }
+    });
+
+    // 👉 其它欄位動態加入
+    showfields.forEach(f => {
+        cols.push({ data: f.data,title:f.title });
+    });
+
+    return cols;
+}
+
+function generateMockData(fields, rowCount = 10) {
+    const result = [];
+
+    for (let i = 0; i < rowCount; i++) {
+        let row = {};
+
+        fields.forEach(f => {
+            const key = f.name;
+
+            // 自動產生資料依 type
+            switch (f.type) {
+                case "number":
+                    row[key] = Math.floor(Math.random() * 100); // 0-99
+                    break;
+
+                case "dropdown":
+                    if (Array.isArray(f.options) && f.options.length > 0) {
+                        let opt = f.options[Math.floor(Math.random() * f.options.length)];
+                        row[key] = opt.value;
+                    } else {
+                        row[key] = "Option" + (i + 1); // fallback
+                    }
+                    break;
+
+                case "checkbox":
+                    row[key] = Math.random() > 0.5;
+                    break;
+
+                case "date":
+                case "HireDate":
+                    row[key] = randomDate("2020-01-01", "2024-12-31");
+                    break;
+
+                default:
+                    // text
+                    row[key] = key + "_" + (i + 1);
+                    break;
+            }
+        });
+
+        result.push(row);
+    }
+
+    return result;
+}
+
+// 給 date type 使用
+function randomDate(start, end) {
+    const s = new Date(start).getTime();
+    const e = new Date(end).getTime();
+    const d = new Date(s + Math.random() * (e - s));
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+
+
+// 🧩 模擬後端查詢
+function fakeFetchData(filter) {
+  const allData = [
+    { ID: 1, Name: "John", Department: "IT", HireDate: "2020-05-01" },
+    { ID: 2, Name: "Mary", Department: "HR", HireDate: "2019-07-15" },
+    { ID: 3, Name: "Alex", Department: "Sales", HireDate: "2021-03-20" },
+    { ID: 4, Name: "Lisa", Department: "IT", HireDate: "2022-01-05" },
+  ];
+
+  let result = allData;
+  filter.forEach(f => {
+    if (f.condition) result = result.filter(x => String(x[f.name]).includes(f.condition));
+  });
+
+  const sortField = filter.find(f => f.sort !== "none");
+  if (sortField) {
+    result.sort((a, b) =>
+      sortField.sort === "asc"
+        ? a[sortField.name] > b[sortField.name] ? 1 : -1
+        : a[sortField.name] < b[sortField.name] ? 1 : -1
+    );
+  }
+
+  return result;
+}
+
+// ✅ 套用設定（查詢 + DataTable 顯示）
+$("#btnApply").click(() => {
+  const filterFields = fields.filter(f=>f.searchEnabled);
+  const displayFields = fields.filter(f=>f.displayEnabled);
+  const filter = filterFields.map(f => ({
+    name: f.name,
+    condition: f.condition,
+    sort: f.sort
+  }));
+
+ 
+   
+
+  // DataTable order: index + asc/desc
+  const order = [];
+  displayFields.forEach((f, i) => {
+    if (f.sort !== "none") {
+      order.push([i, f.sort]); // [columnIndex, 'asc'|'desc']
+    }
+  }); 
+  
+
+ // const columns = displayFields.map(f => ({ title: f.name, data: f.name }));
+  const _columns = displayFields.map(f => ({ title: f.name, data: f.name }));
+  columns = buildColumns(_columns)
+
+
+
+ columns.forEach(col => {
+        let thContent;
+        if(col.data == null) { 
+	       thContent = ` <button class="btn btn-sm btn-success header-btn" data-col="${col.data}">新增</button>`;
+        }
+		else
+		{
+           thContent = col.data;
+		}
+		   $('#dataTable thead tr').append(`<th class="text-center">${thContent}</th>`);
+		  
+    });
+ 
+// 模擬查詢結果
+  const data = generateMockData(displayFields, 20);
+  //fakeFetchData(filter);
+
+  // ✅ 保證每筆資料都含有目前啟用的欄位（即使 fakeFetchData 沒有）
+  data.forEach(row => {
+    displayFields.forEach(f => {
+      if (!(f.name in row)) row[f.name] = ""; // 加入空欄位
+    });
+  });
+   if ($.fn.DataTable.isDataTable("#dataTable")) {
+    table.clear().destroy();
+    $("#dataTable").empty();
+  }
+  table =$('#dataTable').DataTable({
+    data: data,
+    columns: columns,
+    order: order,       // 🔹 套用排序
+    pageLength: 10,
+    responsive: true, searching: false,  
+    dom:
+    '<"row mb-2"' +
+            
+            '<"col-sm-12 text-right d-flex justify-content-end align-items-center custom-buttons">' +
+        '>' +
+
+    '<"row"<"col-sm-12"tr>>' +                                      // 表格本體
+
+    '<"row mt-2"' +
+        '<"col-sm-5"l>' +                                           // ✔ 左下：Show XX entries
+        '<"col-sm-3"i>' +                                           // 中間：Info
+        '<"col-sm-4"p>' +                                           // 右下：分頁
+    '>'
+,
+ 
+
+    // 🔥 下拉框選項（一定要設定）
+    lengthMenu: [
+        [10, 25, 50, -1],   // 實際值
+        [10, 25, 50, "全部"] // 顯示文字
+    ],
+ // 🔹 表格初始化後注入自訂按鈕
+                initComplete: function () {
+
+                    $(".custom-buttons").html(`
+                        <button id="btnImport" class="btn btn-primary btn-sm mr-2">匯入</button>
+                        <button id="btnExport" class="btn btn-success btn-sm">匯出</button>
+                    `);
+ 
+                }
+  });
+generateFields(); 
+    
+   
+
+
+})
+
+
+ // 2️⃣ 將事件綁定放在 DataTable 外面（事件委派方式）
+            $(document).on("click", "#btnImport", function () {
+                alert("你點擊了『匯入』！");
+            });
+
+            $(document).on("click", "#btnExport", function () {
+                alert("你點擊了『匯出』！");
+            }); 
+   // Header 按鈕事件委派
+    $(document).on("click", ".header-btn", function(){
+        const colName = $(this).data("col");
+		 openPopup("add", null);
+        // 可以在這裡新增列或其他操作
+    });
+
+
+
+
+// 更新 JSON
+function updateJSON() {
+
+const key = $("#configSelector").val(); 
+ const extraSetting = {
+    header: {
+      enabled: $("#chkHeader").prop("checked"),
+      name: $("#txtHeaderName").val()
+    },
+    body: {
+      enabled: $("#chkBody").prop("checked"),
+      name: $("#txtBodyName").val()
+    },
+    popup: {
+      enabled: $("#chkPopup").prop("checked"),
+      name: $("#txtPopupName").val()
+    }
+  };
+  const fieldSetting = fields.map(f => ({
+    index: f.index,
+    name: f.name,
+    type: f.type,
+    searchEnabled: f.searchEnabled,
+    displayEnabled: f.displayEnabled,
+    sort: f.sort,
+    condition: f.condition
+  }));
+  const singleConfig  = {
+    key: key,               // ← 你要的識別 key
+    extra: extraSetting,
+    fields: fieldSetting
+  };
+
+
+	const idx = allConfigs.findIndex(x => x.key === key);
+
+	if (idx >= 0) {
+		allConfigs[idx] = singleConfig;  // 覆蓋
+	} else {
+		allConfigs.push(singleConfig);   // 新增
+	}
+syncDataTableOrder()
+  $("#jsonOutput").text(JSON.stringify(singleConfig, null, 2));
+}
+function loadConfig(key) {
+    const cfg = allConfigs.find(x => x.key === key);
+    if (!cfg) return;
+
+    // 套用 extra
+    $("#chkHeader").prop("checked", cfg.extra.header.enabled);
+    $("#txtHeaderName").val(cfg.extra.header.name);
+
+    $("#chkBody").prop("checked", cfg.extra.body.enabled);
+    $("#txtBodyName").val(cfg.extra.body.name);
+
+    $("#chkPopup").prop("checked", cfg.extra.popup.enabled);
+    $("#txtPopupName").val(cfg.extra.popup.name);
+
+    // 套用 fields
+    fields = cfg.fields.map(f => ({ ...f }));
+	
+    fields1 = cfg.fields.filter(p=>p.searchEnabled==true).map(f => ({ ...f }));
+	generateFields(); 
+    renderFields();
+    syncDataTableOrder();
+}
+
+$("#configSelector").change(function () {
+  const key = $(this).val(); 
+  loadConfig(key) 
+});
+// ✅ 拖曳排序（保持資料正確）
+new Sortable(document.querySelector("#fieldTable tbody"), {
+  handle: ".cursor-move",
+  animation: 150,
+  onEnd: e => {
+    const moved = fields.splice(e.oldIndex, 1)[0];
+    fields.splice(e.newIndex, 0, moved);
+     // 更新 index
+    fields.forEach((f, i) => f.index = i);
+    renderFields();
+    syncDataTableOrder(); // 🔹 同步 DataTable 欄位順序
+  }
+});
+// ✅ 雙擊編輯欄位名稱
+$(document).on("dblclick", ".editable", function() {
+  const $td = $(this);
+  const oldText = $td.text().trim();
+  $td.html(`<input type="text" class="form-control form-control-sm editInput" value="${oldText}"/>`);
+  $td.find("input").focus().select();
+});
+
+// ✅ 編輯結束（防重名與空值）
+$(document).on("blur", ".editInput", function() {
+  const $input = $(this);
+  const newText = $input.val().trim();
+  const $td = $input.closest("td");
+  const idx = $td.closest("tr").data("index");
+  const oldText = fields[idx].name;
+
+  // 檢查重名或空值
+  const exists = fields.some((f, i) => i !== idx && f.name.toLowerCase() === newText.toLowerCase());
+  if (!newText) {
+    alert("欄位名稱不可為空！");
+    $td.text(oldText);
+  } else if (exists) {
+    alert(`欄位名稱「${newText}」已存在！`);
+    $td.text(oldText);
+  } else {
+    fields[idx].name = newText;
+    $td.text(newText);
+  }
+  
+  updateJSON();
+})
+
+$(document).on("keypress", ".editInput", function(e) {
+  if (e.which === 13) $(this).blur();
+});
+
+// 型態變更
+$(document).on("change", ".field-type", function(){
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].type = $(this).val();
+  updateJSON();
+});
+
+// ✅ 排序切換
+$(document).on("click", ".sortBtn", function() {
+  const $btn = $(this);
+  const idx = $btn.closest("tr").data("index");
+  const cur = fields[idx].sort;
+  const next = cur === "none" ? "asc" : cur === "asc" ? "desc" : "none";
+  fields[idx].sort = next;
+  $btn.html(getSortIcon(next)).attr("data-sort", next);
+  updateJSON();
+});
+
+// 搜尋啟用
+$(document).on("click", ".searchChk", function(){
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].searchEnabled = this.checked;
+  updateJSON();
+});
+
+// 顯示啟用
+$(document).on("click", ".displayChk", function(){
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].displayEnabled = this.checked;
+  updateJSON();
+});
+
+
+// ✅ 條件輸入
+$(document).on("input", ".condInput", function() {
+  const idx = $(this).closest("tr").data("index");
+  fields[idx].condition = $(this).val();
+  updateJSON();
+});
+// ✅ 新增欄位
+$("#btnAdd").click(() => {
+  let idx = 1;
+  let newName;
+  do {
+    newName = "NewField" + idx++;
+  } while (fields.some(f => f.name === newName));
+
+  fields.push({ index: fields.length, name: newName, searchEnabled: true, displayEnabled: true, sort: "none", condition: "", type: "text" });
+  renderFields();
+  syncDataTableOrder();
+});
+
+// ✅ 刪除列
+$(document).on("click", ".delBtn", function() {
+  const idx = $(this).closest("tr").data("index");
+  fields.splice(idx, 1);
+  // 更新 index
+  fields.forEach((f, i) => f.index = i);
+  renderFields();
+  syncDataTableOrder();
+});
+function safeId(name){
+  return 'popup_' + String(name).replace(/\W+/g, '_');
+}
+/**
+ * mode = "add" | "edit"
+ * rowData = 編輯時帶入資料，新增時可傳 null
+ */
+function openPopup(mode, rowData) {
+
+    // 強制 rowData 是物件，避免 undefined
+    rowData = rowData || {};
+
+    // 清除內容
+    $("#popupModalBody").empty();
+
+    fields.forEach(f => {
+        const colName = f.name;
+        const id = safeId(colName);
+
+        // 新增 = 空值，編輯 = rowData 值
+        const value = (mode === "edit" && rowData[colName] !== undefined)
+            ? rowData[colName]
+            : "";
+
+        let html = `<div class="form-group">
+                      <label class="control-label">${colName}</label>`;
+
+        // 下拉選單
+        if (f.type === 'dropdown') { 
+            html += `<select id="${id}" ${f.disabled ? "disabled" : ""}>`;
+
+            html += `</select>`;
+			
+			 new LargeSelect2( `${id} `,{
+    largeData,
+    pageSize:50,
+    showAllOption:true,
+   allOptionText:"全部選項"
+});
+        }
+
+        // checkbox
+        else if (f.type === 'checkbox') {
+            html += `<div class="checkbox">
+                       <label>
+                         <input type="checkbox" id="${id}" ${value ? "checked" : ""} ${f.disabled ? "disabled" : ""}>
+                         ${f.text || "勾選"}
+                       </label>
+                     </div>`;
+        }
+
+        // number
+        else if (f.type === 'number') {
+            html += `<input type="number" class="form-control" id="${id}" value="${value}" ${f.disabled ? "disabled" : ""}>`;
+        }
+
+        // text / default
+        else {
+            const escaped = String(value).replace(/"/g, "&quot;");
+            html += `<input type="text" class="form-control" id="${id}" value="${escaped}" ${f.disabled ? "disabled" : ""}>`;
+        }
+
+        html += `</div>`;
+        $("#popupModalBody").append(html);
+    });
+
+    // ====== 設定標題 ======
+    if (mode === "add") {
+        $("#popupModalTitle").text("新增資料");
+    } else {
+        $("#popupModalTitle").text("編輯資料");
+    }
+
+    // ====== 設定模式 ======
+    $("#popupModal").data("mode", mode);
+
+    // 顯示
+    $("#popupModal").modal("show");
+}
+$("#btnSavePopup").click(function () {
+    const mode = $("#popupModal").data("mode");
+    let obj = {};
+
+    fields.forEach(f => {
+        const id = safeId(f.name);
+
+        if (f.type === "checkbox") {
+            obj[f.name] = $("#" + id).is(":checked");
+        } else {
+            obj[f.name] = $("#" + id).val();
+        }
+    });
+
+    if (mode === "add") {
+        console.log("新增資料", obj);
+        // 呼叫 API 新增
+    } else {
+        console.log("編輯資料", obj);
+        // 呼叫 API 更新
+    }
+
+    $("#popupModal").modal("hide");
+});
+
+// 編輯
+$(document).on("click", ".edit-btn", function () {
+
+  const row = table.row($(this).closest("tr")).data();
+   openPopup("edit", row);
+ 
+ 
+});
+
+// 初始化
+loadConfig('default')
+renderFields();
+updateJSON();
+$("#chkHeader, #chkBody, #chkPopup").change(updateJSON);
+$("#txtHeaderName, #txtBodyName, #txtPopupName").on("input", updateJSON);
+</script>
+</body>
+</html>
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Bootstrap 3 Tab 切換範例</title>
+  <!-- Bootstrap 3 CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <link href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+   <!-- AdminLTE CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@2.4.18/dist/css/AdminLTE.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@2.4.18/dist/css/skins/skin-blue.min.css">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- iCheck flat-blue CSS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/iCheck/1.0.3/skins/flat/blue.css" rel="stylesheet">
+
+<!-- 修正版 iCheck（支援 jQuery 3.x） -->
+<script src="https://cdn.jsdelivr.net/gh/fronteed/icheck@master/icheck.min.js"></script>
+
+<!-- Bootstrap 3 JS -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+	<!-- AdminLTE JS -->
+	<script src="https://cdn.jsdelivr.net/npm/admin-lte@2.4.18/dist/js/adminlte.min.js"></script>
+  <style>
+    .tab-content {
+      margin-top: 20px;
+    }
+	      /* 讓內容置中且有基本寬度 */
+        .content-area {
+            max-width: 1400px;
+            margin: 20px auto;
+        }
+
+        /* 一列 6 欄 */
+        #field-container {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            padding: 10px;
+        }
+
+        .field-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        select {
+            padding: 5px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+        }
+    
+   #jsonOutput {
+    white-space: pre-wrap;
+    font-size: 13px;
+  }
+  
+.icheck-field-wrapper {
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.icheck-field-wrapper label {
+    margin-left: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+  .field-wrapper {
+            margin-bottom: 10px;
+        }
+
+        /* checkbox label 底下文字對齊 */
+        .icheck-field {
+            display: flex;
+            align-items: center;
+        }
+        .icheck-field label {
+            margin-left: 8px;
+            cursor: pointer;
+        }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>Bootstrap 3 Tab 範例</h2>
+
+  <!-- Nav tabs -->
+  <ul class="nav nav-tabs" role="tablist">
+    <li class="active"><a href="#home" role="tabpanel" data-toggle="tab">首頁</a></li>
+    <li><a href="#profile" role="tabpanel" data-toggle="tab">個人資料</a></li>
+    <li><a href="#messages" role="tabpanel" data-toggle="tab">訊息</a></li>
+  </ul>
+
+  <!-- Tab panes -->
+  <div class="tab-content">
+    <div class="tab-pane fade in active" id="home">
+     <!-- 🔹下拉設定 -->
+      <div class="mb-3">
+        <label class="form-label">選擇欄位設定</label>
+        <select id="configSelector" class="form-select form-select-sm" style="width:200px;">
+          <option value="default">預設設定</option>
+          <option value="simple">簡易版 (ID + Name)</option>
+          <option value="hr">HR 版本 (Name + Department)</option>
+        </select>
+      </div>
+      <!-- 🔹額外設定 -->
+      <div class="card p-3 mb-3">
+        <h5 class="mb-2">額外設定</h5>
+        <div class="row g-3">
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkHeader" class="form-check-input">
+            <label for="chkHeader" class="form-check-label me-2">表頭啟用</label>
+            <input type="text" id="txtHeaderName" class="form-control form-control-sm w-auto">
+          </div>
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkBody" class="form-check-input">
+            <label for="chkBody" class="form-check-label me-2">表身啟用</label>
+            <input type="text" id="txtBodyName" class="form-control form-control-sm w-auto">
+          </div>
+
+          <div class="col-12 d-flex align-items-center gap-2">
+            <input type="checkbox" id="chkPopup" class="form-check-input">
+            <label for="chkPopup" class="form-check-label me-2">彈跳啟用</label>
+            <input type="text" id="txtPopupName" class="form-control form-control-sm w-auto">
+       
+          </div>
+
+        </div>
+      </div>
+
+   
+
+      <!-- 🔹欄位設定表 -->
+      <h5>欄位設定</h5>
+      <table id="fieldTable" class="table table-bordered align-middle table-sm">
+        <thead>
+          <tr class="table-light">
+            <th style="width:50px;">拖曳</th>
+            <th>欄位</th>
+            <th style="width:120px;">型態</th>
+            <th style="width:80px;">搜尋啟用</th>
+            <th style="width:80px;">顯示啟用</th>
+            <th style="width:90px;">排序</th>
+            <th>條件</th>
+            <th style="width:60px;">刪除</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <button id="btnAdd" class="btn btn-outline-primary btn-sm">
+        <i class="fa fa-plus"></i> 新增欄位
+      </button>
+      <button id="btnApply" class="btn btn-success btn-sm">
+        <i class="fa fa-play"></i> 套用設定
+      </button>
+    </div>
+    <div class="tab-pane fade" id="profile">
+    <div class="content-area">
+  
+        <!-- ⭐ 折疊 Panel -->
+        <div class="box box-primary">
+            <div class="box-header with-border">
+                <h3 class="box-title">查詢條件</h3>
+
+                <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="box-body">
+                <div id="field-container"></div>
+            </div>
+        </div>
+
+   
+</div>
+
+<div class="content-area">
+   
+        <!-- ⭐ 折疊 Panel -->
+        <div class="box box-primary">
+            <div class="box-header with-border">
+                <h3 class="box-title">查詢結果</h3>
+
+                <div class="box-tools pull-right">
+                    <button class="btn btn-box-tool" data-widget="collapse">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="box-body">
+               <div class="row">
+					<div class="col-md-12">
+					  <table id="dataTable" class="display w-100"  style="width:100% !important;">
+						<thead><tr></tr></thead>
+						<tbody></tbody>
+					  </table>
+				 
+					</div> 
+			   </div>
+            </div>
+        </div>
+
+    
+</div>
+    </div>
+    <div class="tab-pane fade" id="messages">
+         <h5>查詢結果</h5>
+
+      <div class="row">
+        <div class="col-md-12">
+         <pre id="jsonOutput" class="border p-2 bg-light" style="height:500px; overflow:auto;"></pre>
+        </div>
+
+       
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="popupModal" class="modal fade" tabindex="-1" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title" id="popupModalTitle">彈跳視窗</h4>
+      </div>
+
+      <div class="modal-body" id="popupModalBody">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">關閉</button>
+        <button class="btn btn-primary" id="btnSavePopup">儲存</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/******************************************************************
+ *  LargeSelect2 - 大量下拉選單
+ ******************************************************************/
+class LargeSelect2 {
+    constructor(selectId, options = {}) {
+        this.$select = $(`#${selectId}`);
+        this.pageSize = options.pageSize || 50;
+        this.largeData = options.largeData || null;
+        this.url = options.url || null;
+        this.showAllOption = options.showAllOption || false;
+        this.allOptionText = options.allOptionText || "全部";
+
+        const prependAll = (results) => {
+            if (this.showAllOption && !results.some(r => r.id === "")) {
+                results.unshift({ id: "", text: this.allOptionText });
+            }
+            return results;
+        };
+
+        this.$select.select2({
+            placeholder: options.placeholder || "請選",
+            allowClear: true,
+            minimumResultsForSearch: 0,
+            ajax: this.largeData || this.url ? {
+                transport: (params, success, failure) => {
+                    const page = params.data.page || 1;
+                    const term = params.data.q || "";
+
+                    if (this.largeData) {
+                        let filtered = this.largeData.filter(x => x.text.includes(term));
+                        const start = (page - 1) * this.pageSize;
+                        const end = start + this.pageSize;
+
+                        success({
+                            results: prependAll(filtered.slice(start, end)),
+                            pagination: { more: end < filtered.length }
+                        });
+                    }
+                    else if (this.url) {
+                        $.ajax({
+                            url: this.url,
+                            dataType: 'json',
+                            data: { q: term, page: page },
+                            success: data => {
+                                success({
+                                    results: prependAll(data.items || data.results || []),
+                                    pagination: { more: data.hasMore || false }
+                                });
+                            },
+                            error: failure
+                        });
+                    }
+                },
+                delay: 250
+            } : undefined
+        });
+
+        if (this.showAllOption) {
+            const initial = new Option(this.allOptionText, "", true, true);
+            this.$select.append(initial).trigger("change");
+        }
+    }
+
+    getValue() {
+        return this.$select.val();
+    }
+}
+
+/******************************************************************
+ *  ICheckFieldBuilder - 產生 iCheck Checkbox
+ ******************************************************************/
+class ICheckFieldBuilder {
+    static add(container, name, checked = false) {
+        const safeId = `chk_${name.replace(/\s+/g, "_")}`;
+
+        let wrap = document.createElement("div");
+        wrap.className = "icheck-field-wrapper";
+
+        let cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.id = safeId;
+        cb.checked = checked;
+
+        let label = document.createElement("label");
+        label.setAttribute("for", safeId);
+        label.textContent = name;
+
+        wrap.appendChild(cb);
+        wrap.appendChild(label);
+
+        container.appendChild(wrap);
+
+        $(cb).iCheck({
+            checkboxClass: "icheckbox_flat-blue"
+        });
+
+        return safeId;
+    }
+}
+
+/******************************************************************
+ *  FieldBuilder - 產生 Text/Number/Dropdown/Checkbox
+ ******************************************************************/
+class FieldBuilder {
+    static safeId(name) {
+        return "fld_" + name.replace(/\s+/g, "_");
+    }
+
+    static addText(container, name, value = "") {
+        const id = this.safeId(name);
+        container.innerHTML += `
+            <div class="field-wrapper form-group">
+                <label>${name}</label>
+                <input id="${id}" type="text" class="form-control" value="${value}">
+            </div>`;
+        return id;
+    }
+
+    static addNumber(container, name, value = 0) {
+        const id = this.safeId(name);
+        container.innerHTML += `
+            <div class="field-wrapper form-group">
+                <label>${name}</label>
+                <input id="${id}" type="number" class="form-control" value="${value}">
+            </div>`;
+        return id;
+    }
+
+    static addCheckbox(container, name, checked = false) {
+        return ICheckFieldBuilder.add(container, name, checked);
+    }
+
+    static addDropdown(container, name, options = {}) {
+        const id = this.safeId(name);
+        const wrap = document.createElement("div");
+        wrap.className = "field-item";
+
+        wrap.innerHTML = `
+            <label>${name}</label>
+            <select id="${id}"></select>
+        `;
+        container.appendChild(wrap);
+
+        new LargeSelect2(id, {
+            largeData: options.largeData || [],
+            showAllOption: true
+        });
+
+        return id;
+    }
+}
+
+/******************************************************************
+ * ConfigManager – 管理 default/simple/hr 版本
+ ******************************************************************/
+class ConfigManager {
+    constructor(configs) {
+        this.configs = configs;
+    }
+
+    getConfig(key) {
+        return this.configs.find(c => c.key === key);
+    }
+}
+
+/******************************************************************
+ * FieldTableManager – 管理欄位設定表（你的表格）
+ ******************************************************************/
+class FieldTableManager {
+    constructor(tableId) {
+        this.tableId = tableId;
+        this.fields = [];
+    }
+
+    loadFields(newFields) {
+        this.fields = JSON.parse(JSON.stringify(newFields));
+        this.render();
+    }
+
+    render() {
+        const $tb = $(`${this.tableId} tbody`);
+        $tb.empty();
+
+        this.fields.forEach((f, i) => {
+            $tb.append(`
+                <tr data-i="${i}">
+                    <td><i class="fa fa-bars cursor-move"></i></td>
+                    <td>${f.name}</td>
+                    <td>
+                        <select class="field-type">
+                            <option value="text" ${f.type === 'text' ? "selected" : ""}>Text</option>
+                            <option value="dropdown" ${f.type === 'dropdown' ? "selected" : ""}>Dropdown</option>
+                            <option value="checkbox" ${f.type === 'checkbox' ? "selected" : ""}>Checkbox</option>
+                        </select>
+                    </td>
+                    <td><input type="checkbox" class="searchChk" ${f.searchEnabled ? "checked" : ""}></td>
+                    <td><input type="checkbox" class="displayChk" ${f.displayEnabled ? "checked" : ""}></td>
+                    <td><button class="sortBtn btn btn-sm btn-default" data-sort="${f.sort}">${this.sortIcon(f.sort)}</button></td>
+                    <td><input class="condInput form-control" value="${f.condition || ""}"></td>
+                    <td><button class="delBtn btn btn-danger btn-sm"><i class="fa fa-trash"></i></button></td>
+                </tr>
+            `);
+        });
+    }
+
+    sortIcon(sort) {
+        if (sort === "asc") return `<i class="fa fa-arrow-up"></i>`;
+        if (sort === "desc") return `<i class="fa fa-arrow-down"></i>`;
+        return `<i class="fa fa-minus"></i>`;
+    }
+}
+
+/******************************************************************
+ * DynamicFormRenderer - 產生 Profile tab 裡的查詢條件欄位
+ ******************************************************************/
+class DynamicFormRenderer {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+    }
+
+    render(fields) {
+        this.container.innerHTML = "";
+        fields.forEach(f => {
+            switch (f.type) {
+                case "text": FieldBuilder.addText(this.container, f.name); break;
+                case "number": FieldBuilder.addNumber(this.container, f.name); break;
+                case "checkbox": FieldBuilder.addCheckbox(this.container, f.name); break;
+                case "dropdown": FieldBuilder.addDropdown(this.container, f.name, { largeData }); break;
+            }
+        });
+    }
+}
+const allConfigs = [
+  {
+	  key: 'default',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		{ index: 0, name: 'ID', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown',disabled: true },
+		{ index: 1, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'asc', condition: '', type: 'checkbox',disabled: true  },
+		{ index: 2, name: 'Department', searchEnabled: false, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown' },
+		{ index: 3, name: 'HireDate', searchEnabled: true, displayEnabled: true, sort: 'desc', condition: '', type: 'text' },
+	  ] 
+  },
+   {
+	  key: 'simple',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		 { index: 0, name: 'ID', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+         { index: 1, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'asc', condition: '', type: 'text' },
+	  ] 
+  }, 
+   {
+	  key: 'hr',
+	  extra: {
+		header: {
+		  enabled: false,
+		  name: ''
+		},
+		body: {
+		 enabled: false,
+		  name: ''
+		},
+		popup: {
+		  enabled: true,
+		  name: ''
+		}
+	  },
+	  fields: [
+		   { index: 0, name: 'Name', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'text' },
+          { index: 1, name: 'Department', searchEnabled: true, displayEnabled: true, sort: 'none', condition: '', type: 'dropdown' },
+	  ] 
+  } 
+];
+
+let largeData = [];
+for(let i=1;i<=3;i++){
+    largeData.push({id:i, text:`選項 ${i}`});
+}
+/******************************************************************
+ * App – 總控制器
+ ******************************************************************/
+class App {
+    constructor() {
+        this.configManager = new ConfigManager(allConfigs);
+        this.tableMgr = new FieldTableManager("#fieldTable");
+        this.dynamicRenderer = new DynamicFormRenderer("field-container");
+
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        $("#configSelector").on("change", () => this.applyConfig());
+        $("#btnAdd").on("click", () => this.addField());
+    }
+
+    applyConfig() {
+        const config = this.configManager.getConfig($("#configSelector").val());
+        this.tableMgr.loadFields(config.fields);
+        this.dynamicRenderer.render(config.fields);
+    }
+
+    addField() {
+        this.tableMgr.fields.push({
+            name: "NewField",
+            type: "text",
+            searchEnabled: false,
+            displayEnabled: true,
+            sort: "none",
+            condition: ""
+        });
+        this.tableMgr.render();
+    }
+}
+
+/******************************************************************
+ * 初始化
+ ******************************************************************/
+$(document).ready(() => {
+    window.app = new App();
+    app.applyConfig();
+});
+
+</script>
+</body>
+</html>
+
