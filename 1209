@@ -1,0 +1,62 @@
+doc.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    let value = dict[key] || "";
+
+    // 處理帶參數的語系字串
+    const params = el.getAttribute("data-i18n-args");
+    if (params) {
+        try {
+            const arr = JSON.parse(params);
+            arr.forEach((v, i) => {
+                value = value.replace(`{${i}}`, v);
+            });
+        } catch (e) { }
+    }
+
+    // ⭐ 更新元素文字
+    if (el.textContent.trim() !== value) {
+        if ($(el).is("input,button")) {
+            $(el).val(value).text(value);
+        } else {
+            $(el).html(value);
+        }
+    }
+
+    // ⭐⭐⭐ 新增：支援 Bootstrap 3 Tooltip
+    if (el.hasAttribute("data-i18n-tooltip")) {
+        const tipKey = el.getAttribute("data-i18n-tooltip");
+        let tooltipValue = dict[tipKey] || "";
+
+        const tipArgs = el.getAttribute("data-i18n-tooltip-args");
+        if (tipArgs) {
+            try {
+                const arr = JSON.parse(tipArgs);
+                arr.forEach((v, i) => {
+                    tooltipValue = tooltipValue.replace(`{${i}}`, v);
+                });
+            } catch (e) { }
+        }
+
+        // 設定 Bootstrap 3 Tooltip 文字
+        el.setAttribute("title", tooltipValue);
+        el.setAttribute("data-original-title", tooltipValue);
+
+        // 如果 tooltip 已初始化 → 需重新載入
+        const $el = $(el);
+        if ($el.data("tooltip")) {
+            $el.tooltip("destroy");
+        }
+
+        // 若有 data-toggle="tooltip" → 自動啟動
+        if (el.getAttribute("data-toggle") === "tooltip") {
+            $el.tooltip();
+        }
+    }
+});
+
+<button 
+    data-i18n="btn_save"
+    data-i18n-tooltip="tip_save"
+    data-toggle="tooltip"
+    title=""
+>
