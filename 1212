@@ -1,0 +1,102 @@
+
+    apply(target) {
+      if (!this.ready) return;
+      const $target = $(target || document);
+      $target.find("[data-i18n]").each((_, el) => {
+        const $el = $(el);
+        const key = $el.attr("data-i18n");
+        const argsAttr = $el.attr("data-i18n-args"); // 可選，逗號分隔
+        let args = [];
+        if (argsAttr) {
+          args = argsAttr.split(",").map(s => s.trim());
+        }
+          const value = this.t(key, ...args);
+          if (el.textContent.trim() !== value) {
+              if ($(el).is("input,button")) {
+                  $(el).val(value).text(value);
+              } else {
+                  $(el).html(value); 
+                //  alert($(el).innerHTML)
+              }
+          }
+      });
+    },
+
+
+    _translateIframe(doc) {
+    if (!window.i18n || !i18n.data) return;
+    if (!doc) return;
+    window.i18n.apply(doc)
+}
+
+
+const i18n = {
+  data: {},
+  ready: false,
+
+  // ⭐ 巢狀 key 解析
+  t(key, ...args) {
+    const keys = key.split(".");
+    let val = this.data;
+
+    for (const k of keys) {
+      val = val?.[k];
+      if (val === undefined) return key;
+    }
+
+    if (typeof val === "string" && args.length > 0) {
+      val = val.replace(/\{(\d+)\}/g, (_, index) => args[index] ?? _);
+    }
+
+    return val;
+  },
+
+  // ⭐ 套用到普通 DOM
+  apply(target) {
+    if (!this.ready) return;
+    const root = target || document;
+
+    root.querySelectorAll("[data-i18n]").forEach(el => {
+      this.#applyToEl(el);
+    });
+  },
+
+  // ⭐ 套用到 iframe
+  applyTo(doc) {
+    if (!this.ready || !doc) return;
+
+    doc.querySelectorAll("[data-i18n]").forEach(el => {
+      this.#applyToEl(el);
+    });
+  },
+
+  // ⭐ 內部共用方法
+  #applyToEl(el) {
+    const key = el.getAttribute("data-i18n");
+
+    // 解析參數：支援 JSON / 逗號
+    let args = [];
+    const argStr = el.getAttribute("data-i18n-args");
+    if (argStr) {
+      try {
+        args = JSON.parse(argStr);
+        if (!Array.isArray(args)) throw "";
+      } catch {
+        args = argStr.split(",").map(s => s.trim());
+      }
+    }
+
+    // ⭐ 使用 t()
+    const value = this.t(key, ...args);
+
+    // ⭐ 避免重複更新
+    if (el.textContent.trim() === value) return;
+
+    if (el.matches("input,button")) {
+      el.value = value;
+      el.textContent = value;
+    } else {
+      el.innerHTML = value;
+    }
+  }
+};
