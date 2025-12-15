@@ -1,0 +1,101 @@
+<!-- ① jQuery（一定要在前） -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- ② DataTables 2.3.5 -->
+<link rel="stylesheet"
+      href="https://cdn.datatables.net/2.3.5/css/dataTables.dataTables.min.css">
+<script src="https://cdn.datatables.net/2.3.5/js/dataTables.min.js"></script>
+<style>
+    .dt-scroll-body thead {
+        visibility: hidden;
+    }
+    </style>
+<table id="demo"></table>
+
+<script>
+
+    const schema = [
+        { field: 'id', title: 'ID' },
+        { field: 'name', title: 'Name cc' },
+        { field: 'age', title: 'Age' }
+    ];
+
+    let theadHtml = '<thead><tr>';
+
+    schema.forEach(c => {
+        let t1= c.title.toLowerCase();
+        theadHtml += `<th data-field="${c.field}" data-i18n="${c.title.toLowerCase() || ''}">${c.title}</th>`;
+    });
+
+    theadHtml += '</tr></thead>';
+
+    const tableEl = document.getElementById('demo');
+    tableEl.insertAdjacentHTML('afterbegin', theadHtml);
+    const rows = [
+        { id: 1, name: 'Tom', age: 18 },
+        { id: 2, name: 'Mary', age: 25 }
+    ];
+
+
+    const columns = schema.map(c => ({
+        title: c.title, // 加上 title 避免空白 row
+        data: c.field
+    }));
+    //document.querySelectorAll('.dt-column-header').forEach(el => el.remove());
+
+    const table = new DataTable('#demo', {
+        scrollY: 200,
+        data: rows,
+        columns
+    });
+
+    setTimeout(() => table.columns.adjust(), 100);
+
+    tableEl._dataTableInstance = table;
+
+    tableEl.setAttribute('data-dt-schema', null);
+    //if (parent.i18n && typeof parent.i18n.onChange === 'function') {
+    //    parent.i18n.onChange(lang => {
+    //        //// 更新 thead
+    //        //const ths = tableEl.querySelectorAll('thead th');
+    //        //ths.forEach((th, idx) => {
+    //        //    th.textContent = parent.i18n.t(schema[idx].i18nKey);
+    //        //});
+
+    //        //// 更新 DataTable header
+    //        //Array.from(table.columns().header).forEach((th, idx) => {
+    //        //    th.textContent = parent.i18n.t(schema[idx].i18nKey);
+    //        //});
+
+    //        // 調整欄寬
+    //        table.columns.adjust();
+    //    });
+    //}
+
+    //// 綁定 i18n 變化監聽
+    //window.parent.i18n.onChange(lang => {
+    //    updateDataTableLang(table, schema, lang);
+    //});
+
+
+    //function updateDataTableLang(table, schema, lang) {
+    //    // 更新 i18n 資料
+    //    //window.parent.i18n.load(lang).then(() => {
+    //        // 更新 <thead> 文字
+    //        //$('#demo thead th').each((idx, th) => {
+    //        //    $(th).text(window.parent.i18n.t(schema[idx].title.toLowerCase()));
+    //        //});
+    //        //Array.from(table.columns().header).forEach((th, idx) => {
+    //        //    th.textContent = i18n.t(schema[idx].title.toLowerCase());
+    //        //});
+    //        // 更新 DataTable header
+    //        //table.columns().header().forEach((th, idx) => {
+    //        //    $(th).text(window.parent.i18n.t(schema[idx].title.toLowerCase()));
+    //        //});
+
+    //        // 調整欄寬，避免 scrollBody 空白 row
+    //        table.columns.adjust();
+    //    //});
+    //}
+
+</script>
