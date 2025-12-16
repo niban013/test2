@@ -1,0 +1,55 @@
+ apply(target) {
+   if (!this.ready) return;
+   const $target = $(target || document);
+   $target.find("[data-i18n]").each((_, el) => {
+     const $el = $(el);
+     const key = $el.attr("data-i18n");
+     const argsAttr = $el.attr("data-i18n-args"); // 可選，逗號分隔
+     let args = [];
+     if (argsAttr) {
+       args = argsAttr.split(",").map(s => s.trim());
+     }
+     const value = this.t(key, ...args);
+     if (el.textContent.trim() !== value) {
+         if ($(el).is("input,button")) {
+             $(el).val(value).text(value);
+         } else {
+             $(el).html(value); 
+         //  alert($(el).innerHTML)
+         }
+     }
+      
+
+       // 🔹 Tooltip 翻譯（AdminLTE 專用）
+       $target.find("[data-i18n-tooltip]").each((_, el) => {
+           const $el = $(el);
+           const key = el.getAttribute("data-i18n-tooltip");
+           if (!key) return;
+
+           const tooltipText = this.t(key);
+
+           // 設定 title
+           el.setAttribute("title", tooltipText);
+
+           // tooltip 需要重新初始化 
+           if ($el.data("tooltip")) {
+               $el.tooltip("destroy");
+           }
+           if (el.getAttribute("data-toggle") === "tooltip") {
+               $el.tooltip({
+                   container: "body",
+                   placement: "right",
+                   trigger: "hover"
+               });
+           }
+       });
+
+   });
+ },
+ <li>
+     <a href="#" data-target="Portal/TestSuccess"  data-i18n-tooltip="greeting">
+         <span class="glyphicon glyphicon-globe"></span>
+         <span class="text" data-i18n="menu">z22</span>
+     </a>
+ </li>
+ 
