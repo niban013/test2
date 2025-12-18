@@ -1,0 +1,524 @@
+window.DtI18n = (function () {
+
+    function applyLanguage(options = {}) {
+        return {
+            ...options,
+            language: {
+                ...(options.language || {}),
+                lengthMenu: parent.i18n.t("dt.lengthMenu"),
+                emptyTable: parent.i18n.t("dt.emptyTable"),
+                zeroRecords: parent.i18n.t("dt.zeroRecords"),
+                processing: parent.i18n.t("dt.processing"),
+                loadingRecords: parent.i18n.t("dt.loadingRecords"),
+                paginate: {
+                    first: parent.i18n.t("dt.paginate.first"),
+                    previous: parent.i18n.t("dt.paginate.prev"),
+                    next: parent.i18n.t("dt.paginate.next"),
+                    last: parent.i18n.t("dt.paginate.last")
+                },
+                aria: {
+                    sortAscending: parent.i18n.t("dt.aria.sortAscending"),
+                    sortDescending: parent.i18n.t("dt.aria.sortDescending")
+                }
+            },
+            infoCallback: function (settings, start, end, max, total) {
+                if (total === 0) {
+                    return parent.i18n.t("dt.infoEmpty");
+                }
+                return parent.i18n.t("dt.info", [start, end, total]);
+            }
+        };
+    }
+    function patchPaginateText(table) {
+        const container = table.table().container();
+        if (!container) return;
+
+        const buttons = container.querySelectorAll('button.dt-paging-button');
+
+        buttons.forEach(btn => {
+            const idx = btn.getAttribute('data-dt-idx');
+            if (!idx) return;
+
+            switch (idx) {
+                case 'first':
+                    btn.innerHTML = parent.i18n.t('dt.paginate.first');
+                    break;
+                case 'previous':
+                    btn.innerHTML = parent.i18n.t('dt.paginate.prev');
+                    break;
+                case 'next':
+                    btn.innerHTML = parent.i18n.t('dt.paginate.next');
+                    break;
+                case 'last':
+                    btn.innerHTML = parent.i18n.t('dt.paginate.last');
+                    break;
+            }
+        });
+    }
+    function patchEmpty(table) {
+        const container = table.table().container();
+        const cell = container.querySelector('td.dt-empty');
+        if (!cell) return;
+
+        const isFiltered = table.search && table.search();
+        cell.innerHTML = isFiltered
+            ? parent.i18n.t('dt.zeroRecords')
+            : parent.i18n.t('dt.emptyTable');
+    }
+
+    function patchLengthMenu(table) {
+        const container = table.table().container();
+        const label = container.querySelector('.dt-length label');
+        if (!label) return;
+
+        const select = label.querySelector('select');
+        if (!select) return;
+
+        label.innerHTML = '';
+        const text = parent.i18n.t('dt.lengthMenu').replace('_MENU_', '');
+        label.append(text, select);
+    }
+
+    function bindI18n(table) {
+        if (!parent.i18n || typeof parent.i18n.onChange !== 'function') return;
+
+        parent.i18n.onChange(() => {
+            patchPaginateText(table);
+            patchLengthMenu(table);
+            patchEmpty(table);
+            table.draw(false); // 更新 infoCallback
+        });
+    }
+
+    function create(selector, options) {
+        const tableEl = document.querySelector(selector);
+
+        const table = new DataTable(
+            tableEl,
+            applyLanguage(options)
+        );
+
+        tableEl._dataTableInstance = table;
+        tableEl.setAttribute('data-dt-schema', '');
+
+        patchLengthMenu(table);
+        patchEmpty(table);
+
+        bindI18n(table);
+
+        setTimeout(() => table.columns.adjust(), 100);
+
+        table.on('draw', () => {
+            patchEmpty(table);
+        });
+
+        return table;
+    }
+
+    return { create };
+
+})();
+
+
+{
+  "pageTitleDefault": "ESG儀表板",
+  "greeting": "你好, 使用者",
+  "logout": "登出",
+  "downloading": "開始模擬下載",
+  "menu": "選單",
+  "welcome": "你好，{0}！歡迎回來！",
+  "analyze": "分析",
+  "name cc": "姓名",
+  "age": "年齡",
+  "greet": "{0}，{1}！",
+  "footerInfo": "&copy; 2025 綠色永續股份有限公司 - ESG報告平台<br>聯絡信箱：info@esgcompany.com",
+  "menuItems": {
+    "sustain": "永續報告",
+    "analysis": "碳排分析",
+    "sub1": "範疇一排放",
+    "sub2": "範疇二排放",
+    "z22": "環境儀表"
+  },
+  "dt": {
+    "info": "顯示第 {0} 筆到第 {1} 筆，共 {2} 筆",
+    "infoEmpty": "沒有資料",
+    "lengthMenu": "每頁顯示 _MENU_ 筆",
+    "emptyTable": "目前沒有資料",
+    "zeroRecords": "查無符合條件的資料",
+    "processing": "資料處理中...",
+    "loadingRecords": "載入資料中...",
+    "paginate": {
+      "first": "第一頁",
+      "prev": "上一頁",
+      "next": "下一頁",
+      "last": "最後一頁"
+    },
+    "aria": {
+      "sortAscending": ": 升序排列",
+      "sortDescending": ": 降序排列"
+    }
+  }
+}
+
+
+{
+  "pageTitleDefault": "ESG Dashboard",
+  "greeting": "Hello, User",
+  "logout": "Logout",
+  "downloading": "Start Download",
+  "menu": "Menu",
+  "analyze": "analyze",
+  "welcome": "你好，{0}！歡迎回來！",
+  "greet": "{0}，{1}！",
+  "name cc": "Name",
+  "age": "Age",
+  "footerInfo": "&copy; 2025 Green Sustainability Corp - ESG Report Platform<br>Email: info@esgcompany.com",
+  "menuItems": {
+    "sustain": "Sustainability Report",
+    "analysis": "Carbon Analysis",
+    "sub1": "Scope 1 Emission",
+    "sub2": "Scope 2 Emission",
+    "z22": "Dashboard"
+  },
+  "dt": {
+    "info": "Showing {0} to {1} of {2} entries",
+    "infoEmpty": "No data available",
+    "lengthMenu": "Show _MENU_ entries per page",
+    "emptyTable": "No data available in table",
+    "zeroRecords": "No matching records found",
+    "processing": "Processing...",
+    "loadingRecords": "Loading data...",
+    "paginate": {
+      "first": "First",
+      "prev": "Previous",
+      "next": "Next",
+      "last": "Last"
+    },
+    "aria": {
+      "sortAscending": ": activate to sort column ascending",
+      "sortDescending": ": activate to sort column descending"
+    }
+  }
+}
+
+{
+  "pageTitleDefault": "ESG ダッシュボード",
+  "greeting": "こんにちは, ユーザー",
+  "logout": "ログアウト",
+  "downloading": "ダウンロード開始",
+  "menu": "メニュー",
+  "welcome": "こんにちは，{0}！歡迎回來！",
+  "greet": "{0}，{1}！",
+  "name cc": "姓名ja",
+  "age": "年齡ja",
+  "footerInfo": "&copy; 2025 グリーンサステナビリティ株式会社 - ESGレポートプラットフォーム<br>メール: info@esgcompany.com",
+  "menuItems": {
+    "sustain": "サステナビリティ報告",
+    "analysis": "炭素分析",
+    "sub1": "スコープ1排出",
+    "sub2": "スコープ2排出",
+    "z22": "ダッシュボード"
+  },
+  "dt": {
+    "info": "{0} 件目から {1} 件目までを表示、合計 {2} 件",
+    "infoEmpty": "データがありません",
+    "lengthMenu": "1ページに _MENU_ 件表示",
+    "emptyTable": "現在、データはありません",
+    "zeroRecords": "該当するデータが見つかりません",
+    "processing": "処理中...",
+    "loadingRecords": "データを読み込み中...",
+    "paginate": {
+      "first": "最初のページ",
+      "prev": "前へ",
+      "next": "次へ",
+      "last": "最後のページ"
+    },
+    "aria": {
+      "sortAscending": ": 昇順に並べ替え",
+      "sortDescending": ": 降順に並べ替え"
+    }
+  }
+}
+
+
+// 🌐 i18n.js - 多國語言模組（支援位置參數）
+(function (global) {
+  const i18n = {
+    data: {},
+    currentLang: localStorage.getItem("lang") || "zh",
+    ready: false,
+      listeners: [], // ⭐ 加這行
+    async init(lang) {
+      await this.load(lang || this.currentLang);
+    },
+      onChange(callback) {
+          this.listeners.push(callback);
+      },
+      _emitChange() {
+          this.listeners.forEach(fn => fn(this.currentLang));
+      },
+    async load(lang) {
+      const url = `lang/${lang}.json`;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`語言包載入失敗: ${url}`);
+        this.data = await response.json();
+        this.currentLang = lang;
+        localStorage.setItem("lang", lang);
+          this.ready = true;
+          this._emitChange(); // ⭐ 語言切換後通知所有 listener
+      } catch (err) {
+        console.error("❌ i18n 載入錯誤:", err);
+      }
+    },
+
+    /**
+     * 取得翻譯文字，支援多層 key（a.b.c）
+     * 並支援位置參數 {0}, {1}, ...
+     * i18n.t("welcome", "王小明") → "你好，王小明！"
+     */
+      t(key, ...args) {
+          if (args.length === 1 && Array.isArray(args[0])) {
+              args = args[0];
+          }
+
+      const keys = key.split(".");
+      let val = this.data;
+      for (const k of keys) {
+        val = val?.[k];
+        if (val === undefined) break;
+      }
+      if (val === undefined || val === null) return key;
+
+      // 如果是字串且有位置參數
+      if (typeof val === "string" && args.length > 0) {
+        val = val.replace(/\{(\d+)\}/g, (match, index) => {
+          return args[index] !== undefined ? args[index] : match;
+        });
+      }
+      return val;
+    },
+
+   
+
+    apply(target) {
+      if (!this.ready) return;
+      const $target = $(target || document);
+      $target.find("[data-i18n]").each((_, el) => {
+        const $el = $(el);
+        const key = $el.attr("data-i18n");
+        const argsAttr = $el.attr("data-i18n-args"); // 可選，逗號分隔
+        let args = [];
+        if (argsAttr) {
+          args = argsAttr.split(",").map(s => s.trim());
+        }
+        const value = this.t(key, ...args);
+        if (el.textContent.trim() !== value) {
+            if ($(el).is("input,button")) {
+                $(el).val(value).text(value);
+            } else {
+                $(el).html(value); 
+            //  alert($(el).innerHTML)
+            }
+        }
+         
+
+          // 🔹 Tooltip 翻譯（AdminLTE 專用）
+          $target.find("[data-i18n-tooltip]").each((_, el) => {
+              const $el = $(el);
+              const key = el.getAttribute("data-i18n-tooltip");
+              if (!key) return;
+
+              const tooltipText = this.t(key);
+
+              // 設定 title
+              el.setAttribute("title", tooltipText);
+
+              // tooltip 需要重新初始化 
+              if ($el.data("tooltip")) {
+                  $el.tooltip("destroy");
+              }
+              if (el.getAttribute("data-toggle") === "tooltip") {
+                  $el.tooltip({
+                      container: "body",
+                      placement: "right",
+                      trigger: "hover"
+                  });
+              }
+          });
+
+      });
+    },
+      translateText(text) {
+          // 找 menuItems 對應
+          const map = this.data?.menuItems || {};
+          return map[text.trim()] || text;
+      },
+    async setLang(lang) {
+      await this.load(lang);
+      this.apply(document);
+    },
+
+    getLang() {
+      return this.currentLang;
+    }
+  };
+
+  global.i18n = i18n;
+})(window);
+
+
+<!-- ① jQuery（一定要在前） -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="../../Scripts/tb.js"></script>
+<!-- ② DataTables 2.3.5 -->
+<link rel="stylesheet"
+      href="https://cdn.datatables.net/2.3.5/css/dataTables.dataTables.min.css">
+<script src="https://cdn.datatables.net/2.3.5/js/dataTables.min.js"></script>
+<style>
+    .dt-scroll-body thead {
+        visibility: hidden;
+    }
+    </style>
+<table id="demo"></table>
+
+<script>
+    const rows = [
+        { id: 1, name: 'Tom', age: 18 },
+        { id: 2, name: 'Mary', age: 25 }
+    ];
+    const schema = [
+        { field: 'id', title: 'ID' },
+        { field: 'name', title: 'Name cc' },
+        { field: 'age', title: 'Age' }
+    ];
+    const columns = schema.map(c => ({
+        title: c.title, // 加上 title 避免空白 row
+        data: c.field
+    }));
+    const table = DtI18n.create('#demo', {
+        scrollY: 200,
+        data: rows,
+        columns
+    });
+
+    //function refreshLengthMenuText(dt) {
+    //    const wrapper = dt.table().container();
+    //    const label = wrapper.querySelector('.dt-length label');
+    //    if (!label) return;
+
+    //    const select = label.querySelector('select');
+    //    label.innerHTML = '';
+    //    label.append(
+    //        parent.i18n.t('dt.lengthMenu').replace('_MENU_', ''),
+    //        select
+    //    );
+    //}
+    //function patchDtEmptyText(dt, i18n) {
+    //    const container = dt.table().container();
+
+    //    // emptyTable & zeroRecords 都是這個 td
+    //    const emptyCell = container.querySelector('td.dt-empty');
+
+    //    if (!emptyCell) return;
+
+    //    const isFiltered = dt.search() && dt.search().length > 0;
+
+    //    emptyCell.innerHTML = isFiltered
+    //        ? i18n.t('dt.zeroRecords')
+    //        : i18n.t('dt.emptyTable');
+    //}
+    //const schema = [
+    //    { field: 'id', title: 'ID' },
+    //    { field: 'name', title: 'Name cc' },
+    //    { field: 'age', title: 'Age' }
+    //];
+
+    //let theadHtml = '<thead><tr>';
+
+    //schema.forEach(c => {
+    //    let t1= c.title.toLowerCase();
+    //    theadHtml += `<th data-field="${c.field}" data-i18n="${c.title.toLowerCase() || ''}">${c.title}</th>`;
+    //});
+
+    //theadHtml += '</tr></thead>';
+
+    //const tableEl = document.getElementById('demo');
+    //tableEl.insertAdjacentHTML('afterbegin', theadHtml);
+    //const rows = [
+    //    { id: 1, name: 'Tom', age: 18 },
+    //    { id: 2, name: 'Mary', age: 25 }
+    //];
+
+
+    //const columns = schema.map(c => ({
+    //    title: c.title, // 加上 title 避免空白 row
+    //    data: c.field
+    //}));
+    ////document.querySelectorAll('.dt-column-header').forEach(el => el.remove());
+
+    //const table = new DataTable('#demo', {
+    //    scrollY: 200,
+    //    data: rows,
+    //    columns,
+    //    language: {
+    //        lengthMenu: parent.i18n.t("dt.lengthMenu"),
+    //        emptyTable: parent.i18n.t("dt.emptyTable"),
+    //        zeroRecords: parent.i18n.t("dt.zeroRecords"),
+    //    },
+    //    infoCallback: function (settings, start, end, max, total) {
+    //        if (total === 0) {
+    //            return parent.i18n.t("dt.infoEmpty");
+    //        }
+    //        return parent.i18n.t("dt.info", [start, end, total]);
+    //    }
+    //});
+
+    //setTimeout(() => table.columns.adjust(), 100);
+
+    //tableEl._dataTableInstance = table;
+
+    //tableEl.setAttribute('data-dt-schema', null);
+    if (parent.i18n && typeof parent.i18n.onChange === 'function') {
+        parent.i18n.onChange(lang => {
+           
+            //refreshLengthMenuText(table);
+            //patchDtEmptyText(table, parent.i18n);
+            table.draw(false);   // ⭐ 觸發 infoCallback
+            // 調整欄寬
+            //table.columns.adjust();
+        });
+    }
+
+    // 綁定 i18n 變化監聽
+    //window.parent.i18n.onChange(lang => {
+    //    updateDataTableLang(table, schema, lang);
+    //});
+
+
+    //function updateDataTableLang(table, schema, lang) {
+    //    // 更新 i18n 資料
+    //    //window.parent.i18n.load(lang).then(() => {
+    //        // 更新 <thead> 文字
+    //        //$('#demo thead th').each((idx, th) => {
+    //        //    $(th).text(window.parent.i18n.t(schema[idx].title.toLowerCase()));
+    //        //});
+    //        //Array.from(table.columns().header).forEach((th, idx) => {
+    //        //    th.textContent = i18n.t(schema[idx].title.toLowerCase());
+    //        //});
+    //        // 更新 DataTable header
+    //        //table.columns().header().forEach((th, idx) => {
+    //        //    $(th).text(window.parent.i18n.t(schema[idx].title.toLowerCase()));
+    //        //});
+
+    //        // 調整欄寬，避免 scrollBody 空白 row
+    //        table.columns.adjust();
+    //    //});
+    //}
+
+</script>
+
+
+
+
+
