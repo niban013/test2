@@ -1,0 +1,318 @@
+const value = this.t(key, ...args);
+
+  if (el.tagName === "TH") {
+      // 只改 dt-column-title，不動整個 th
+      const titleEl = el.querySelector(".dt-column-title");
+      if (titleEl && titleEl.textContent !== value) {
+          titleEl.textContent = value;
+      }
+      return; // ⛔ 一定要 return，不能往下走
+  }
+
+  window.DtI18n = (function () {
+
+    function applyLanguage(options = {}) {
+        return {
+            ...options,
+            //processing: true,
+                serverSide: true,
+            //ajax: (data, callback) => {
+            //    setTimeout(() => {
+            //        callback({
+            //            data: rows,
+            //            recordsTotal: rows.length,
+            //            recordsFiltered: rows.length
+            //        });
+            //    }, 5000);
+            //},
+            language: {
+                ...(options.language || {}),
+                lengthMenu: parent.i18n.t("dt.lengthMenu"),
+                emptyTable: parent.i18n.t("dt.emptyTable"),
+                zeroRecords: parent.i18n.t("dt.zeroRecords"),
+                processing: parent.i18n.t("dt.processing"),
+                loadingRecords: parent.i18n.t("dt.loadingRecords"),
+                paginate: {
+                    first: parent.i18n.t("dt.paginate.first"),
+                    previous: parent.i18n.t("dt.paginate.prev"),
+                    next: parent.i18n.t("dt.paginate.next"),
+                    last: parent.i18n.t("dt.paginate.last")
+                },
+                aria: {
+                    sortAscending: parent.i18n.t("dt.aria.sortAscending"),
+                    sortDescending: parent.i18n.t("dt.aria.sortDescending")
+                }
+            },
+            infoCallback: function (settings, start, end, max, total) {
+                if (total === 0) {
+                    return parent.i18n.t("dt.infoEmpty");
+                }
+                return parent.i18n.t("dt.info", [start, end, total]);
+            }
+        };
+    }
+    function patchPaginateText(table) {
+        const container = table.table().container();
+        if (!container) return;
+
+        const settings = table.settings()[0];
+
+        //settings.oLanguage.sEmptyTable =
+        //    parent.i18n.t('dt.emptyTable');
+
+        //settings.oLanguage.sZeroRecords =
+        //    parent.i18n.t('dt.zeroRecords');
+
+        //settings.oLanguage.sInfo =
+        //    parent.i18n.t('dt.info');
+
+        //settings.oLanguage.sInfoEmpty =
+        //    i18n.t('dt.infoEmpty');
+
+        //settings.oLanguage.sLengthMenu =
+        //    i18n.t('dt.lengthMenu');
+
+        //settings.oLanguage.sProcessing =
+        //    i18n.t('dt.processing');
+
+        //settings.oLanguage.sLoadingRecords =
+        //    i18n.t('dt.loadingRecords');
+
+        settings.oLanguage.oPaginate.sFirst =
+            parent.i18n.t('dt.paginate.first');
+
+        settings.oLanguage.oPaginate.sPrevious =
+            parent.i18n.t('dt.paginate.prev');
+
+        settings.oLanguage.oPaginate.sNext =
+            parent.i18n.t('dt.paginate.next');
+
+        settings.oLanguage.oPaginate.sLast =
+            parent.i18n.t('dt.paginate.last');
+
+        //settings.oLanguage.oAria.sSortAscending =
+        //    i18n.t('dt.aria.sortAscending');
+
+        //settings.oLanguage.oAria.sSortDescending =
+        //    i18n.t('dt.aria.sortDescending');
+    }
+    function patchEmpty(table) {
+        const container = table.table().container();
+        const cell = container.querySelector('td.dt-empty');
+        if (!cell) return;
+
+        const isFiltered = table.search && table.search();
+        cell.innerHTML = isFiltered
+            ? parent.i18n.t('dt.zeroRecords')
+            : parent.i18n.t('dt.emptyTable');
+    }
+
+    function patchLengthMenu(table) {
+        const container = table.table().container();
+        const label = container.querySelector('.dt-length label');
+        if (!label) return;
+
+        const select = label.querySelector('select');
+        if (!select) return;
+
+        label.innerHTML = '';
+        const text = parent.i18n.t('dt.lengthMenu').replace('_MENU_', '');
+        label.append(text, select);
+    }
+
+    function bindI18n(table) {
+        if (!parent.i18n || typeof parent.i18n.onChange !== 'function') return;
+
+        parent.i18n.onChange(() => {
+            patchPaginateText(table);
+            patchLengthMenu(table);
+            patchEmpty(table);
+            table.draw(false); // 更新 infoCallback
+        });
+    }
+
+    function create(selector, options) {
+        const tableEl = document.querySelector(selector);
+
+        const table = new DataTable(
+            tableEl,
+            applyLanguage(options)
+        );
+
+        //tableEl._dataTableInstance = table;
+        //tableEl.setAttribute('data-dt-schema', '');
+
+        //patchLengthMenu(table);
+        //patchEmpty(table);
+
+        //bindI18n(table);
+
+        //setTimeout(() => table.columns.adjust(), 100);
+
+        //table.on('draw', () => {
+        //    patchEmpty(table);
+        //});
+        //table.on('processing.dt', (e, settings, processing) => {
+        //    if (processing) {
+        //        GlobalOverlay('loading').show();
+        //    } else {
+        //        GlobalOverlay('loading').hide();
+        //    }
+        //});
+        return table;
+    }
+
+    return { create };
+
+})();
+
+
+const GlobalOverlay = (() => {
+    const state = {};
+    const textProvider = {};
+    const instanceCache = {};
+
+    function injectStyle() {
+        if (document.getElementById('global-overlay-style')) return;
+        const style = document.createElement('style');
+        style.id = 'global-overlay-style';
+        style.textContent = `
+      .go-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #fff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: go-spin 1s linear infinite;
+      }
+      @keyframes go-spin {
+        to { transform: rotate(360deg); }
+      }
+    `;
+        document.head.appendChild(style);
+    }
+
+    function createMaskForMode(mode) {
+        injectStyle();
+
+        const mask = document.createElement('div');
+        mask.className = 'global-overlay-mask';
+        mask.dataset.mode = mode;
+        mask.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(0,0,0,.35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    `;
+
+        const icon = document.createElement('div');
+        icon.className = 'go-icon';
+
+        const text = document.createElement('div');
+        text.className = 'go-text';
+        text.style.cssText = 'margin-top:12px;color:#fff;font-size:14px;';
+
+        mask.append(icon, text);
+        document.body.appendChild(mask);
+
+        return { mask, icon, text };
+    }
+
+    function updateView(mode) {
+        const info = state[mode];
+        if (!info) return;
+
+        if (info.active) {
+            info.mask.style.display = 'flex';
+            const text =
+                typeof textProvider[mode] === 'function'
+                    ? textProvider[mode]()
+                    : info.defaultText || mode;
+            info.text.textContent = text;
+
+            info.icon.innerHTML = '';
+            if (info.iconType === 'spinner') {
+                const s = document.createElement('div');
+                s.className = 'go-spinner';
+                info.icon.appendChild(s);
+            } else if (info.iconType) {
+                info.icon.textContent = info.iconType;
+            }
+        } else {
+            info.mask.style.display = 'none';
+        }
+    }
+
+    function createInstance(mode) {
+        return {
+            show(customText, customIcon) {
+                if (!state[mode]) {
+                    const dom = createMaskForMode(mode);
+                    state[mode] = {
+                        active: false,
+                        defaultText: mode,
+                        iconType: 'spinner',
+                        ...dom
+                    };
+                }
+
+                const info = state[mode];
+                info.active = true;
+
+                if (customText) info.defaultText = customText;
+                if (customIcon) info.iconType = customIcon;
+
+                updateView(mode);
+            },
+
+            hide() {
+                if (!state[mode]) return;
+                state[mode].active = false;
+                updateView(mode);
+            },
+
+            setText(fnOrText) {
+                textProvider[mode] =
+                    typeof fnOrText === 'function' ? fnOrText : () => fnOrText;
+                updateView(mode);
+            },
+
+            setIcon(icon) {
+                if (!state[mode]) return;
+                state[mode].iconType = icon;
+                updateView(mode);
+            },
+
+            /**
+             * wrap a promise, automatically show/hide overlay
+             * @param {Promise} promise
+             * @param {string} [customText]
+             * @param {string} [customIcon]
+             * @returns {Promise}
+             */
+            wrap(promise, customText, customIcon) {
+                this.show(customText, customIcon);
+                return promise
+                    .finally(() => {
+                        this.hide();
+                    });
+            }
+        };
+    }
+
+    function getInstance(mode) {
+        if (!instanceCache[mode]) {
+            instanceCache[mode] = createInstance(mode);
+        }
+        return instanceCache[mode];
+    }
+
+    return getInstance;
+})();
+
+
+
