@@ -1,0 +1,576 @@
+//using Dapper;
+using Microsoft.AspNetCore.Http;
+using mvc5.autofac;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Data;
+using System.Data.Common;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Web;
+
+namespace mvc5
+{
+    public interface IDbSessionContext
+    {
+        IDbSession Get(string key);
+    }
+
+    public class DbSessionContext : IDbSessionContext, IDisposable
+    {
+        private readonly IConnectionInfoResolver _resolver;
+        private readonly Dictionary<string, IDbSession> _sessions = new Dictionary<string, IDbSession>();
+        public DbSessionContext(IConnectionInfoResolver resolver)
+        {
+            _resolver = resolver;
+        }
+
+        public IDbSession Get(string key)
+        {
+            if (!_sessions.TryGetValue(key, out var session))
+            {
+                var info = _resolver.Resolve(key);
+                IDbConnection conn;
+                switch (info.DbType)
+                {
+                    case DatabaseType.SqlServer:
+                        conn = new SqlConnection(info.ConnectionString);
+                        break;
+
+                    case DatabaseType.Oracle:
+                        conn = new Oracle.ManagedDataAccess.Client
+                                   .OracleConnection(info.ConnectionString);
+                        break;
+
+                    default:
+                        throw new NotSupportedException(
+                            $"Unsupported DB type: {info.DbType}");
+                }
+                session = new DbSession(conn);
+                _sessions[key] = session;
+            }
+            return session;
+        }
+
+        public void Dispose()
+        {
+            foreach (var s in _sessions.Values)
+                s.Dispose();
+        }
+    }
+
+
+}
+
+
+
+
+
+//using Dapper;
+using Microsoft.AspNetCore.Http;
+using mvc5.autofac;
+using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Data;
+using System.Data.Common;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Web;
+using System.Configuration;
+namespace mvc5
+{
+    
+    public enum DatabaseType
+    {
+        SqlServer,
+        Oracle
+    }
+    public interface IConnectionInfoResolver
+    {
+        (DatabaseType DbType, string ConnectionString) Resolve(string key);
+    }
+
+    public class ConnectionInfoResolver : IConnectionInfoResolver
+    {
+        public (DatabaseType DbType, string ConnectionString) Resolve(string key)
+        {
+            switch (key)
+            {
+                case "DefaultConnection":
+                    return (DatabaseType.SqlServer,
+                        ConfigurationManager.ConnectionStrings["DefaultConnection"].ConnectionString);
+                case "TenantB":
+                    return (DatabaseType.Oracle,
+                        ConfigurationManager.ConnectionStrings["TenantB_Oracle"].ConnectionString);
+                default:
+                    throw new ArgumentException($"Unknown key: {key}");
+            }
+        }
+    }
+
+
+
+}
+
+using Autofac;
+using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web;
+
+namespace mvc5.autofac
+{
+    public class DbSession : IDbSession
+    {
+        private readonly IDbConnection _connection;
+        private IDbTransaction _transaction;
+
+        public DbSession(IDbConnection connection)
+        {
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            if (_connection.State != ConnectionState.Open)
+                _connection.Open();
+        }
+
+        public IDbConnection Connection => _connection;
+        public IDbTransaction Transaction => _transaction;
+
+        public void BeginTransaction()
+        {
+            if (_transaction == null)
+                _transaction = _connection.BeginTransaction();
+        }
+        //public async Task BeginTransactionAsync()
+        //{
+        //    await Task.Run(() => BeginTransaction());
+        //}
+
+        public void Commit()
+        {
+            _transaction?.Commit();
+            _transaction?.Dispose();
+            _transaction = null;
+        }
+        //public async Task CommitAsync()
+        //{
+        //    await Task.Run(() => Commit());
+        //}
+        public void Rollback()
+        {
+            _transaction?.Rollback();
+            _transaction?.Dispose();
+            _transaction = null;
+        }
+        //public async Task RollbackAsync()
+        //{
+        //    await Task.Run(() => Rollback());
+        //}
+        public IDbCommand CreateCommand(string sql, CommandType commandType = CommandType.Text, IDictionary<string, object> parameters = null)
+        {
+            if (_connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+            var cmd = _connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandType = commandType;
+            if (parameters != null)
+            {
+                foreach (var kvp in parameters)
+                {
+                    IDbDataParameter param;
+
+                    if (_connection is SqlConnection) // SQL Server
+                    {
+                        param = new SqlParameter
+                        {
+                            ParameterName = kvp.Key.StartsWith("@") ? kvp.Key : "@" + kvp.Key,
+                            Value = kvp.Value ?? DBNull.Value
+                        };
+                    }
+                    else if (_connection is OracleConnection) // Oracle
+                    {
+                        param = new OracleParameter
+                        {
+                            ParameterName = kvp.Key, // Oracle 不要 @
+                            Value = kvp.Value ?? DBNull.Value
+                        };
+                    }
+                    else
+                    {
+                        // fallback generic
+                        param = cmd.CreateParameter();
+                        param.ParameterName = kvp.Key;
+                        param.Value = kvp.Value ?? DBNull.Value;
+                    }
+
+                    cmd.Parameters.Add(param);
+                }
+            }
+
+            if (_transaction != null)
+                cmd.Transaction = _transaction;
+            return cmd;
+        }
+
+    
+
+        // ======== 同步 ========
+        public int ExecuteNonQuery(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            {
+                return cmd.ExecuteNonQuery();
+            }
+        }
+
+        public object ExecuteScalar(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            { 
+                return cmd.ExecuteScalar();
+            }
+        }
+
+        public IDataReader ExecuteReader(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = CreateCommand(sql, commandType, parameters))
+            { 
+                return cmd.ExecuteReader(CommandBehavior.CloseConnection);
+            }
+        }
+
+        // ======== 非同步 ========
+        //public async Task<int> ExecuteNonQueryAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        //{
+        //    using (var cmd = CreateCommand(sql, commandType, parameters))
+        //    {
+        //        if (cmd is SqlCommand sqlCmd)
+        //            return await sqlCmd.ExecuteNonQueryAsync(cancellationToken);
+
+        //        if (cmd is OracleCommand oracleCmd)
+        //            return await Task.Run(() => oracleCmd.ExecuteNonQuery(), cancellationToken);
+
+        //        return await Task.Run(() => cmd.ExecuteNonQuery(), cancellationToken);
+        //    }
+        //}
+
+        //public async Task<object> ExecuteScalarAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        //{ 
+        //    using (var cmd = (IDbCommand)CreateCommand(sql, commandType, parameters))
+        //    {
+        //        if (cmd is SqlCommand sqlCmd)
+        //            return await sqlCmd.ExecuteScalarAsync(cancellationToken);
+
+        //        if (cmd is OracleCommand oracleCmd)
+        //            return await Task.Run(() => oracleCmd.ExecuteScalar(), cancellationToken);
+
+        //        return await Task.Run(() => cmd.ExecuteScalar(), cancellationToken); 
+        //    }
+        //}
+
+        //public async Task<IDataReader> ExecuteReaderAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        //{ 
+        //    using (var cmd = (IDbCommand)CreateCommand(sql, commandType, parameters))
+        //    {
+        //        if (cmd is SqlCommand sqlCmd)
+        //            return await sqlCmd.ExecuteReaderAsync(CommandBehavior.CloseConnection, cancellationToken);
+
+        //        if (cmd is OracleCommand oracleCmd)
+        //            return await Task.Run(() => oracleCmd.ExecuteReader(CommandBehavior.CloseConnection), cancellationToken);
+
+        //        return await Task.Run(() => cmd.ExecuteReader(CommandBehavior.CloseConnection), cancellationToken); 
+        //    }
+        //}
+        //// ---------------- ExecuteProcedure ----------------
+        public int ExecuteProcedure(string procName, IDictionary<string, object> parameters = null)
+        {
+            using (var cmd = CreateCommand(procName, CommandType.StoredProcedure, parameters))
+            {
+                return cmd.ExecuteNonQuery();
+            }
+        }
+        //public async Task<int> ExecuteProcedureAsync(string procName, IDictionary<string, object> parameters = null, CancellationToken cancellationToken = default)
+        //{
+        //    using (var cmd = CreateCommand(procName, CommandType.StoredProcedure, parameters))
+        //    {
+        //        return await Task.Run(() => cmd.ExecuteNonQuery());
+        //    } 
+        //}
+
+        //public async Task<DataTable> ExecuteProcedureToDataTableAsync(string procName, IDictionary<string, object> parameters = null, CancellationToken cancellationToken = default)
+        //{
+        //    if (Connection == null)
+        //        throw new InvalidOperationException("Connection 尚未初始化");
+
+        //    if (Connection.State != ConnectionState.Open)
+        //        Connection.Open();
+
+        //    using (var cmd = Connection.CreateCommand())
+        //    {
+        //        cmd.CommandText = procName;
+        //        cmd.CommandType = CommandType.StoredProcedure;
+        //        if (Transaction != null)
+        //            cmd.Transaction = Transaction;
+
+        //        if (parameters != null)
+        //            foreach (var p in parameters)
+        //                cmd.Parameters.Add(p);
+
+        //        IDataAdapter da = null;
+        //        if (cmd is SqlCommand sqlCmd)
+        //            da = new SqlDataAdapter(sqlCmd);
+        //        else if (cmd is OracleCommand oracleCmd)
+        //            da = new OracleDataAdapter(oracleCmd);
+        //        else
+        //            throw new NotSupportedException("不支援的 Command 類型");
+
+        //        try
+        //        {
+        //            var ds = new DataSet();
+        //            await Task.Run(() => da.Fill(ds));
+        //            return ds.Tables[0];
+        //        }
+        //        finally
+        //        {
+        //            // IDataAdapter 強制釋放
+        //            if (da is IDisposable disposable)
+        //                disposable.Dispose();
+        //        }
+        //    }
+        //}
+
+        public DataTable ExecuteProcedureToDataTable(string procName, IDictionary<string, object> parameters = null)
+        {
+            if (Connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+
+            if (Connection.State != ConnectionState.Open)
+                Connection.Open();
+
+            using (var cmd = Connection.CreateCommand())
+            {
+                cmd.CommandText = procName;
+                cmd.CommandType = CommandType.StoredProcedure;
+                if (Transaction != null)
+                    cmd.Transaction = Transaction;
+
+                if (parameters != null)
+                    foreach (var p in parameters)
+                        cmd.Parameters.Add(p);
+
+                IDataAdapter da = null;
+                if (cmd is SqlCommand sqlCmd)
+                    da = new SqlDataAdapter(sqlCmd);
+                else if (cmd is OracleCommand oracleCmd)
+                    da = new OracleDataAdapter(oracleCmd);
+                else
+                    throw new NotSupportedException("不支援的 Command 類型");
+
+                try
+                {
+                    var ds = new DataSet();
+                    da.Fill(ds);
+                    return ds.Tables[0];
+                }
+                finally
+                {
+                    // IDataAdapter 強制釋放
+                    if (da is IDisposable disposable)
+                        disposable.Dispose();
+                }
+            }
+        }
+
+
+        // ---------------- private helpers ----------------
+        //private IDbCommand CreateCommand(string cmdText, CommandType type, IDbDataParameter[] parameters)
+        //{
+        //    IDbCommand cmd = Connection.CreateCommand();
+        //    cmd.CommandText = cmdText;
+        //    cmd.CommandType = type;
+        //    if (Transaction != null)
+        //        cmd.Transaction = Transaction;
+
+        //    if (parameters != null)
+        //    {
+        //        foreach (var p in parameters)
+        //            cmd.Parameters.Add(p);
+        //    }
+
+        //    return cmd;
+        //}
+
+        
+        //public async Task<DataTable> GetDataTableAsync(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text, CancellationToken cancellationToken = default)
+        //{ 
+        //    return await Task.Run(() => GetDataTable(sql, parameters, commandType), cancellationToken);
+        //}
+
+        public DataTable GetDataTable(string sql, IDictionary<string, object> parameters = null, CommandType commandType = CommandType.Text)
+        {
+            using (var cmd = (IDbCommand)CreateCommand(sql, commandType, parameters)) 
+            { 
+                IDataAdapter da = null;
+                if (cmd is SqlCommand sqlCmd)
+                    da = new SqlDataAdapter(sqlCmd);
+                else if (cmd is OracleCommand oracleCmd)
+                    da = new OracleDataAdapter(oracleCmd);
+                else
+                    throw new NotSupportedException("不支援的 Command 類型");
+
+                try
+                {
+                    var ds = new DataSet();
+                    da.Fill(ds);
+                    return ds.Tables[0];
+                }
+                finally
+                {
+                    // IDataAdapter 強制釋放
+                    if (da is IDisposable disposable)
+                        disposable.Dispose();
+                } 
+            }
+        }
+        //public async Task BulkInsertAsync(DataTable dt, CancellationToken ct = default)
+        //{
+        //    if (_connection == null)
+        //        throw new InvalidOperationException("Connection 尚未初始化");
+
+        //    if (_connection is SqlConnection) // SQL Server
+        //    {
+        //        using (var bulk = new SqlBulkCopy((SqlConnection)Connection, SqlBulkCopyOptions.Default, (SqlTransaction)Transaction))
+        //        {
+        //            bulk.DestinationTableName = dt.TableName;
+
+        //            foreach (DataColumn col in dt.Columns)
+        //            {
+        //                bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+        //            }
+
+        //            // .NET 4.5+ 可以直接使用 async
+        //            await bulk.WriteToServerAsync(dt, ct);
+        //        }
+        //    }
+        //    else if (_connection is OracleConnection) // Oracle
+        //    {
+        //        // Oracle 沒有內建 async bulk insert
+        //        await Task.Run(() => BulkInsert(dt), ct);
+        //    }
+        //    else
+        //    {
+        //        throw new NotSupportedException("不支援的 Command 類型");
+        //    }
+        //}
+        public void BulkInsert(DataTable dt)
+        {
+            if (_connection == null)
+                throw new InvalidOperationException("Connection 尚未初始化");
+
+            if (_connection is SqlConnection) // SQL Server
+            {
+                using (var bulk = new SqlBulkCopy((SqlConnection)Connection, SqlBulkCopyOptions.Default, (SqlTransaction)Transaction))
+                {
+                    bulk.DestinationTableName = dt.TableName;
+
+                    foreach (DataColumn col in dt.Columns)
+                    {
+                        bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    } 
+                    bulk.WriteToServer(dt);
+                } 
+            }
+            else if (_connection is OracleConnection) // Oracle
+            {
+                if (dt.Rows.Count == 0) return;
+                OracleCommand cmd = (OracleCommand)Connection.CreateCommand();
+                cmd.Transaction = (OracleTransaction)Transaction;
+
+                var cols = dt.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+                string colList = string.Join(",", cols);
+                string paramList = string.Join(",", cols.Select(c => ":" + c));
+
+                cmd.CommandText = $"INSERT INTO {dt.TableName} ({colList}) VALUES ({paramList})";
+                cmd.ArrayBindCount = dt.Rows.Count;
+
+                foreach (DataColumn col in dt.Columns)
+                {
+                    var values = dt.AsEnumerable().Select(r => r[col.ColumnName]).ToArray();
+                    var p = new OracleParameter(col.ColumnName, values);
+                    cmd.Parameters.Add(p);
+                }
+
+                cmd.ExecuteNonQuery();
+            }
+            else
+            {
+                throw new NotSupportedException("不支援的 Command 類型");
+            } 
+        }
+
+        public void Dispose()
+        {
+            _transaction?.Dispose();
+            if (_connection?.State == ConnectionState.Open)
+                _connection?.Close();
+            _connection?.Dispose();
+        }
+    }
+
+    public static class DbSessionExtensions
+    {
+        public static T UsingSession<T>(this ILifetimeScope scope, Func<IDbSession, T> action)
+        {
+            using (var _scope = scope.BeginLifetimeScope())
+            {
+                var dbContext = _scope.Resolve<IDbSessionContext>();
+                using (var session = dbContext.Get("DefaultConnection"))
+                {
+                    return action(session);
+                }
+            }
+        }
+
+        public static T UsingSession<T>(this IComponentContext scope, string dbKey, Func<IDbSession, T> action)
+        {
+            using (var session = scope.ResolveNamed<IDbSession>(dbKey))
+            {
+                return action(session);
+            }
+        }
+
+        public static async Task<T> UsingSessionAsync<T>(this IComponentContext scope, Func<IDbSession, Task<T>> action)
+        {
+            using (var session = scope.Resolve<IDbSession>())
+            {
+                return await action(session);
+            }
+        }
+
+        public static async Task<T> UsingSessionAsync<T>(this IComponentContext scope, string dbKey, Func<IDbSession, Task<T>> action)
+        {
+            using (var session = scope.ResolveNamed<IDbSession>(dbKey))
+            {
+                return await action(session);
+            }
+        }
+    }
+}
+
+// DB 注冊
+builder.RegisterType<ConnectionInfoResolver>()
+       .As<IConnectionInfoResolver>()
+       .SingleInstance();
+
+builder.RegisterType<DbSessionContext>()
+       .As<IDbSessionContext>() 
+       .InstancePerDependency(); // ⭐ 關鍵
