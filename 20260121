@@ -1,3 +1,57 @@
+using SapFacadeMvc5.Models;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Linq;
+using System;
+
+namespace SapFacadeMvc5.Facades
+{
+    public class SapOrderODataFacade : ISapOrderFacade
+    {
+        private static readonly HttpClient _client;
+
+        static SapOrderODataFacade()
+        {
+            // 不用 Proxy
+            _client = new HttpClient
+            {
+                BaseAddress = new Uri(System.Configuration.ConfigurationManager.AppSettings["SapBaseUrl"]),
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
+            // Basic Auth
+            var user = System.Configuration.ConfigurationManager.AppSettings["SapUser"];
+            var pass = System.Configuration.ConfigurationManager.AppSettings["SapPassword"];
+            var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{pass}"));
+
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
+        }
+
+        public async Task<IReadOnlyList<OrderDto>> GetOrdersAsync(DateTime from, DateTime to)
+        {
+            var filter = $"OrderDate ge datetime'{from:yyyy-MM-ddT00:00:00}' and OrderDate le datetime'{to:yyyy-MM-ddT23:59:59}'";
+            var url = $"Orders?$filter={Uri.EscapeDataString(filter)}&$select=OrderNo,OrderDate,Amount,CustomerName";
+
+            var response = await _client.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var sapResult = JsonSerializer.Deserialize<SapODataResponse<SapOrderEntity>>(json);
+
+            return sapResult?.Value.Select(x => new OrderDto
+            {
+                OrderNo = x.OrderNo,
+                OrderDate = x.OrderDate,
+                Amount = x.Amount,
+                CustomerName = x.CustomerName
+            }).ToList() ?? new List<OrderDto>();
+        }
+    }
+}
+
 Models/OrderDto.cs
 namespace SapFacadeMvc5.Models;
 
