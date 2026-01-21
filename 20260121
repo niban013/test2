@@ -1,0 +1,205 @@
+Models/OrderDto.cs
+namespace SapFacadeMvc5.Models;
+
+public class OrderDto
+{
+    public string OrderNo { get; set; }
+    public DateTime OrderDate { get; set; }
+    public decimal Amount { get; set; }
+    public string CustomerName { get; set; }
+}
+
+Models/SapODataResponse.cs
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+
+namespace SapFacadeMvc5.Models;
+
+public class SapODataResponse<T>
+{
+    [JsonPropertyName("value")]
+    public List<T> Value { get; set; }
+}
+
+public class SapOrderEntity
+{
+    public string OrderNo { get; set; }
+    public DateTime OrderDate { get; set; }
+    public decimal Amount { get; set; }
+    public string CustomerName { get; set; }
+}
+
+
+📌 MVC5 也可以用 System.Text.Json
+（或你原本就用 Newtonsoft 也 OK）
+
+2️⃣ Facade 介面
+Facades/ISapOrderFacade.cs
+using SapFacadeMvc5.Models;
+
+namespace SapFacadeMvc5.Facades;
+
+public interface ISapOrderFacade
+{
+    Task<IReadOnlyList<OrderDto>> GetOrdersAsync(
+        DateTime from,
+        DateTime to);
+}
+
+3️⃣ Facade 實作（MVC5 重點在這）
+Facades/SapOrderODataFacade.cs
+using SapFacadeMvc5.Models;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+
+namespace SapFacadeMvc5.Facades;
+
+public class SapOrderODataFacade : ISapOrderFacade
+{
+    // MVC5：HttpClient 建議「重用」
+    private static readonly HttpClient _client;
+
+    static SapOrderODataFacade()
+    {
+        var handler = new HttpClientHandler
+        {
+            Proxy = new WebProxy("http://corp-proxy:8080"),
+            UseProxy = true
+        };
+
+        _client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(
+                System.Configuration.ConfigurationManager
+                    .AppSettings["SapBaseUrl"]),
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
+        var auth = Convert.ToBase64String(
+            System.Text.Encoding.UTF8.GetBytes(
+                System.Configuration.ConfigurationManager
+                    .AppSettings["SapUser"] + ":" +
+                System.Configuration.ConfigurationManager
+                    .AppSettings["SapPassword"])
+        );
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Basic", auth);
+    }
+
+    public async Task<IReadOnlyList<OrderDto>> GetOrdersAsync(
+        DateTime from,
+        DateTime to)
+    {
+        var filter =
+            $"OrderDate ge datetime'{from:yyyy-MM-ddT00:00:00}' " +
+            $"and OrderDate le datetime'{to:yyyy-MM-ddT23:59:59}'";
+
+        var url =
+            $"Orders?$filter={Uri.EscapeDataString(filter)}" +
+            $"&$select=OrderNo,OrderDate,Amount,CustomerName";
+
+        var response = await _client.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+
+        var sapResult =
+            JsonSerializer.Deserialize<
+                SapODataResponse<SapOrderEntity>>(json);
+
+        return sapResult?.Value
+            .Select(x => new OrderDto
+            {
+                OrderNo = x.OrderNo,
+                OrderDate = x.OrderDate,
+                Amount = x.Amount,
+                CustomerName = x.CustomerName
+            })
+            .ToList()
+            ?? new List<OrderDto>();
+    }
+}
+
+📌 MVC5 關鍵注意
+
+❌ 不要每次 new HttpClient
+
+✅ static HttpClient（或 Singleton）
+
+Proxy / Auth 在 Facade 裡解決
+
+4️⃣ Web API Controller（MVC5）
+Controllers/OrdersController.cs
+using SapFacadeMvc5.Facades;
+using System.Web.Http;
+
+namespace SapFacadeMvc5.Controllers;
+
+[RoutePrefix("api/orders")]
+public class OrdersController : ApiController
+{
+    private readonly ISapOrderFacade _sap;
+
+    public OrdersController()
+    {
+        // MVC5 沒 DI 就先這樣（之後可換 Autofac）
+        _sap = new SapOrderODataFacade();
+    }
+
+    [HttpGet]
+    [Route("")]
+    public async Task<IHttpActionResult> Get(
+        DateTime from,
+        DateTime to)
+    {
+        var result = await _sap.GetOrdersAsync(from, to);
+        return Ok(result);
+    }
+}
+
+5️⃣ WebApiConfig（一定要）
+App_Start/WebApiConfig.cs
+using System.Web.Http;
+
+public static class WebApiConfig
+{
+    public static void Register(HttpConfiguration config)
+    {
+        config.MapHttpAttributeRoutes();
+
+        config.Routes.MapHttpRoute(
+            name: "DefaultApi",
+            routeTemplate: "api/{controller}/{id}",
+            defaults: new { id = RouteParameter.Optional }
+        );
+    }
+}
+
+6️⃣ Web.config（SAP 設定）
+<appSettings>
+  <add key="SapBaseUrl" value="https://sap.example.com/odata/" />
+  <add key="SapUser" value="SAP_USER" />
+  <add key="SapPassword" value="SAP_PASSWORD" />
+</appSettings>
+
+呼叫方式
+GET /api/orders?from=2024-01-01&to=2024-01-31
+
+MVC5 實戰建議（超重要）
+✅ 一定要 Facade
+
+SAP 不能直接在 Controller 用 HttpClient
+
+✅ HttpClient 重用
+
+避免 socket exhaustion
+
+✅ Controller 只做 HTTP
+
+商業邏輯在 Facade
+
+❌ 不要讓 View / JS 直接打 SAP
+如果你要「企業級 MVC5」
