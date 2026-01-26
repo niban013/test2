@@ -1,0 +1,175 @@
+var table = $('#example').DataTable({
+    dom:
+        "<'row align-items-center mb-2'<'col-md-6'i><'col-md-6 d-flex justify-content-end align-items-center gap-2'fB>>" +
+        "<'row'<'col-12'tr>>" +
+        "<'row mt-2'<'col-md-5'l><'col-md-7'p>>",
+
+    buttons: [
+        { extend: 'excelHtml5', text: '匯出 Excel', className: 'btn btn-success btn-sm' },
+        { extend: 'csvHtml5',   text: '匯出 CSV',   className: 'btn btn-primary btn-sm' }
+    ]
+});
+
+table.on('draw', function () {
+    const hasData = table.rows({ filter: 'applied' }).any();
+
+    // index 0 = Excel
+    table.button(0).node().style.display = hasData ? 'inline-block' : 'none';
+});
+buttons: [
+    { extend: 'excelHtml5', text: '匯出 Excel', className: 'btn btn-success btn-sm', name: 'excelBtn' },
+    { extend: 'csvHtml5',   text: '匯出 CSV',   className: 'btn btn-primary btn-sm', name: 'csvBtn' }
+]
+table.on('draw', function () {
+    const hasData = table.rows({ filter: 'applied' }).any();
+
+    table.button('excelBtn:name').node().style.display = hasData ? 'inline-block' : 'none';
+});
+
+
+const count = table.rows({ filter: 'applied' }).count();
+table.button('excelBtn:name').node().style.display = count > 0 ? 'inline-block' : 'none';
+
+
+基本寫法
+
+假設你已經有一個 function：
+
+function myExportLogic() {
+    alert("執行自訂匯出邏輯！");
+}
+
+
+Button 這樣寫：
+
+buttons: [
+    {
+        text: '自訂匯出',
+        className: 'btn btn-warning btn-sm',
+        action: function (e, dt, node, config) {
+            myExportLogic(); // 👈 呼叫你自己的 function
+        }
+    }
+]
+
+✅ 如果你還想「先做自訂邏輯，再執行原本 Excel 匯出」
+function beforeExportCheck() {
+    console.log("匯出前檢查完成");
+}
+
+{
+    extend: 'excelHtml5',
+    text: '匯出 Excel',
+    className: 'btn btn-success btn-sm',
+    action: function (e, dt, node, config) {
+
+        beforeExportCheck(); // 👈 先跑你自己的 function
+
+        // 👇 再呼叫 DataTables 內建的 Excel 匯出
+        $.fn.dataTable.ext.buttons.excelHtml5.action.call(this, e, dt, node, config);
+    }
+}
+
+✅ 把 DataTable 物件傳進你的 function
+
+很多時候你需要目前表格資料：
+
+function exportSelectedRows(table) {
+    const data = table.rows({ selected: true }).data().toArray();
+    console.log("選取的資料：", data);
+}
+
+{
+    text: '匯出選取資料',
+    className: 'btn btn-info btn-sm',
+    action: function (e, dt, node, config) {
+        exportSelectedRows(dt); // dt 就是 DataTable instance
+    }
+}
+
+🧠 action 參數是什麼？
+參數	說明
+e	click event
+dt	DataTable API 物件（超好用）
+node	按鈕 DOM
+config	按鈕設定
+🎯 最常見應用
+需求	寫法
+呼叫自訂 function	myFunc();
+傳 table 進去	myFunc(dt);
+先檢查再匯出	自訂邏輯 + excelHtml5.action.call(...)
+
+如果你把你那個 已經寫好的 function 貼給我，我可以幫你改成「按下按鈕 → 正確帶入 DataTable 資料」的版本。
+
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>DataTable Export Demo</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- DataTables -->
+    <link href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+
+    <div class="container">
+        <h3 class="mb-3">員工清單</h3>
+
+        <table id="example" class="table table-striped" style="width:100%">
+            <thead>
+                <tr>
+                    <th>姓名</th>
+                    <th>職稱</th>
+                    <th>城市</th>
+                    <th>年齡</th>
+                    <th>到職日</th>
+                    <th>薪資</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>王小明</td><td>工程師</td><td>台北</td><td>28</td><td>2020/03/12</td><td>50,000</td></tr>
+                <tr><td>李小華</td><td>設計師</td><td>台中</td><td>32</td><td>2019/07/01</td><td>48,000</td></tr>
+                <tr><td>陳大文</td><td>專案經理</td><td>高雄</td><td>40</td><td>2018/01/15</td><td>75,000</td></tr>
+                <tr><td>林美麗</td><td>行銷</td><td>台北</td><td>29</td><td>2021/11/20</td><td>45,000</td></tr>
+                <tr><td>張志強</td><td>工程師</td><td>新竹</td><td>35</td><td>2017/05/30</td><td>68,000</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- DataTables -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+    <!-- Buttons -->
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+
+    <!-- Excel 需要 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            var table = $('#example').DataTable({
+                dom:
+                    "<'row align-items-center mb-2'<'col-md-6'i><'col-md-6 d-flex justify-content-end align-items-center gap-2'fB>>" +
+                    "<'row'<'col-12'tr>>" +
+                    "<'row mt-2'<'col-md-5'l><'col-md-7'p>>",
+
+                buttons: [
+                    { extend: 'excelHtml5', text: '匯出 Excel', className: 'btn btn-success btn-sm' },
+                    { extend: 'csvHtml5', text: '匯出 CSV', className: 'btn btn-primary btn-sm' }
+                ]
+            });
+        });
+    </script>
+
+</body>
+</html>
+
