@@ -1,0 +1,78 @@
+<asp:GridView ID="gvFiles" runat="server" AutoGenerateColumns="False" DataKeyNames="Id">
+    <Columns>
+        <!-- 顯示檔名 -->
+        <asp:BoundField DataField="FileName" HeaderText="檔名" />
+
+        <!-- 下載連結，跨網域穩定 -->
+        <asp:TemplateField HeaderText="下載">
+            <ItemTemplate>
+                <a href='<%# "https://B.com/DownloadHandler.ashx?id=" + Eval("Id") %>' 
+                   target="_top">
+                    下載
+                </a>
+            </ItemTemplate>
+        </asp:TemplateField>
+    </Columns>
+</asp:GridView>
+<a href='<%# ResolveUrl("~/DownloadHandler.ashx?id=" + Eval("Id")) %>' 
+   target="_blank">
+    下載
+</a>
+📌 如果 ashx 在某個子資料夾
+
+例如：
+
+B.com/api/DownloadHandler.ashx
+
+那就寫：
+
+<a href='<%# ResolveUrl("~/api/DownloadHandler.ashx?id=" + Eval("Id")) %>' 
+   target="_blank">
+    下載
+</a>
+<a href='<%# "https://B.com/DownloadHandler.ashx?id=" + Eval("Id") %>'
+   target="_blank"
+   rel="noopener">
+    下載
+</a>
+public class DownloadHandler : IHttpHandler
+{
+    public void ProcessRequest(HttpContext context)
+    {
+        string id = context.Request.QueryString["id"];
+        if (string.IsNullOrEmpty(id))
+        {
+            context.Response.StatusCode = 400;
+            context.Response.Write("Missing id");
+            return;
+        }
+
+        // 假設從資料庫或檔案取得 byte[]
+        byte[] fileBytes = GetFileById(id); // 你自己的方法
+        if (fileBytes == null)
+        {
+            context.Response.StatusCode = 404;
+            context.Response.Write("File not found");
+            return;
+        }
+
+        context.Response.Clear();
+        context.Response.ContentType = "application/pdf";
+        context.Response.AddHeader("Content-Disposition", $"attachment; filename=file_{id}.pdf");
+        context.Response.AddHeader("Content-Length", fileBytes.Length.ToString());
+        context.Response.OutputStream.Write(fileBytes, 0, fileBytes.Length);
+        context.Response.Flush();
+        context.ApplicationInstance.CompleteRequest();
+    }
+
+    public bool IsReusable => false;
+
+    private byte[] GetFileById(string id)
+    {
+        // 範例：從實體檔讀
+        string path = HttpContext.Current.Server.MapPath("~/files/test.pdf");
+        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+
+        // 或從 DB 讀取 varbinary
+    }
+}
