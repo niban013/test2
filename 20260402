@@ -1,0 +1,1198 @@
+function buildContext($el, val, vm, form, key, name) {
+    return {
+        val,
+        el: $el,
+        vm,
+        form,
+        tabKey: key,
+        field: name,
+
+        type: ($el.attr("type") || $el.prop("tagName")).toLowerCase(),
+
+        must: $el.data("must"),
+        pattern: $el.data("pattern"),
+        minlength: $el.data("minlength"),
+        maxlength: $el.data("maxlength"),
+        min: $el.attr("min"),
+        max: $el.attr("max"),
+        conditional: $el.data("conditional"),
+        cross: $el.data("cross"),
+        asyncUrl: $el.data("async")
+    };
+}
+
+const ControlRuleMap = {
+
+    text: ["required", "pattern", "minlength", "maxlength"],
+    textarea: ["required", "minlength", "maxlength"],
+
+    number: ["required", "min", "max"],
+
+    date: ["required", "min", "max"],
+
+    select: ["required"],
+
+    checkbox: ["required"],
+
+    file: [] // ⭐ 完全跳過（或只留 required 看需求）
+};
+const ValidatorRules = {
+
+    required: {
+        validate: (val, ctx) => {
+            if (ctx.must && (val === "" || val == null)) return "必填";
+            return true;
+        }
+    },
+
+    pattern: {
+        validate: (val, ctx) => {
+            if (!ctx.pattern || !val) return true;
+            return new RegExp(ctx.pattern).test(val) || "格式錯誤";
+        }
+    },
+
+    minlength: {
+        validate: (val, ctx) => {
+            if (!ctx.minlength || !val) return true;
+            return val.length >= ctx.minlength || `至少${ctx.minlength}字`;
+        }
+    },
+
+    maxlength: {
+        validate: (val, ctx) => {
+            if (!ctx.maxlength || !val) return true;
+            return val.length <= ctx.maxlength || `最多${ctx.maxlength}字`;
+        }
+    },
+
+    min: {
+        validate: (val, ctx) => {
+            if (!ctx.min || !val) return true;
+
+            // ⭐ 日期 or 數字
+            if (ctx.type === "date") {
+                return new Date(val) >= new Date(ctx.min) || `不可小於${ctx.min}`;
+            }
+
+            return parseFloat(val) >= parseFloat(ctx.min) || `不可小於${ctx.min}`;
+        }
+    },
+
+    max: {
+        validate: (val, ctx) => {
+            if (!ctx.max || !val) return true;
+
+            if (ctx.type === "date") {
+                return new Date(val) <= new Date(ctx.max) || `不可大於${ctx.max}`;
+            }
+
+            return parseFloat(val) <= parseFloat(ctx.max) || `不可大於${ctx.max}`;
+        }
+    },
+
+    conditional: {
+        validate: (val, ctx) => {
+            if (!ctx.conditional) return true;
+
+            let cond = JSON.parse(ctx.conditional);
+            if ($(cond.selector).val() && val === "") {
+                return "條件必填";
+            }
+            return true;
+        }
+    },
+
+    cross: {
+        validate: (val, ctx) => {
+            if (!ctx.cross) return true;
+
+            let c = JSON.parse(ctx.cross);
+            let otherVal = $(c.selector).val();
+
+            if (c.op === ">" && val && otherVal) {
+                return parseFloat(val) > parseFloat(otherVal) || `必須大於${c.selector}`;
+            }
+            return true;
+        }
+    }
+
+};
+
+
+
+const ValueHandler = {
+
+    // =========================
+    // ⭐ 取得值（統一出口）
+    // =========================
+    get($el) {
+
+        // ===== file =====
+        if ($el.is(":file")) {
+            return $el.data("file") || null;
+        }
+        if ($el.is(":radio")) {
+            const name = $el.attr("name");
+            return $(`input[name="${name}"]:checked`).val() || "";
+        }
+        // ===== select2 =====
+        if ($el.hasClass("select2")) {
+            return $el.val();
+        }
+
+        // ===== 一般 input/select/textarea =====
+        if ($el.is("input, select, textarea")) {
+            return $el.val()?.trim() || "";
+        }
+
+        // ===== label / span / div =====
+        return $el.text().trim();
+    },
+
+    // =========================
+    // ⭐ 設定值（統一入口🔥）
+    // =========================
+    set($el, value, options = {}) {
+
+        const { silent = false, vm, tabKey, field } = options;
+
+        // ===== file =====
+        if ($el.is(":file")) {
+
+            const $group = $el.closest(".dynamic-file");
+            const $previewBtn = $group.find(".preview-btn");
+            const $deleteBtn = $group.find(".delete-btn");
+            const $filenameLabel = $group.find(".filename-label");
+
+            // ===== 清空 =====
+            if (!value) {
+                $el.data("file", null);
+                $filenameLabel.text("");
+                $previewBtn.hide();
+                $deleteBtn.hide();
+                return;
+            }
+
+            // ===== 設定檔案 =====
+            $el.data("file", value);
+            $filenameLabel.text(value.name || value);
+
+            $previewBtn.show();
+            $deleteBtn.show();
+
+            // ⭐ 綁 preview（先解除再綁，避免重複）
+            $previewBtn.off("click").on("click", () => {
+                vm.previewFile(tabKey, value);
+            });
+
+            // ⭐ 綁 delete
+            $deleteBtn.off("click").on("click", () => {
+
+                $el.val(""); // 清 input
+                $el.data("file", null);
+
+                $filenameLabel.text("");
+                $previewBtn.hide();
+                $deleteBtn.hide();
+
+                vm.removeFile(tabKey, field);
+            });
+
+            return;
+        }
+
+        // ===== select2 =====
+        if ($el.hasClass("select2")) {
+            $el.val(value).trigger("change.select2");
+        }
+        // ===== input =====
+        else if ($el.is("input, select, textarea")) {
+            $el.val(value);
+        }
+        // ===== label =====
+        else {
+            $el.text(value);
+        }
+
+        if (!silent) {
+            $el.trigger("input");
+        }
+    }
+};
+
+var DynamicForm = (function () {
+
+    // =========================
+    // ⭐ PageVM（內建）
+    // =========================
+    class PageVM {
+        constructor() {
+            this.forms = [];
+
+            // ⭐ 以 tabKey 分隔 scope
+            this._scopedData = {};      // { tabKey: { fieldName: value } }
+            this._watchers = {};        // { tabKey: { fieldName: [fn,...] } }
+            this._computed = {};        // { tabKey: { fieldName: fn } }
+            this._computedCache = {};   // { tabKey: { fieldName: value } }
+            this._dirty = {};           // { tabKey: Set }
+            this._validators = {}; // ⭐ NEW
+            // ⭐ 新增自定物件儲存
+            this._customData = {};  // 任何你想存的資料
+            this._fileData = {}; // { tabKey: { fieldName: File } }
+
+        }
+
+        register(form) {
+            this.forms.push(form);
+            const key = form.key;
+
+            // ⭐ 初始化 tab scope
+            if (!this._scopedData[key]) this._scopedData[key] = {};
+            if (!this._dirty[key]) this._dirty[key] = new Set();
+            if (!this._watchers[key]) this._watchers[key] = {};
+            if (!this._computed[key]) this._computed[key] = {};
+            if (!this._computedCache[key]) this._computedCache[key] = {};
+
+            // ⭐ 初始化欄位值
+            Object.entries(form.fieldCache).forEach(([k, v]) => {
+                if (this._scopedData[key][k] === undefined) {
+                    this._scopedData[key][k] = v;
+                }
+            });
+
+            // ⭐ 建立 tab 專屬 proxy
+            const proxy = new Proxy(this._scopedData[key], {
+                set: (target, name, value) => {
+                    const old = target[name];
+                    if (old === value) return true;
+
+                    target[name] = value;
+
+                    // ⭐ dirty
+                    this._dirty[key].add(name);
+
+                    // ⭐ 更新當前 form
+                    setTimeout(() => form.validateField(name).catch(console.error), 0);
+
+
+                    // ⭐ watch
+                    if (this._watchers[key][name]) {
+                        this._watchers[key][name].forEach(fn => fn(value, old));
+                    }
+
+                    // ⭐ computed cache 清掉
+                    this._computedCache[key] = {};
+
+                    return true;
+                },
+                get: (target, name) => {
+                    if (this._computed[key][name]) {
+                        if (this._computedCache[key][name] === undefined) {
+                            this._computedCache[key][name] = this._computed[key][name].call(proxy);
+                        }
+                        return this._computedCache[key][name];
+                    }
+                    return target[name];
+                }
+            });
+
+            // ⭐ 原本 form.proxy
+            form.proxy = proxy;
+
+            // ⭐ 直接掛到 VM 物件上
+            this[key] = proxy;
+        }
+
+        // ========= API =========
+        $watch(tabKey, name, fn) {
+            if (!this._watchers[tabKey][name]) this._watchers[tabKey][name] = [];
+            this._watchers[tabKey][name].push(fn);
+        }
+
+        $computed(tabKey, name, fn) {
+            this._computed[tabKey][name] = fn;
+        }
+
+        $dirty(tabKey) {
+            const result = {};
+            this._dirty[tabKey].forEach(k => result[k] = this._scopedData[tabKey][k]);
+            return result;
+        }
+
+        $resetDirty(tabKey) {
+            this._dirty[tabKey].clear();
+        }
+
+        cache() {
+            this.forms.forEach(f => f.cache());
+        }
+
+        restore() {
+            this.forms.forEach(f => f.restore());
+        }
+
+        async validate() {
+            const results = await Promise.all(this.forms.map(f => f.validateAll()));
+            return results.every(r => r);
+        }
+
+        // ⭐ NEW：註冊自訂驗證
+        $validator(tabKey, field, fn) {
+            if (!this._validators[tabKey]) this._validators[tabKey] = {};
+            if (!this._validators[tabKey][field]) this._validators[tabKey][field] = [];
+
+            this._validators[tabKey][field].push(fn);
+        }
+
+        showCache() {
+            this.forms.forEach(f => {
+                console.log(`Cache for ${f.key}:`, f.fieldCache);
+            });
+        }
+
+        setCustom(tabKey, key, value) {
+            if (!this._customData[tabKey]) this._customData[tabKey] = {};
+            this._customData[tabKey][key] = value;
+        }
+
+        getCustom(tabKey, key) {
+            return this._customData[tabKey]?.[key];
+        }
+
+        // ⭐ 設定檔案
+        setFile(tabKey, field, file, options = {}) {
+            if (!this._fileData[tabKey]) this._fileData[tabKey] = {};
+
+            // 非同步驗證
+            if (options.validate) {
+                const { maxSizeMB, allowedTypes } = options;
+
+                if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+                    throw new Error(`檔案超過 ${maxSizeMB} MB`);
+                }
+
+                if (allowedTypes && !allowedTypes.includes(file.type)) {
+                    throw new Error(`檔案類型不允許: ${file.type}`);
+                }
+            }
+
+            this._fileData[tabKey][field] = file;
+        }
+
+        // ⭐ 取得檔案
+        //getFile(tabKey, field) {
+        //    return this._fileData[tabKey]?.[field];
+        //}
+        async getFile(tabKey, field) {
+            // 先看本地是否已有
+            let file = this._fileData[tabKey]?.[field];
+            if (file) return file;
+
+            // ⭐ 後端抓檔案方法
+            const fetchBackendFile = async (tabKey, field) => {
+                const res = await fetch(`/api/file/${tabKey}/${field}`);
+                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+                const blob = await res.blob();
+                return {
+                    name: `${field}.pdf`, // 或從 headers/後端傳回真實檔名
+                    type: blob.type,
+                    byteArray: new Uint8Array(await blob.arrayBuffer())
+                };
+            };
+
+            try {
+                const backendFile = await fetchBackendFile(tabKey, field);
+                if (!this._fileData[tabKey]) this._fileData[tabKey] = {};
+                const newFile = new File([backendFile.byteArray], backendFile.name, { type: backendFile.type });
+                this._fileData[tabKey][field] = newFile;
+            } catch (err) {
+                console.error("從後端抓檔案失敗", err);
+                return this._fileData[tabKey]?.[field] || null;
+/*                throw err;*/
+            }
+
+            return this._fileData[tabKey]?.[field] || null;
+        }
+
+        // ⭐ 移除檔案
+        removeFile(tabKey, field) {
+            if (this._fileData[tabKey]) delete this._fileData[tabKey][field];
+        }
+
+        // ⭐ 取得整個 tab 的檔案集合
+        getFiles(tabKey) {
+            return this._fileData[tabKey] || {};
+        }
+
+
+         
+        async previewFile(tabKey, file) {
+
+            if (file instanceof File) {
+               
+            } else if (typeof file === "string") {
+             
+                file = { name: file, lazy: true };
+            }
+
+            if (!file) return;
+
+            const win = window.open("", "_blank", "width=1000,height=700");
+            if (!win) {
+                alert("請允許彈出視窗");
+                return;
+            }
+
+            // ⭐ lazy load
+            if (file?.lazy) {
+                const realFile = await this.getFile(tabKey, file.name);
+                if (!realFile) {
+                    win.close();
+                    alert("下載失敗");
+                    return;
+                }
+                file = realFile;
+            }
+
+            const url = URL.createObjectURL(file);
+
+            // ===== 內部專用 helper: 圖片/PDF互動 =====
+            const _initPreviewInteraction = (type, targetId, sliderId, options = {}) => {
+                const el = win.document.getElementById(targetId);
+                const slider = win.document.getElementById(sliderId);
+                if (!el || !slider) return;
+
+                let scale = 1;
+                let translateX = 0, translateY = 0;
+                let isDragging = false;
+                let startX, startY;
+
+                const minScale = options.minScale || 0.5;
+                const maxScale = options.maxScale || 5;
+                const step = options.step || 0.01;
+
+                const applyTransform = () => {
+                    if (type === "image") {
+                        el.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+                    } else if (type === "pdf") {
+                        el.style.transformOrigin = "top left";
+                        el.style.transform = `scale(${scale})`;
+                    }
+                };
+
+                slider.min = minScale;
+                slider.max = maxScale;
+                slider.step = step;
+                slider.value = scale;
+
+                slider.oninput = e => {
+                    scale = parseFloat(e.target.value);
+                    applyTransform();
+                };
+
+                if (type === "image") {
+                    el.style.cursor = "grab";
+                    el.onwheel = e => {
+                        e.preventDefault();
+                        scale += e.deltaY * -0.001;
+                        scale = Math.min(Math.max(minScale, scale), maxScale);
+                        applyTransform();
+                        slider.value = scale;
+                    };
+                    el.onmousedown = e => {
+                        isDragging = true;
+                        startX = e.clientX - translateX;
+                        startY = e.clientY - translateY;
+                        el.style.cursor = "grabbing";
+                    };
+                    win.document.onmouseup = () => {
+                        isDragging = false;
+                        el.style.cursor = "grab";
+                    };
+                    win.document.onmousemove = e => {
+                        if (!isDragging) return;
+                        translateX = e.clientX - startX;
+                        translateY = e.clientY - startY;
+                        applyTransform();
+                    };
+                }
+
+                if (type === "pdf" && options.zoomInId && options.zoomOutId) {
+                    const zoomInBtn = win.document.getElementById(options.zoomInId);
+                    const zoomOutBtn = win.document.getElementById(options.zoomOutId);
+                    if (zoomInBtn) zoomInBtn.onclick = () => { scale = Math.min(scale + 0.1, maxScale); applyTransform(); slider.value = scale; };
+                    if (zoomOutBtn) zoomOutBtn.onclick = () => { scale = Math.max(scale - 0.1, minScale); applyTransform(); slider.value = scale; };
+                }
+            };
+
+            // ===== 決定內容 =====
+            let content = "";
+            if (file.type.startsWith("image/")) {
+                content = `
+        <div style="display:flex; flex-direction:column; align-items:center; width:100%; height:100%;">
+            <img id="previewImg" src="${url}" 
+                 style="max-width:100%; max-height:80%; cursor:grab; transform:scale(1);" />
+            <input type="range" id="imgZoom" min="0.5" max="5" step="0.01" value="1" style="width:80%; margin-top:5px;">
+        </div>`;
+            } else if (file.type === "application/pdf") {
+                content = `
+        <div style="display:flex; flex-direction:column; height:100%; width:100%;">
+            <div style="display:flex; gap:5px; padding:5px; align-items:center;">
+                <button id="pdfZoomIn">+</button>
+                <button id="pdfZoomOut">-</button>
+                <input type="range" id="pdfZoomSlider" min="0.5" max="3" step="0.01" value="1" style="flex:1;">
+            </div>
+            <iframe id="pdfFrame" src="${url}" style="width:100%; flex:1; border:none;"></iframe>
+        </div>`;
+            } else {
+                // fallback: 下載
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = file.name;
+                a.click();
+                URL.revokeObjectURL(url);
+                return;
+            }
+
+            // ===== render =====
+            win.document.body.style.margin = "0";
+            win.document.body.innerHTML = `
+    <div style="height:100%; display:flex; flex-direction:column;">
+        <div style="padding:5px; background:#f1f1f1;">${file.name}</div>
+        <div id="content" style="flex:1; display:flex; justify-content:center; align-items:center;">
+            ${content}
+        </div>
+    </div>`;
+
+            // ===== 初始化互動 =====
+            if (file.type.startsWith("image/")) {
+                _initPreviewInteraction("image", "previewImg", "imgZoom");
+            } else if (file.type === "application/pdf") {
+                _initPreviewInteraction("pdf", "pdfFrame", "pdfZoomSlider", {
+                    minScale: 0.5,
+                    maxScale: 3,
+                    step: 0.01,
+                    zoomInId: "pdfZoomIn",
+                    zoomOutId: "pdfZoomOut"
+                });
+            }
+
+            // ===== 清理 ObjectURL =====
+            win.addEventListener("beforeunload", () => URL.revokeObjectURL(url));
+        }
+
+    // ⭐ 處理檔案輸入（inline / modal 共用）
+        handleFileInput(tabKey, field, file, options) {
+        if (!file?.lazy) {
+            this.setFile(tabKey, field, file);
+        }
+         
+
+        if (options.inline) {
+            const $group = options.$group;
+            const $previewBtn = $group.find(".preview-btn");
+            const $deleteBtn = $group.find(".delete-btn");
+            const $filenameLabel = $group.find(".filename-label");
+            const $input = options.$input;
+
+            $filenameLabel.text(file.name);
+            $previewBtn.show();
+            $deleteBtn.show();
+
+            $deleteBtn.off("click").on("click", () => {
+                $input.val(null);
+                $filenameLabel.text("未選檔案");
+                $previewBtn.hide();
+                $deleteBtn.hide();
+                this.removeFile(tabKey, field);
+            });
+
+            $previewBtn.off("click").on("click", () => {
+
+                this.previewFile(tabKey,file);
+            });
+        }
+        else if (options.modal) {
+            const $fileList = options.$fileList;
+            const $li = $(`
+                <li class="list-group-item d-flex justify-content-between align-items-center flex-column align-items-start">
+                    <div class="d-flex justify-content-between w-100 align-items-center">
+                        <span>${file.name} (${Math.round(file.size / 1024)} KB)</span>
+                        <button type="button" class="btn btn-sm btn-danger btn-delete">刪除</button>
+                    </div>
+                    <div class="file-preview mt-2"></div>
+                </li>
+            `);
+            $fileList.append($li);
+
+            $li.find(".btn-delete").click(() => {
+                $li.remove();
+                this.removeFile(tabKey, field);
+            });
+
+            //const $preview = $li.find(".file-preview");
+            //this.previewFile(file, $preview);
+        }
+    }
+    }
+
+    // =========================
+    // ⭐ Form Instance
+    // =========================
+    class DynamicFormInstance {
+        constructor(container, vm) {
+            this.container = $(container);
+            this.fields = this.container.find("[vmodel]");
+            this.vm = vm; 
+            this.key = this.container.data("df"); // ⭐ 每個 tab 的 key
+            this.fieldCache = {};
+            this.asyncCache = {};
+            this.asyncTokens = {};
+            this.data = {};
+            this.errors = {}; // ⭐ 加入錯誤收集 (tabKey scoped)
+
+            this.proxyData = new Proxy(this.data, {
+                set: (target, key, value) => {
+
+                    if (target[key] === value) return true; // ⚠️ 避免重複觸發
+
+                    target[key] = value;
+                    this.updateField(key, value, false);
+                    return true;
+                }
+            });
+
+            this.init();
+
+            // ⭐ 自動註冊到 VM
+            this.vm.register(this);
+        }
+
+
+        init() {
+            // this.fields 只包含 vmodel 標記的欄位
+            this.fields.each((_, el) => {
+                const $el = $(el);
+                const name = $el.attr("id") || $el.attr("name");
+                if (!name) return;
+
+                // 判斷欄位類型
+                const isInput = $el.is("input, select, textarea");
+                const isFile = isInput && $el.attr("type") === "file";
+
+                let val;
+
+                if (isInput) {
+                    // ===== 可編輯欄位 =====
+                    if (!$el.parent().hasClass("input-with-status") && !isFile) {
+                        $el.wrap('<div class="input-with-status"></div>');
+                    }
+
+                    // 預設值處理
+                    //const def = $el.data("default") || "";
+                    //if (!$el.val() && def) $el.val(def);
+
+                    val = ValueHandler.get($el) || "";
+
+                    if ($el.hasClass("select2")) {
+                        this.initSelect2($el);
+                    }
+
+                    this.clearStatusIcon($el);
+                    
+                } else {
+                    // ===== 只讀欄位（label / span / div 等） =====
+                    val = $el.text().trim();
+                }
+
+                if (val.length > 0) {
+                    this.setStatusIcon($el, 'success');
+                }
+                // ===== 同步 VM =====
+                (this.vm._scopedData[this.key] ||= {})[name] = val;
+                this.proxyData[name] = val;
+                this.fieldCache[name] = val;
+            });
+
+            // 綁定事件，只綁可編輯欄位
+            this.bindEvents();
+        }
+
+        initSelect2($el) {
+            $el.select2({
+                width: '100%',
+                templateResult: item =>
+                    item.id
+                        ? $(`<div style="background:${$(item.element).data("color") || ''};padding:4px 6px;">${item.text}</div>`)
+                        : item.text,
+                templateSelection: item => item.text
+            }).on("select2:select select2:unselect change", () => {
+                this.updateSelect2Background($el);
+                const name = $el.attr("id") || $el.attr("name");
+                this.proxyData[name] = ValueHandler.get($el);
+                this.validateField($el);
+            });
+
+            this.updateSelect2Background($el);
+        }
+        
+        updateSelect2Background($el) {
+            const color = $el.find("option:selected").data("color") || "";
+            $el.next(".select2-container")
+                .find(".select2-selection--single")
+                .css("background-color", color);
+        }
+        updateLocalData(name, value) {
+            this.fieldCache[name] = value;
+            // ⚠️ 不要再寫 proxyData，避免觸發 Proxy
+            // this.proxyData[name] = value;
+            if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+            this.vm._scopedData[this.key][name] = value;
+        }
+        //updateLocalData(name, value) {
+        //    this.fieldCache[name] = value;
+        //    this.proxyData[name] = value;
+        //    if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+        //    this.vm._scopedData[this.key][name] = value;
+        //}
+        updateField(name, value, validate = true) {
+            const $el = this.fields.filter(`[name="${name}"], [id="${name}"]`);
+            if (!$el.length) return;
+
+            // ⭐ 避免無限 loop
+            const current = ValueHandler.get($el);
+
+            if (JSON.stringify(current) === JSON.stringify(value)) return;
+
+            const isFileDisplay = $el.closest(".dynamic-file-show").length > 0;
+
+            if (isFileDisplay && value) {
+
+                const file = typeof value === "object"
+                    ? value
+                    : {
+                        name: value,
+                        lazy: true
+                    };
+
+                ValueHandler.set($el, file, {
+                    silent: !validate,
+                    vm: this.vm,
+                    tabKey: this.key,
+                    field: name
+                });
+            }
+            else {
+                // ⭐ 一般欄位（統一入口）
+                ValueHandler.set($el, value, { silent: !validate });
+            }
+
+            if (!this.isEditableField($el)) {
+
+                $el.text(value);
+
+           
+                const $group = $el.closest(".dynamic-file-show");
+                if ($group.length > 0) {  
+                    const file = {
+                        name: "example.pdf",
+                        size: 1024 * 200,  // 200 KB
+                        id: "abc123",      // 後端識別用
+                        blob: null,         // 目前沒載入 byte
+                        lazy:true
+                    };
+                    this.vm.handleFileInput(this.key, name, file, { inline: true, $group, $input: $el });
+
+                }
+            }
+          
+            if (validate) {
+                this.validateField($el).catch(err => {
+                    console.error("validate error:", err);
+                });
+            }
+
+            this.updateLocalData(name, value);
+        }
+        setStatusIcon($el, status, msg = "") {
+
+
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove();
+            this.clearStatusIcon($el);
+            this.clearError($el);
+
+            const icons = {
+                success: '<i class="bi bi-check-circle text-success"></i>',
+                error: '',
+                processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+            };
+
+            if (status) $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+            if (msg) this.showFieldError($el, msg);
+        }
+        //setStatusIcon($el, status) {
+        //    const $w = $el.parent(".input-with-status");
+        //    this.clearStatusIcon($el);
+
+        //    const val = $el.val()?.trim() || "";
+        //    if ($el.data("must") && val === "") return;
+
+        //    const icons = {
+        //        success: '<i class="bi bi-check-circle text-success"></i>',
+        //        error: '<i class="bi bi-x-circle text-danger"></i>',
+        //        processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+        //    };
+
+        //    if (icons[status]) {
+        //        $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+        //    }
+        //}
+        clearStatusIcon($el) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove().end().removeClass("has-icon");
+        }
+        //clearStatusIcon($el) {
+        //    $el.parent(".input-with-status").find(".status-icon").remove().end().removeClass("has-icon");
+        //}
+     
+        showFieldError($el, msg) {
+            // 先處理 input 自身紅邊框與 title
+            if (msg) {
+                $el.addClass("is-invalid").css("border", "1px solid red").attr("title", msg);
+            } else {
+                $el.removeClass("is-invalid").css("border", "").attr("title", "");
+            }
+
+            // 找到 input 所在的 row
+            var $row = $el.closest('.row');
+            if (!$row.length) return; // 沒有 row 就放棄
+
+            // 嘗試找到下一個 col
+            var $errorCol = $el.closest('[class*="col-"]').next('[class*="col-"]');
+
+            // 如果下一個 col 不存在，動態建立一個 col-3 並放在後面
+            if (!$errorCol.length) {
+                $errorCol = $('<div class="col-3"></div>');
+                $el.closest('[class*="col-"]').after($errorCol);
+            }
+
+            // 先清空舊訊息
+            $errorCol.empty();
+
+            // 加入錯誤訊息
+            if (msg) {
+                $errorCol.append('<label class="error-label" style="color:red; font-size:0.85em;">' + msg + '</label>');
+            }
+        }
+
+        _errorKey(name) {
+            return `${this.key}_${name}`;
+        }
+
+        setError($el, msg) {
+            const name = $el.attr("id") || $el.attr("name");
+            const key = this._errorKey(name);
+            this.errors[key] = msg;
+
+            this.showFieldError($el, msg);
+        }
+        //setError($el, msg) {
+        //    //$el.addClass("is-invalid").css("border", "1px solid red").attr("title", msg || "");
+
+        //    this.showFieldError($el, "這是錯誤訊息");
+        //    //$el.next(".select2-container").find(".select2-selection").css("border", "1px solid red");
+        //}
+        clearError($el) {
+            const name = $el.attr("id") || $el.attr("name");
+            const key = this._errorKey(name);
+            delete this.errors[key];
+
+            $el.removeClass("is-invalid").css("border", "").attr("title", "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "");
+        }
+        //clearError($el) {
+        //    $el.removeClass("is-invalid").css("border", "").attr("title", "");
+        //    $el.next(".select2-container").find(".select2-selection").css("border", "");
+        //}
+        getErrors(tabKey = this.key) {
+            const prefix = `${tabKey}_`;
+            return Object.fromEntries(Object.entries(this.errors).filter(([k]) => k.startsWith(prefix)));
+        }
+
+        hasAnyError(tabKey = this.key) {
+            const prefix = `${tabKey}_`;
+            return Object.keys(this.errors).some(k => k.startsWith(prefix));
+        }
+        isEditableField($el) {
+            if (!$el.is("input,textarea,select")) return false;
+            if ($el.is(":disabled") || $el.prop("readonly")) return false;
+
+            // 如果 display:none / hidden / hidden by parent
+            if (!$el.is(":visible")) return false;
+
+            return true;
+        }
+        async validateField(el) {
+
+            const $el = $(el);
+            const val = ValueHandler.get($el);
+            const name = $el.attr("id") || $el.attr("name");
+
+            this.clearError($el);
+            this.clearStatusIcon($el);
+
+            // ⭐ file 直接略過（你原本邏輯）
+            if ($el.attr("type") === "file") return true;
+
+            const ctx = buildContext($el, val, this.vm, this, this.key, name);
+
+            // ⭐ 空值快速通過
+            if (!ctx.must && val === "") return true;
+
+            // =========================
+            // ⭐ 根據控件取得規則
+            // =========================
+            const rules = [...(ControlRuleMap[ctx.type] || [])];
+            // ⭐ 額外規則（可混用 data-*）
+            if (ctx.conditional) rules.push("conditional");
+            if (ctx.cross) rules.push("cross");
+
+            // =========================
+            // ⭐ 同步驗證
+            // =========================
+            for (let r of rules) {
+
+                const rule = ValidatorRules[r];
+                if (!rule) continue;
+
+                const result = await rule.validate(val, ctx);
+
+                if (result !== true) {
+                    this.setError($el, result);
+                    this.setStatusIcon($el, 'error', result); 
+                    return false;
+                }
+            }
+
+            // =========================
+            // ⭐ 自訂驗證
+            // =========================
+            const customValidators = this.vm._validators?.[this.key]?.[name];
+
+            if (customValidators?.length) {
+                for (let fn of customValidators) {
+
+                    let result = await fn(val, ctx);
+
+                    if (result !== true) {
+                        this.setError($el, result || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                        return false;
+                    }
+                }
+            }
+
+            // =========================
+            // ⭐ async 驗證（原樣保留）
+            // =========================
+            if (ctx.asyncUrl && val) {
+
+                const cacheKey = `${this.key}_${name}_${val}`;
+                const token = Symbol();
+                this.asyncTokens[cacheKey] = token;
+
+                this.setStatusIcon($el, 'processing');
+
+                try {
+                    const resp = await $.ajax({
+                        url: ctx.asyncUrl,
+                        data: { value: val }
+                    });
+
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.asyncCache[cacheKey] = resp.valid;
+
+                    if (!resp.valid) {
+                        this.setError($el, resp.message || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                    } else {
+                        this.setStatusIcon($el, 'success');
+                    }
+
+                    return resp.valid;
+
+                } catch {
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.setError($el, "異步驗證失敗");
+                    this.setStatusIcon($el, 'error');
+                    return false;
+                }
+            }
+
+            // =========================
+            // ⭐ 成功
+            // =========================
+            this.setStatusIcon($el, 'success');
+
+            this.fieldCache[name] = val;
+            this.proxyData[name] = val;
+
+            return true;
+        }
+
+        async validateAll() {
+            const results = [];
+            for (let i = 0; i < this.fields.length; i++) {
+                try {
+                    const valid = await this.validateField(this.fields[i]);
+                    results.push(valid);
+                } catch (err) {
+                    console.error("validateAll error:", err);
+                    results.push(false); // 單欄位錯誤不阻塞整個表單
+                }
+            }
+            return results.every(r => r);
+        }
+
+        cache() {
+            this.fields.each((_, el) => {
+                const $el = $(el);
+                this.fieldCache[$el.attr("id") || $el.attr("name")] = ValueHandler.get($el);
+            });
+        }
+
+        restore() {
+            Object.entries(this.fieldCache).forEach(([k, v]) => {
+                this.proxyData[k] = v;
+            });
+        }
+
+        bindEvents() {
+            const debounced = this.debounce(async e => {
+                try {
+                    await this.validateField(e.currentTarget);
+                } catch (err) {
+                    console.error("validate error:", err);
+                }
+            }, 500);
+
+            this.container.on("input", "[vmodel]", e => { 
+                const $el = $(e.currentTarget);
+                if ($el.is(":file")) return;
+                if (ValueHandler.get($el) !== "") this.setStatusIcon($el, 'processing');
+
+                // ⭐ 同步到 tab 專屬 VM scope
+                if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+                this.vm._scopedData[this.key][$el.attr("id") || $el.attr("name")] = ValueHandler.get($el);
+                debounced(e); 
+                // ⭐ 同步到 proxyData & fieldCache
+                const name = $el.attr("id") || $el.attr("name");
+                this.proxyData[name] = ValueHandler.get($el);
+                this.fieldCache[name] = ValueHandler.get($el);
+            });
+            this.container.on("blur change", "[vmodel]", e => {
+
+                const $el = $(e.currentTarget);
+
+                // ⭐ 排除 file（關鍵🔥）
+                if ($el.is(":file")) return;
+
+                debounced(e);
+            });
+
+            this.container.on("change", "input[type=file][vmodel]", e => {
+
+                const $el = $(e.currentTarget);
+                const name = $el.attr("id") || $el.attr("name");
+                const file = e.currentTarget.files[0];
+
+                if (!file) return;
+
+                // ===== 驗證 =====
+                const maxSizeMB = $el.data("maxsize");
+
+                if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+                    this.setError($el, `檔案不可超過 ${maxSizeMB} MB`);
+                    $el.val("");
+                    ValueHandler.set($el, null, { silent: true });
+                    return;
+                }
+
+                this.clearError($el);
+
+                // ===== UI + 行為 =====
+                ValueHandler.set($el, file, {
+                    silent: true,
+                    vm: this.vm,
+                    tabKey: this.key,
+                    field: name
+                });
+
+                // ===== 資料 =====
+                this.vm.setFile(this.key, name, file);
+
+            });
+
+
+            this.container.on("change", ".dropdownColor", (e) => {
+                let $el = $(e.currentTarget);
+                let color = $el.find("option:selected").data("color");
+                $el.css("background-color", color);
+            });
+        }
+
+        //debounce(fn, delay = 500) {
+        //    let timer;
+        //    return function (...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), delay); };
+        //}
+        debounce(fn, delay = 500) {
+            let timer;
+            return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+        }
+    }
+
+    // =========================
+    // ⭐ 初始化 + VM 建立
+    // =========================
+    function initAll() {
+        const vm = new PageVM();
+        window.vm = vm;
+
+        $("[data-df]").each(function () {
+            const $el = $(this);
+            if ($el.data("df-initialized")) return;
+
+            const form = new DynamicFormInstance(this, vm);
+            form.key = $el.data("df");
+
+            $el.data("df-initialized", true);
+            $el.data("form", form);
+        });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initAll);
+    } else {
+        initAll();
+    }
+
+    return {};
+})();
