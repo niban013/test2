@@ -1,0 +1,2556 @@
+function buildContext($el, val, vm, form, key, name) {
+    return {
+        val,
+        el: $el,
+        vm,
+        form,
+        tabKey: key,
+        field: name,
+
+        type: ($el.attr("type") || $el.prop("tagName")).toLowerCase(),
+
+        must: $el.data("must"),
+        pattern: $el.data("pattern"),
+        minlength: $el.data("minlength"),
+        maxlength: $el.data("maxlength"),
+        min: $el.attr("min"),
+        max: $el.attr("max"),
+        conditional: $el.data("conditional"),
+        cross: $el.data("cross"),
+        asyncUrl: $el.data("async")
+    };
+}
+
+const ControlRuleMap = {
+
+    text: ["required", "pattern", "minlength", "maxlength"],
+    textarea: ["required", "minlength", "maxlength"],
+
+    number: ["required", "min", "max"],
+
+    date: ["required", "min", "max"],
+
+    select: ["required"],
+
+    checkbox: ["required"],
+
+    file: [] // ⭐ 完全跳過（或只留 required 看需求）
+};
+const ValidatorRules = {
+
+    required: {
+        validate: (val, ctx) => {
+            if (ctx.must && (val === "" || val == null)) return "必填";
+            return true;
+        }
+    },
+
+    pattern: {
+        validate: (val, ctx) => {
+            if (!ctx.pattern || !val) return true;
+            return new RegExp(ctx.pattern).test(val) || "格式錯誤";
+        }
+    },
+
+    minlength: {
+        validate: (val, ctx) => {
+            if (!ctx.minlength || !val) return true;
+            return val.length >= ctx.minlength || `至少${ctx.minlength}字`;
+        }
+    },
+
+    maxlength: {
+        validate: (val, ctx) => {
+            if (!ctx.maxlength || !val) return true;
+            return val.length <= ctx.maxlength || `最多${ctx.maxlength}字`;
+        }
+    },
+
+    min: {
+        validate: (val, ctx) => {
+            if (!ctx.min || !val) return true;
+
+            // ⭐ 日期 or 數字
+            if (ctx.type === "date") {
+                return new Date(val) >= new Date(ctx.min) || `不可小於${ctx.min}`;
+            }
+
+            return parseFloat(val) >= parseFloat(ctx.min) || `不可小於${ctx.min}`;
+        }
+    },
+
+    max: {
+        validate: (val, ctx) => {
+            if (!ctx.max || !val) return true;
+
+            if (ctx.type === "date") {
+                return new Date(val) <= new Date(ctx.max) || `不可大於${ctx.max}`;
+            }
+
+            return parseFloat(val) <= parseFloat(ctx.max) || `不可大於${ctx.max}`;
+        }
+    },
+
+    conditional: {
+        validate: (val, ctx) => {
+            if (!ctx.conditional) return true;
+
+            let cond = JSON.parse(ctx.conditional);
+            if ($(cond.selector).val() && val === "") {
+                return "條件必填";
+            }
+            return true;
+        }
+    },
+
+    cross: {
+        validate: (val, ctx) => {
+            if (!ctx.cross) return true;
+
+            let c = JSON.parse(ctx.cross);
+            let otherVal = $(c.selector).val();
+
+            if (c.op === ">" && val && otherVal) {
+                return parseFloat(val) > parseFloat(otherVal) || `必須大於${c.selector}`;
+            }
+            return true;
+        }
+    }
+
+};
+
+const ValueHandler = {
+
+    // =========================
+    // ⭐ 取得值（統一出口）
+    // =========================
+    get($el) {
+
+        // ===== file =====
+        if ($el.is(":file")) {
+            return $el.data("file") || null;
+        }
+        if ($el.is(":radio")) {
+            const name = $el.attr("name");
+            return $(`input[name="${name}"]:checked`).val() || "";
+        }
+        // ===== select2 =====
+        if ($el.hasClass("select2")) {
+            return $el.val();
+        }
+
+        // ===== 一般 input/select/textarea =====
+        if ($el.is("input, select, textarea")) {
+            return $el.val()?.trim() || "";
+        }
+
+        // ===== label / span / div =====
+        return $el.text().trim() || "";
+    },
+
+    // =========================
+    // ⭐ 設定值（統一入口🔥）
+    // =========================
+    set($el, value, options = {}) {
+
+        const { silent = false, vm, tabKey, field, inline } = options;
+
+        // ===== file =====
+        if ($el.is(":file")) { 
+            if (inline) {
+                const $group = $el.closest(".dynamic-file");
+                const $previewBtn = $group.find(".preview-btn");
+                const $deleteBtn = $group.find(".delete-btn");
+                const $filenameLabel = $group.find(".filename-label");
+
+                $filenameLabel.text(value.name);
+                $previewBtn.show();
+                $deleteBtn.show();
+                 
+                // ⭐ 綁 delete
+                $deleteBtn.off("click").on("click", () => {
+
+                    $el.val(""); // 清 input
+                    $el.data("file", null);
+
+                    $filenameLabel.text("");
+                    $previewBtn.hide();
+                    $deleteBtn.hide();
+
+                    vm.removeFile(tabKey, field, value.name);
+                });
+ 
+                $previewBtn.off("click").on("click", async () => { 
+                    await vm.previewFile(tabKey, { name: field, lazy: true });
+                });
+            }
+            return;
+        }
+
+        // ===== select2 =====
+        if ($el.hasClass("select2")) {
+            $el.val(value).trigger("change.select2");
+        }
+        // ===== input =====
+        else if ($el.is("input, select, textarea")) {
+            $el.val(value);
+        }
+        // ===== label =====
+        else {
+            $el.text(value);
+        }
+
+        if (!silent) {
+            $el.trigger("input");
+        }
+    }
+};
+
+
+var DynamicForm = (function () {
+
+    class PageVM {
+        constructor() {
+            this.forms = [];
+
+            // ⭐ 以 tabKey 分隔 scope
+            this._scopedData = {};      // { tabKey: { fieldName: value } }
+            this._watchers = {};        // { tabKey: { fieldName: [fn,...] } }
+            this._computed = {};        // { tabKey: { fieldName: fn } }
+            this._computedCache = {};   // { tabKey: { fieldName: value } }
+            this._dirty = {};           // { tabKey: Set }
+            this._validators = {}; // ⭐ NEW
+            this._customData = {};  // 任何你想存的資料
+            this._fileData = {}; // { tabKey: { fieldName: File } }
+            this._pagePath = window.location.pathname; // 標記這台 VM 屬於哪一頁
+        }
+
+        register(form) {
+            this.forms = this.forms.filter(f => f.key !== form.key);
+            this.forms.push(form);
+            const key = form.key;
+
+            // ⭐ 初始化 tab scope
+            if (!this._scopedData[key]) this._scopedData[key] = {};
+            if (!this._dirty[key]) this._dirty[key] = new Set();
+            if (!this._watchers[key]) this._watchers[key] = {};
+            if (!this._computed[key]) this._computed[key] = {};
+            if (!this._computedCache[key]) this._computedCache[key] = {};
+
+            // ⭐ 初始化欄位值
+            Object.entries(form.fieldCache).forEach(([k, v]) => {
+                if (this._scopedData[key][k] === undefined) {
+                    this._scopedData[key][k] = v;
+                }
+            });
+
+            // ⭐ 建立 tab 專屬 proxy
+            const proxy = new Proxy(this._scopedData[key], {
+                set: (target, name, value) => {
+                    const old = target[name];
+                    if (old === value) return true;
+
+                    target[name] = value;
+
+                    // ⭐ dirty
+                    this._dirty[key].add(name);
+
+                    // ⭐ 更新當前 form
+                    setTimeout(() => form.validateField(name).catch(console.error), 0);
+
+                    // ⭐ watch
+                    if (this._watchers[key][name]) {
+                        this._watchers[key][name].forEach(fn => fn(value, old));
+                    }
+
+                    // ⭐ computed cache 清掉
+                    this._computedCache[key] = {};
+
+                    return true;
+                },
+                get: (target, name) => {
+                    if (this._computed[key][name]) {
+                        if (this._computedCache[key][name] === undefined) {
+                            this._computedCache[key][name] = this._computed[key][name].call(proxy);
+                        }
+                        return this._computedCache[key][name];
+                    }
+                    return target[name];
+                }
+            });
+
+            // ⭐ 原本 form.proxy
+            form.proxy = proxy;
+
+            // ⭐ 直接掛到 VM 物件上
+            this[key] = proxy;
+        }
+
+        // ========= API =========
+        $watch(tabKey, name, fn) {
+            if (!this._watchers[tabKey][name]) this._watchers[tabKey][name] = [];
+            this._watchers[tabKey][name].push(fn);
+        }
+
+        $computed(tabKey, name, fn) {
+            this._computed[tabKey][name] = fn;
+        }
+
+        $dirty(tabKey) {
+            const result = {};
+            this._dirty[tabKey].forEach(k => result[k] = this._scopedData[tabKey][k]);
+            return result;
+        }
+
+        $resetDirty(tabKey) {
+            this._dirty[tabKey].clear();
+        }
+
+        cache() {
+            this.forms.forEach(f => f.cache());
+        }
+
+        restore() {
+            this.forms.forEach(f => f.restore());
+        }
+
+        async validate() {
+            const results = await Promise.all(this.forms.map(f => f.validateAll()));
+            return results.every(r => r);
+        }
+
+        async getJsonString() {
+            this.cache();
+            let finalPayload = {};
+            const isValid = await this.validate();
+            if (!isValid) {
+            }
+            else {
+                this.forms.forEach(f => {
+                    finalPayload[f.key] = this._scopedData[f.key];
+                });
+            }
+            return JSON.stringify(finalPayload, null, 4)
+        }
+
+        showCache() {
+            this.forms.forEach(f => {
+                console.log(`Cache for ${f.key}:`, f.fieldCache);
+            });
+        }
+        // ⭐ NEW：註冊自訂驗證
+        $validator(tabKey, field, fn) {
+            if (!this._validators[tabKey]) this._validators[tabKey] = {};
+            if (!this._validators[tabKey][field]) this._validators[tabKey][field] = [];
+
+            this._validators[tabKey][field].push(fn);
+        }
+        setCustom(tabKey, key, value) {
+            if (!this._customData[tabKey]) this._customData[tabKey] = {};
+            this._customData[tabKey][key] = value;
+        }
+
+        getCustom(tabKey, key) {
+            return this._customData[tabKey]?.[key];
+        }
+
+
+
+
+        // ⭐ 設定檔案
+        setFile(tabKey, field, file, options = {}) {
+            if (!this._fileData[tabKey]) this._fileData[tabKey] = {};
+
+            if (!this._fileData[tabKey][field]) {
+                this._fileData[tabKey][field] = [];
+            }
+            // 非同步驗證
+            if (options.validate) {
+                const { maxSizeMB, allowedTypes } = options;
+
+                if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+                    throw new Error(`檔案超過 ${maxSizeMB} MB`);
+                }
+
+                if (allowedTypes && !allowedTypes.includes(file.type)) {
+                    throw new Error(`檔案類型不允許: ${file.type}`);
+                }
+            }
+
+            this._fileData[tabKey][field].push(file);
+        }
+
+        // ⭐ 刪除特定檔案
+        removeFile(tabKey, field, identifier) {
+            const files = this._fileData[tabKey]?.[field];
+            if (!files) return;
+
+            if (typeof identifier === 'number') {
+                // 💡 如果 identifier 是數字，按索引刪除
+                if (Array.isArray(files)) {
+                    files.splice(identifier, 1);
+                } else {
+                    delete this._fileData[tabKey][field];
+                }
+            } else if (typeof identifier === 'string') {
+                // 💡 如果 identifier 是字串，按檔名刪除
+                if (Array.isArray(files)) {
+                    this._fileData[tabKey][field] = files.filter(f => f.name !== identifier);
+                } else if (files.name === identifier) {
+                    delete this._fileData[tabKey][field];
+                }
+            }
+
+            // 💡 小優化：如果刪完後陣列空了，就把該欄位清掉
+            if (Array.isArray(this._fileData[tabKey][field]) && this._fileData[tabKey][field].length === 0) {
+                delete this._fileData[tabKey][field];
+            }
+        }
+        clearFiles(tabKey, field) {
+            if (this._fileData[tabKey]) delete this._fileData[tabKey][field];
+        }
+        // ⭐ 取得檔案
+        async getFilesByField(tabKey, field) {
+            // 先看本地是否已有
+            let file = this._fileData[tabKey]?.[field];
+            if (file) return file;
+
+            // ⭐ 後端抓檔案方法
+            const fetchBackendFile = async (tabKey, field) => {
+                const res = await fetch(`/api/file/${tabKey}/${field}`);
+                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+                const blob = await res.blob();
+                return {
+                    name: `${field}.pdf`, // 或從 headers/後端傳回真實檔名
+                    type: blob.type,
+                    byteArray: new Uint8Array(await blob.arrayBuffer())
+                };
+            };
+
+            try {
+                const backendFile = await fetchBackendFile(tabKey, field);
+                if (!this._fileData[tabKey]) this._fileData[tabKey] = {};
+                const newFile = new File([backendFile.byteArray], backendFile.name, { type: backendFile.type });
+                this._fileData[tabKey][field] = newFile;
+            } catch (err) {
+                console.error("從後端抓檔案失敗", err);
+                return this._fileData[tabKey]?.[field] || [];
+                /*                throw err;*/
+            }
+
+            return this._fileData[tabKey]?.[field] || [];
+        }
+        // ⭐ 取得整個 tab 的檔案集合
+        getFiles(tabKey) {
+            return this._fileData[tabKey] || [];
+        }
+        // inline file preview
+        async previewFile(tabKey, file) {
+
+            if (file instanceof File) {
+
+            } else if (typeof file === "string") {
+
+                file = { name: file, lazy: true };
+            }
+
+            if (!file) return;
+
+            const win = window.open("", "_blank", "width=1000,height=700");
+            if (!win) {
+                alert("請允許彈出視窗");
+                return;
+            }
+
+            // ⭐ lazy load
+            if (file?.lazy) {
+                const realFile = await this.getFilesByField(tabKey, file.name);
+                if (!realFile) {
+                    win.close();
+                    alert("下載失敗");
+                    return;
+                }
+                file = realFile[0];
+            }
+
+            const url = URL.createObjectURL(file);
+
+            // ===== 內部專用 helper: 圖片/PDF互動 =====
+            const _initPreviewInteraction = (type, targetId, sliderId, options = {}) => {
+                const el = win.document.getElementById(targetId);
+                const slider = win.document.getElementById(sliderId);
+                if (!el || !slider) return;
+
+                let scale = 1;
+                let translateX = 0, translateY = 0;
+                let isDragging = false;
+                let startX, startY;
+
+                const minScale = options.minScale || 0.5;
+                const maxScale = options.maxScale || 5;
+                const step = options.step || 0.01;
+
+                const applyTransform = () => {
+                    if (type === "image") {
+                        el.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+                    } else if (type === "pdf") {
+                        el.style.transformOrigin = "top left";
+                        el.style.transform = `scale(${scale})`;
+                    }
+                };
+
+                slider.min = minScale;
+                slider.max = maxScale;
+                slider.step = step;
+                slider.value = scale;
+
+                slider.oninput = e => {
+                    scale = parseFloat(e.target.value);
+                    applyTransform();
+                };
+
+                if (type === "image") {
+                    el.style.cursor = "grab";
+                    el.onwheel = e => {
+                        e.preventDefault();
+                        scale += e.deltaY * -0.001;
+                        scale = Math.min(Math.max(minScale, scale), maxScale);
+                        applyTransform();
+                        slider.value = scale;
+                    };
+                    el.onmousedown = e => {
+                        isDragging = true;
+                        startX = e.clientX - translateX;
+                        startY = e.clientY - translateY;
+                        el.style.cursor = "grabbing";
+                    };
+                    win.document.onmouseup = () => {
+                        isDragging = false;
+                        el.style.cursor = "grab";
+                    };
+                    win.document.onmousemove = e => {
+                        if (!isDragging) return;
+                        translateX = e.clientX - startX;
+                        translateY = e.clientY - startY;
+                        applyTransform();
+                    };
+                }
+
+                if (type === "pdf" && options.zoomInId && options.zoomOutId) {
+                    const zoomInBtn = win.document.getElementById(options.zoomInId);
+                    const zoomOutBtn = win.document.getElementById(options.zoomOutId);
+                    if (zoomInBtn) zoomInBtn.onclick = () => { scale = Math.min(scale + 0.1, maxScale); applyTransform(); slider.value = scale; };
+                    if (zoomOutBtn) zoomOutBtn.onclick = () => { scale = Math.max(scale - 0.1, minScale); applyTransform(); slider.value = scale; };
+                }
+            };
+
+            // ===== 決定內容 =====
+            let content = "";
+            if (file.type.startsWith("image/")) {
+                content = `
+        <div style="display:flex; flex-direction:column; align-items:center; width:100%; height:100%;">
+            <img id="previewImg" src="${url}" 
+                 style="max-width:100%; max-height:80%; cursor:grab; transform:scale(1);" />
+            <input type="range" id="imgZoom" min="0.5" max="5" step="0.01" value="1" style="width:80%; margin-top:5px;">
+        </div>`;
+            } else if (file.type === "application/pdf") {
+                content = `
+        <div style="display:flex; flex-direction:column; height:100%; width:100%;">
+            <div style="display:flex; gap:5px; padding:5px; align-items:center;">
+                <button id="pdfZoomIn">+</button>
+                <button id="pdfZoomOut">-</button>
+                <input type="range" id="pdfZoomSlider" min="0.5" max="3" step="0.01" value="1" style="flex:1;">
+            </div>
+            <iframe id="pdfFrame" src="${url}" style="width:100%; flex:1; border:none;"></iframe>
+        </div>`;
+            } else {
+                // fallback: 下載
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = file.name;
+                a.click();
+                URL.revokeObjectURL(url);
+                return;
+            }
+
+            // ===== render =====
+            win.document.body.style.margin = "0";
+            win.document.body.innerHTML = `
+    <div style="height:100%; display:flex; flex-direction:column;">
+        <div style="padding:5px; background:#f1f1f1;">${file.name}</div>
+        <div id="content" style="flex:1; display:flex; justify-content:center; align-items:center;">
+            ${content}
+        </div>
+    </div>`;
+
+            // ===== 初始化互動 =====
+            if (file.type.startsWith("image/")) {
+                _initPreviewInteraction("image", "previewImg", "imgZoom");
+            } else if (file.type === "application/pdf") {
+                _initPreviewInteraction("pdf", "pdfFrame", "pdfZoomSlider", {
+                    minScale: 0.5,
+                    maxScale: 3,
+                    step: 0.01,
+                    zoomInId: "pdfZoomIn",
+                    zoomOutId: "pdfZoomOut"
+                });
+            }
+
+            // ===== 清理 ObjectURL =====
+            win.addEventListener("beforeunload", () => URL.revokeObjectURL(url));
+        }
+
+        // ⭐ 處理檔案輸入（inline / modal 共用）
+        async handleFileInput(tabKey, field, file, options) {
+            if (!file?.lazy) {
+                this.setFile(tabKey, field, file);
+            }
+
+
+            if (options.inline) {
+                const $group = options.$group;
+                const $previewBtn = $group.find(".preview-btn");
+                const $deleteBtn = $group.find(".delete-btn");
+                const $filenameLabel = $group.find(".filename-label");
+                const $input = options.$input;
+
+                $filenameLabel.text(file.name);
+                $previewBtn.show();
+                $deleteBtn.show();
+
+                $deleteBtn.off("click").on("click", () => {
+                    $input.val(null);
+                    $filenameLabel.text("未選檔案");
+                    $previewBtn.hide();
+                    $deleteBtn.hide();
+                    this.removeFile(tabKey, field);
+                });
+
+                $previewBtn.off("click").on("click", async () => {
+
+                    await this.previewFile(tabKey, file);
+                });
+            }
+            else if (options.modal) {
+                const $fileList = options.$fileList;
+                const $li = $(`
+                    <li class="list-group-item d-flex justify-content-between align-items-center flex-column align-items-start">
+                        <div class="d-flex justify-content-between w-100 align-items-center">
+                            <span>${file.name} (${Math.round(file.size / 1024)} KB)</span>
+                            <button type="button" class="btn btn-sm btn-danger btn-delete">刪除</button>
+                        </div>
+                        <div class="file-preview mt-2"></div>
+                    </li>
+                `);
+                $fileList.append($li);
+
+                $li.find(".btn-delete").click(() => {
+                    $li.remove();
+                    this.removeFile(tabKey, field);
+                });
+            }
+        }
+
+
+
+    }
+    // =========================
+    // ⭐ Form Instance
+    // =========================
+    class DynamicFormInstance {
+        constructor(container, sharedVm) {
+            this.container = $(container);
+            this.fields = this.container.find("[vmodel]:visible");
+            this.vm = sharedVm; // 使用傳入的共用 VM  
+            this.key = this.container.data("df"); // ⭐ 每個 tab 的 key
+            this.fieldCache = {};
+            this.asyncCache = {};
+            this.asyncTokens = {};
+            this.data = {};
+
+            this.proxyData = new Proxy(this.data, {
+                set: (target, key, value) => {
+                    if (target[key] === value) return true;
+                    target[key] = value;
+                    this.updateField(key, value, false);
+                    return true;
+                }
+            });
+
+            this.init();
+
+            // ⭐ 自動註冊到 VM
+            this.vm.register(this);
+            this.container.data("df-initialized", true);
+            //this.bindFileInputs();
+            this.restoreFiles();
+        }
+
+        init() {
+            this.fields.each((_, el) => {
+                const $el = $(el);
+                const name = $el.attr("id") || $el.attr("name");
+                if (!name) return;
+
+                // 判斷欄位類型
+                const isInput = $el.is("input, select, textarea");
+                const isFile = isInput && $el.attr("type") === "file"; 
+
+                if (isInput) {
+                    // ===== 可編輯欄位 =====
+                    if (!$el.parent().hasClass("input-with-status") && !isFile) {
+                        $el.wrap('<div class="input-with-status"></div>');
+                    }
+
+                    // 預設值處理
+                    //const def = $el.data("default") || "";
+                    //if (!$el.val() && def) $el.val(def);
+                    const savedValue = (this.vm._scopedData[this.key] || {})[name];
+                    if (savedValue !== undefined && savedValue !== null && savedValue !== "") {
+                        $el.val(savedValue);
+                        console.log(`[${this.key}] 從 VM 恢復欄位 ${name}:`, savedValue);
+                    }
+                    else {
+                        // 3. 如果 VM 沒資料，才檢查 HTML 是否有預設值，並「存入」VM
+                        //const def = $el.data("default") || "";
+                        //if (!$el.val() && def) $el.val(def);
+                        //dropdown不會變色，要在這裡設定
+                        if ($el.hasClass("dropdownColor")) {
+                            let color = $el.find("option:selected").data("color");
+                            $el.css("background-color", color);
+                        }
+
+                        const currentVal = ValueHandler.get($el);
+                        (this.vm._scopedData[this.key] ||= {})[name] = currentVal;
+                        console.log(`[${this.key}] 第一次初始化欄位 ${name}:`, currentVal);
+                    } 
+
+                } else { 
+                }
+
+                if ($el.hasClass("select2")) {
+                    this.initSelect2($el);
+                }
+
+                this.clearStatusIcon($el);
+
+                const finalVal = ValueHandler.get($el);  
+                this.fieldCache[name] = finalVal;
+                this.proxyData[name] = finalVal; // 這會觸發 Proxy 但因為值相同會被 setter 擋掉
+
+                if ($el.hasClass("select2")) this.initSelect2($el);
+                this.clearStatusIcon($el);
+
+                if (!isFile) {
+                    if (finalVal.length > 0) {
+                        this.setStatusIcon($el, 'success');
+                    }
+                }
+
+
+                // ===== 同步 VM =====
+                //(this.vm._scopedData[this.key] ||= {})[name] = val;
+                //this.proxyData[name] = val;
+                //this.fieldCache[name] = val;
+
+                //// 建立 status 容器
+                //if (!$el.parent().hasClass("input-with-status")) {
+                //    $el.wrap('<div class="input-with-status"></div>');
+                //}
+
+                //// --- ⭐ 核心修正：資料恢復機制 ⭐ ---
+
+                //// 1. 先看 VM 是否已經存過這個 Tab (this.key) 的這個欄位 (name)
+                //const savedValue = (this.vm._scopedData[this.key] || {})[name];
+
+                //// 2. 判斷邏輯：如果 VM 有值 (不是 undefined 且不是空字串)，則「恢復」到畫面
+                //if (savedValue !== undefined && savedValue !== null && savedValue !== "") {
+                //    $el.val(savedValue);
+                //    console.log(`[${this.key}] 從 VM 恢復欄位 ${name}:`, savedValue);
+                //}
+                //else {
+                //    // 3. 如果 VM 沒資料，才檢查 HTML 是否有預設值，並「存入」VM
+                //    const def = $el.data("default") || "";
+                //    if (!$el.val() && def) $el.val(def);
+                //    //dropdown不會變色，要在這裡設定
+                //    if ($el.hasClass("dropdownColor")) {
+                //        let color = $el.find("option:selected").data("color");
+                //        $el.css("background-color", color);
+                //    }
+
+                //    const currentVal = $el.val() || "";
+                //    (this.vm._scopedData[this.key] ||= {})[name] = currentVal;
+                //    console.log(`[${this.key}] 第一次初始化欄位 ${name}:`, currentVal);
+                //}
+
+                //// 4. 同步本地狀態 (Instance 內部使用的快取)
+                //const finalVal = $el.val() || "";
+                //this.fieldCache[name] = finalVal;
+                //this.proxyData[name] = finalVal; // 這會觸發 Proxy 但因為值相同會被 setter 擋掉
+
+                //if ($el.hasClass("select2")) this.initSelect2($el);
+                //this.clearStatusIcon($el);
+            });
+
+            this.bindEvents();
+        }
+
+        // ====================
+        // ⭐ 檔案綁定
+        // ====================
+        bindFileInputs() {
+            const self = this;
+
+            //this.container.on("click", ".uploadBtn", e => {
+            //    const $btn = $(e.currentTarget);
+            //    const colId = $btn.data("name");
+            //    const tabKey = this.key; // 這裡的 this.key 就是 tabKey (如 SupplierVCSection)
+
+            //    // 將值填入 Modal 的隱藏欄位
+            //    $('#currentField').val(colId);
+            //    $('#currentTabKey').val(tabKey);
+
+            //    // 💡 呼叫全域的 renderFileList 來顯示該欄位已有的檔案
+            //    //if (typeof window.renderFileList === "function") {
+            //    //    window.renderFileList(tabKey, colId);
+            //    //}
+
+            //    // 顯示 Modal
+            //    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal'));
+            //    modal.show();
+            //});
+
+
+            //this.container.on("change", 'input[type="file"]', function () {
+            //    const $input = $(this);
+            //    const field = $input.attr("name");
+            //    let files = Array.from(this.files);
+
+            //    // 非同步可客製驗證，例如大小、類型
+            //    const maxSizeMB = $input.data("maxsize") || 5;
+            //    const acceptTypes = ($input.attr("accept") || "").split(",");
+
+            //    files = files.filter(f => {
+            //        if (f.size / 1024 / 1024 > maxSizeMB) {
+            //            alert(`${f.name} 超過 ${maxSizeMB}MB`);
+            //            return false;
+            //        }
+            //        if (acceptTypes.length && !acceptTypes.includes(f.type)) {
+            //            alert(`${f.name} 類型不符`);
+            //            return false;
+            //        }
+            //        return true;
+            //    });
+
+            //    self.vm.setFile(self.key, field, files);
+            //    self.showFilePreview($input, files);
+            //});
+
+            //// 刪除檔案
+            //this.container.on("click", ".file-remove-btn", function () {
+            //    const $btn = $(this);
+            //    const $wrapper = $btn.closest(".file-item");
+            //    const field = $wrapper.data("field");
+            //    const fileName = $wrapper.data("filename");
+            //    self.vm.removeFile(self.key, field, fileName);
+            //    $wrapper.remove();
+            //});
+
+            //// ⭐ 拖拉上傳效果
+            //this.container.on("dragover", ".dropzone", function (e) {
+            //    e.preventDefault(); e.stopPropagation();
+            //    $(this).addClass("dragover");
+            //});
+            //this.container.on("dragleave drop", ".dropzone", function (e) {
+            //    e.preventDefault(); e.stopPropagation();
+            //    $(this).removeClass("dragover");
+            //});
+            //this.container.on("drop", ".dropzone", function (e) {
+            //    const dt = e.originalEvent.dataTransfer;
+            //    const files = Array.from(dt.files);
+            //    const $input = $(this).find('input[type="file"]');
+            //    $input[0].files = e.originalEvent.dataTransfer.files;
+            //    $input.trigger("change");
+            //});
+        }
+
+        //showFilePreview($input, files) {
+        //    const $container = $input.closest(".input-with-status");
+        //    $container.find(".file-list").remove();
+        //    const $list = $('<div class="file-list"></div>');
+
+        //    files.forEach(f => {
+        //        const ext = f.name.split('.').pop().toLowerCase();
+        //        let preview = '';
+
+        //        if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+        //            const reader = new FileReader();
+        //            reader.onload = e => {
+        //                const imgHtml = `<img src="${e.target.result}" class="file-thumb" style="max-width:80px; max-height:80px; margin-right:5px;">`;
+        //                $list.append(`<div class="file-item" data-field="${$input.attr("name")}" data-filename="${f.name}">${imgHtml}<span>${f.name}</span><button type="button" class="file-remove-btn btn btn-sm btn-danger">刪除</button></div>`);
+        //            };
+        //            reader.readAsDataURL(f);
+        //        } else {
+        //            $list.append(`<div class="file-item" data-field="${$input.attr("name")}" data-filename="${f.name}"><span>${f.name}</span><button type="button" class="file-remove-btn btn btn-sm btn-danger">刪除</button></div>`);
+        //        }
+        //    });
+
+        //    $container.append($list);
+        //}
+
+        restoreFiles() {
+            const tabData = this.vm._fileData[this.key] || {};
+
+            // 💡 改為：遍歷容器內「所有的上傳按鈕」
+            this.container.find('.uploadBtn').each((index, el) => {
+                const $btn = $(el);
+                const field = $btn.data('name'); // 取得欄位名稱
+                const files = tabData[field] || []; // 如果 tabData 沒這欄位，就給空陣列
+
+                // 定位到狀態格 (Status TD)
+                const $statusTd = $btn.closest('td').next('td');
+
+                if (files.length > 0) {
+                    // ⭐ 狀態 A：有檔案 (顯示成功圖示 + 數量)
+                    $statusTd.html(`
+                <i class="bi bi-check-circle-fill text-success"></i>
+                <span class="badge rounded-pill bg-success ms-1">${files.length}</span>
+            `);
+                } else {
+                    // ⭐ 狀態 B：無檔案 (清空 Badge 並還原為紅色叉叉)
+                    // 這樣即便 tabData 是空的，也會因為跑遍所有按鈕而把舊的狀態刷掉
+                    $statusTd.html(`<i class="bi bi-x-circle text-danger"></i>`);
+                }
+            });
+            //Object.entries(tabData).forEach(([field, files]) => {
+            //    // 1. 找到該欄位的「上傳按鈕」
+            //    const $uploadBtn = this.container.find(`.uploadBtn[data-name="${field}"]`);
+
+            //    if ($uploadBtn.length) {
+            //        // 2. 定位到「下一個單元格」 (Status TD)
+            //        const $statusTd = $uploadBtn.closest('td').next('td');
+
+            //        if (files && files.length > 0) {
+            //            // ⭐ 狀態 A：有檔案 (更換為成功圖示 + Badge)
+            //            $statusTd.html(`<i class="bi bi-check-circle-fill text-success"></i>
+            //                            <span class="badge rounded-pill bg-success ms-1">${files.length}</span>
+            //                        `);
+            //        } else {
+            //            // ⭐ 狀態 B：無檔案 (還原為原本的失敗圖示)
+            //            $statusTd.html(`<i class="bi bi-x-circle text-danger"></i>`);
+            //        }
+            //    }
+            //});
+        }
+
+
+        restoreFilesbk() {
+            Object.entries(this.vm._fileData[this.key] || {}).forEach(([field, files]) => {
+                const $el = this.container.find(`[name="${field}"]`);
+                if ($el.length && files && files.length) this.showFilePreview($el, files);
+            });
+        }
+
+        initSelect2($el) {
+            $el.select2({
+                width: '100%',
+                templateResult: item =>
+                    item.id
+                        ? $(`<div style="background:${$(item.element).data("color") || ''};padding:4px 6px;">${item.text}</div>`)
+                        : item.text,
+                templateSelection: item => item.text
+            }).on("select2:select select2:unselect change", () => {
+                this.updateSelect2Background($el);
+                const name = $el.attr("id") || $el.attr("name");
+                this.proxyData[name] = ValueHandler.get($el);
+                this.validateField($el);
+            });
+
+            this.updateSelect2Background($el);
+        }
+
+        updateSelect2Background($el) {
+            const color = $el.find("option:selected").data("color") || "";
+            $el.next(".select2-container")
+                .find(".select2-selection--single")
+                .css("background-color", color);
+        }
+        updateLocalData(name, value) {
+            this.fieldCache[name] = value;
+            // ⚠️ 不要再寫 proxyData，避免觸發 Proxy
+            // this.proxyData[name] = value;
+            if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+            this.vm._scopedData[this.key][name] = value;
+        }
+
+        updateField(name, value, validate = true) {
+            const $el = this.fields.filter(`[name="${name}"], [id="${name}"]`);
+            if (!$el.length) return;
+
+            const current = ValueHandler.get($el);
+
+            if (JSON.stringify(current) === JSON.stringify(value)) return;
+
+            const isFileDisplay = $el.closest(".dynamic-file-show").length > 0;
+
+            if (isFileDisplay && value) {
+
+                const file = typeof value === "object"
+                    ? value
+                    : {
+                        name: value,
+                        lazy: true
+                    };
+
+                ValueHandler.set($el, file, {
+                    silent: !validate,
+                    vm: this.vm,
+                    tabKey: this.key,
+                    field: name
+                });
+            }
+            else {
+                // ⭐ 一般欄位（統一入口）
+                ValueHandler.set($el, value, { silent: !validate });
+            }
+
+            //if (!this.isEditableField($el)) {
+
+            //    $el.text(value);
+
+
+            //    const $group = $el.closest(".dynamic-file-show");
+            //    if ($group.length > 0) {
+            //        const file = {
+            //            name: "example.pdf",
+            //            size: 1024 * 200,  // 200 KB
+            //            id: "abc123",      // 後端識別用
+            //            blob: null,         // 目前沒載入 byte
+            //            lazy: true
+            //        };
+            //        this.vm.handleFileInput(this.key, name, file, { inline: true, $group, $input: $el });
+
+            //    }
+            //}
+
+            if (validate) {
+                this.validateField($el).catch(err => {
+                    console.error("validate error:", err);
+                });
+            }
+
+            this.updateLocalData(name, value);
+        }
+
+        //setStatusIcon($el, status, msg = "") {
+
+
+        //    if ($el.is(":radio")) {
+        //        $el = $el.closest(".radio-group");
+        //    }
+
+        //    const $w = $el.hasClass("radio-group")
+        //        ? $el
+        //        : $el.parent(".input-with-status");
+
+        //    $w.find(".status-icon").remove();
+        //    this.clearStatusIcon($el);
+        //    this.clearError($el);
+
+        //    const icons = {
+        //        success: '<i class="bi bi-check-circle text-success"></i>',
+        //        error: '<i class="bi bi-x-circle text-danger"></i>',
+        //        processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+        //    };
+
+        //    if (status) $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+        //    if (msg) this.showFieldError($el, msg);
+        //}
+        setStatusIcon($el, status) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove();
+            this.clearStatusIcon($el);
+            this.clearError($el);
+
+            const val = ValueHandler.get($el);
+            if ($el.data("must") && val === "") return;
+
+            const icons = {
+                success: '<i class="bi bi-check-circle text-success"></i>',
+                error: '<i class="bi bi-x-circle text-danger"></i>',
+                processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+            };
+
+            if (icons[status]) {
+                $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+            }
+        }
+        clearStatusIcon($el) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove().end().removeClass("has-icon");
+        }
+        //clearStatusIcon($el) {
+        //    $el.parent(".input-with-status").find(".status-icon").remove().end().removeClass("has-icon");
+        //}
+
+        setError($el, msg) {
+            $el.addClass("is-invalid").css("border", "1px solid red").attr("title", msg || "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "1px solid red");
+        }
+
+        clearError($el) {
+            $el.removeClass("is-invalid").css("border", "").attr("title", "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "");
+        }
+        isEditableField($el) {
+            if (!$el.is("input,textarea,select")) return false;
+            if ($el.is(":disabled") || $el.prop("readonly")) return false;
+
+            // 如果 display:none / hidden / hidden by parent
+            if (!$el.is(":visible")) return false;
+
+            return true;
+        }
+
+        async validateField(el) {
+
+            const $el = $(el);
+            const val = ValueHandler.get($el);
+            const name = $el.attr("id") || $el.attr("name");
+
+            this.clearError($el);
+            this.clearStatusIcon($el);
+
+            // ⭐ file 直接略過（你原本邏輯）
+            if ($el.attr("type") === "file") return true;
+
+            const ctx = buildContext($el, val, this.vm, this, this.key, name);
+
+            // ⭐ 空值快速通過
+            if (!ctx.must && val === "") return true;
+
+            // =========================
+            // ⭐ 根據控件取得規則
+            // =========================
+            const rules = [...(ControlRuleMap[ctx.type] || [])];
+            // ⭐ 額外規則（可混用 data-*）
+            if (ctx.conditional) rules.push("conditional");
+            if (ctx.cross) rules.push("cross");
+
+            // =========================
+            // ⭐ 同步驗證
+            // =========================
+            for (let r of rules) {
+
+                const rule = ValidatorRules[r];
+                if (!rule) continue;
+
+                const result = await rule.validate(val, ctx);
+
+                if (result !== true) {
+                    this.setError($el, result);
+                    this.setStatusIcon($el, 'error', result);
+                    return false;
+                }
+            }
+
+            // =========================
+            // ⭐ 自訂驗證
+            // =========================
+            const customValidators = this.vm._validators?.[this.key]?.[name];
+
+            if (customValidators?.length) {
+                for (let fn of customValidators) {
+
+                    let result = await fn(val, ctx);
+
+                    if (result !== true) {
+                        this.setError($el, result || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                        return false;
+                    }
+                }
+            }
+
+            // =========================
+            // ⭐ async 驗證（原樣保留）
+            // =========================
+            if (ctx.asyncUrl && val) {
+
+                const cacheKey = `${this.key}_${name}_${val}`;
+                const token = Symbol();
+                this.asyncTokens[cacheKey] = token;
+
+                this.setStatusIcon($el, 'processing');
+
+                try {
+                    const resp = await $.ajax({
+                        url: ctx.asyncUrl,
+                        data: { value: val }
+                    });
+
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.asyncCache[cacheKey] = resp.valid;
+
+                    if (!resp.valid) {
+                        this.setError($el, resp.message || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                    } else {
+                        this.setStatusIcon($el, 'success');
+                    }
+
+                    return resp.valid;
+
+                } catch {
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.setError($el, "異步驗證失敗");
+                    this.setStatusIcon($el, 'error');
+                    return false;
+                }
+            }
+
+            // =========================
+            // ⭐ 成功
+            // =========================
+            this.setStatusIcon($el, 'success');
+
+            this.fieldCache[name] = val;
+            this.proxyData[name] = val;
+
+            return true;
+        }
+
+        async validateAll() {
+            const results = [];
+            for (let i = 0; i < this.fields.length; i++) {
+                try {
+                    const valid = await this.validateField(this.fields[i]);
+                    results.push(valid);
+                } catch (err) {
+                    console.error("validateAll error:", err);
+                    results.push(false); // 單欄位錯誤不阻塞整個表單
+                }
+            }
+            return results.every(r => r);
+        }
+
+        cache() {
+            this.fields.each((_, el) => {
+                const $el = $(el);
+                this.fieldCache[$el.attr("id") || $el.attr("name")] = ValueHandler.get($el);
+            });
+        }
+        getJsonData() {
+            // 確保快取是最新的
+            this.cache();
+            // 直接回傳 fieldCache 物件（這在 JS 中就是 JSON 格式的物件）
+            return this.fieldCache;
+        }
+
+        getJsonString() {
+            this.cache();
+            return JSON.stringify(this.fieldCache);
+        }
+
+        restore() {
+            Object.entries(this.fieldCache).forEach(([k, v]) => {
+                this.proxyData[k] = v;
+            });
+        }
+
+        bindEvents() {
+            const debounced = this.debounce(async e => {
+                try {
+                    await this.validateField(e.currentTarget);
+                } catch (err) {
+                    console.error("validate error:", err);
+                }
+            }, 500);
+
+            this.container.on("input", "[vmodel]", e => {
+                const $el = $(e.currentTarget);
+                if ($el.is(":file")) return;
+                if (ValueHandler.get($el) !== "") this.setStatusIcon($el, 'processing');
+
+                // ⭐ 同步到 tab 專屬 VM scope
+                if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+                this.vm._scopedData[this.key][$el.attr("id") || $el.attr("name")] = ValueHandler.get($el);
+                debounced(e);
+                // ⭐ 同步到 proxyData & fieldCache
+                const name = $el.attr("id") || $el.attr("name");
+                this.proxyData[name] = ValueHandler.get($el);
+                this.fieldCache[name] = ValueHandler.get($el);
+            });
+            this.container.on("blur change", "[vmodel]", e => {
+
+                const $el = $(e.currentTarget);
+
+                // ⭐ 排除 file（關鍵🔥）
+                if ($el.is(":file")) return;
+
+                debounced(e);
+            });
+
+            this.container.on("change", "input[type=file][vmodel]", e => {
+
+                const $el = $(e.currentTarget);
+                const name = $el.attr("id") || $el.attr("name");
+                const file = e.currentTarget.files[0];
+
+                if (!file) return;
+
+                // ===== 驗證 =====
+                const maxSizeMB = $el.data("maxsize");
+
+                if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+                    this.setError($el, `檔案不可超過 ${maxSizeMB} MB`);
+                    $el.val("");
+                    ValueHandler.set($el, null, { silent: true });
+                    return;
+                }
+
+                this.clearError($el);
+
+                // ===== UI + 行為 =====
+                ValueHandler.set($el, file, {
+                    silent: true,
+                    vm: this.vm,
+                    tabKey: this.key,
+                    field: name,
+                    inline : true
+                });
+
+                // ===== 資料 =====
+                this.vm.setFile(this.key, name, file);
+
+            });
+
+
+            this.container.on("change", ".dropdownColor", (e) => {
+                let $el = $(e.currentTarget);
+                let color = $el.find("option:selected").data("color");
+                $el.css("background-color", color);
+            });
+        }
+
+        //bindFileInputs() {
+        //    this.container.on("change", 'input[type="file"]', e => {
+        //        const $el = $(e.currentTarget);
+        //        const name = $el.attr("name");
+        //        const files = $el[0].files;
+
+        //        // ⭐ 存到 PageVM
+        //        this.vm.setFile(this.key, name, Array.from(files));
+
+        //        // ⭐ 顯示檔名
+        //        this.showFileNames($el, Array.from(files));
+        //    });
+
+        //    // ⭐ 刪除檔案按鈕
+        //    this.container.on("click", ".file-remove-btn", e => {
+        //        const $btn = $(e.currentTarget);
+        //        const $wrapper = $btn.closest(".file-item");
+        //        const field = $wrapper.data("field");
+        //        const fileName = $wrapper.data("filename");
+
+        //        // 刪除 cache
+        //        this.vm.removeFile(this.key, field, fileName);
+
+        //        // 移除畫面
+        //        $wrapper.remove();
+        //    });
+        //}
+
+        //showFileNames($input, files) {
+        //    const $container = $input.closest(".input-with-status");
+        //    $container.find(".file-list").remove();
+
+        //    const $list = $('<div class="file-list"></div>');
+        //    files.forEach(f => {
+        //        $list.append(`
+        //        <div class="file-item" data-field="${$input.attr("name")}" data-filename="${f.name}">
+        //            <span class="file-name-text">${f.name}</span>
+        //            <button type="button" class="file-remove-btn btn btn-sm btn-danger">刪除</button>
+        //        </div>
+        //    `);
+        //    });
+        //    $container.append($list);
+        //}
+
+        //// ⭐ 回復檔案顯示（restore）
+        //restoreFiles() {
+        //    Object.entries(this.vm._fileData[this.key] || {}).forEach(([field, files]) => {
+        //        const $el = this.container.find(`[name="${field}"]`);
+        //        if ($el.length && files && files.length) {
+        //            this.showFileNames($el, files);
+        //        }
+        //    });
+        //}
+
+        debounce(fn, delay = 500) {
+            let timer;
+            return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+        }
+    }
+
+
+    return {
+
+        init: function () {
+            const currentPath = window.location.pathname;
+
+            // 1. 檢查全域 VM 是否存在或是否換頁
+            if (!window.vm || window.vm._pagePath !== currentPath) {
+                window.vm = new PageVM();
+                // 開放門戶給隨後載入的 PartialView 呼叫
+                window.CurrentPageContext = { init: () => this.init() };
+            }
+
+            // 2. 掃描所有尚未初始化的 [data-df]
+            $("[data-df]:not([data-df-initialized])").each(function () {
+                const formInstance = new DynamicFormInstance(this, window.vm);
+                window.activeForm = formInstance;
+                console.log("Tab 自動註冊成功:", $(this).data("df"));
+            });
+        }
+    };
+
+})();
+
+
+
+
+$(document).ready(function () {
+
+        if (window.CurrentPageContext) {
+            window.CurrentPageContext.init();
+        }
+
+
+        class FormWizard {
+    constructor(options) {
+        // 配置參數
+        this.containerId = options.containerId || "#wizard-content";
+        this.stepsId = options.stepsId || "#wizard-steps";
+        this.nextBtnId = options.nextBtnId || "#nextBtn";
+        this.prevBtnId = options.prevBtnId || "#prevBtn";
+        this.progressBarId = options.progressBarId || "#wizard-progress-bar";
+        this.baseUrl = options.baseUrl || "/Wizard";
+
+        // 狀態變數 (封裝在執行個體內)
+        this.currentStep = 0;
+        this.totalSteps = $(`${this.stepsId} li`).length; 
+        this.stepTypes = {}; 
+        this.init();
+    }
+
+    init() {
+        const self = this;
+        // 載入第一步
+        this.loadStep(this.currentStep);
+
+        // 綁定「下一步」
+        $(this.nextBtnId).off("click").on("click", function () { self.next(); });
+
+        // 綁定「上一步」
+        $(this.prevBtnId).off("click").on("click", function () { self.prev(); });
+
+        // 綁定步驟點擊
+        $(`${this.stepsId} li`).off("click").on("click", function () {
+            const index = $(this).data("step");
+            if (index !== undefined && index !== self.currentStep) {
+                // 直接更新並載入
+                self.currentStep = index;
+                const historyType = self.stepTypes[self.currentStep - 1] || ""; 
+                self.loadStep(self.currentStep, historyType);
+            }
+        });
+
+        $(`${this.stepsId} .step-badge`).hide();
+    }
+
+    //goToStep(stepIndex, type = "") {
+
+    //    if (type === "") {
+    //        type = this.stepTypes[stepIndex] || this.redirectFields?.filter('.pageredirect').val() || "";
+    //    }
+    //    this.currentStep = stepIndex;
+    //    this.loadStep(this.currentStep, type);
+    //}
+
+    loadStep(stepIndex, type, extraData = null, callback = null) {
+        const self = this; 
+        $(this.nextBtnId).prop("disabled", true); 
+
+
+        let queryParams = {
+            stepIndex: stepIndex,
+            Type: type || ''
+        };
+
+        if (extraData) { 
+            queryParams.SendData = JSON.stringify(extraData); 
+        }
+
+        $.get(`${this.baseUrl}/Step`, queryParams, function (html) {
+            $(self.containerId).html(html);
+            self.redirectFields = $(self.containerId).find('.pageredirect[name]');
+            self.updateUI(); 
+            $(self.nextBtnId).prop("disabled", false);
+            if (typeof callback === "function") {
+               
+                callback();
+            }
+        });
+
+         
+
+        //    .fail(function (xhr) {
+        //    // 💡 發生 Exception 時會跑這裡
+        //    if (xhr.responseJSON && xhr.responseJSON.redirectUrl) {
+        //        window.location.href = xhr.responseJSON.redirectUrl;
+        //    } else {
+        //        window.location.href = "/Error/Index";
+        //    }
+        //});
+    }
+
+    next(extraData = null, callback = null) {
+        const self = this;
+        //const formData = this.getFormData();
+
+        const val = this.redirectFields?.filter('.pageredirect').val() || ""; 
+        this.stepTypes[this.currentStep] = val;
+
+        $(`${this.stepsId} li[data-step=${this.currentStep}] .step-badge`).show();
+
+        // 2. 判斷是否還有下一步
+        if (this.currentStep < this.totalSteps - 1) {
+            this.currentStep++; // 這裡才加 1
+            this.loadStep(this.currentStep, val, extraData,callback);
+        } else {
+            alert("流程完成!");
+        }
+
+
+        //$.post(`${this.baseUrl}/ValidateStep?stepIndex=${this.currentStep}`, formData, function (res) {
+        //    if (res.success) {
+                //$(`${self.stepsId} li[data-step=${self.currentStep}] .step-badge`).show();
+                //if (self.currentStep < self.totalSteps - 1) {
+                //    self.currentStep++;
+                //    self.loadStep(self.currentStep, val);
+                //} else {
+                //    alert("流程完成!");
+                //}
+        //    } else {
+        //        alert(res.message);
+        //    }
+        //});
+    }
+
+    prev() {
+        if (this.currentStep > 0) {
+            this.currentStep--; // 這裡才減 1
+            const historyType = this.stepTypes[this.currentStep-1] || ""; 
+            this.loadStep(this.currentStep, historyType);
+        }
+    }
+
+    updateUI() {
+        const self = this;
+        //$(this.prevBtnId).prop("disabled", this.currentStep === 0);
+        $(this.prevBtnId).css("visibility", self.currentStep === 0 ? "hidden" : "visible");
+        $(this.nextBtnId).text(self.currentStep === self.totalSteps - 1 ? "完成" : "下一步");
+
+        $(`${this.stepsId} li`).removeClass("active");
+        $(`${this.stepsId} li[data-step=${self.currentStep}]`).addClass("active");
+
+        let progress = (self.totalSteps > 1) ? (self.currentStep / (self.totalSteps - 1)) * 100 : 100;
+        $(this.progressBarId).css("width", progress + "%");
+    }
+
+    //getFormData() {
+    //    const formData = {};
+    //    $(".dynamic-input").each(function () {
+    //        formData[$(this).attr("name")] = $(this).val();
+    //    });
+    //    return formData;
+    //}
+
+    //attachAutoSave() {
+    //    const self = this;
+    //    $(".dynamic-input").off("input").on("input", function () {
+           
+    //        const formData = self.getFormData();
+    //        // 這裡可以加入您的驗證邏輯...
+    //        $.post(`${self.baseUrl}/AutoSave?stepIndex=${self.currentStep}`, formData);
+    //    });
+    //}
+
+    getStepValue(stepIndex,fieldName) {
+        // 從你的 VM scope 取得資料
+        const stepData = window.vm?._scopedData?.["Step" + stepIndex];
+        return (stepData && stepData[fieldName] !== undefined) ? stepData[fieldName] : null;
+    }
+}
+
+
+
+var DynamicTablePro = (function () {
+    const api = {};
+    api.events = {};
+    api.tables = {};
+    api.formatters = {
+        currency: v => "$" + Number(v).toLocaleString()
+    };
+
+    // 建立欄位
+    function buildColumns(schema) {
+        let cols = [];
+        let features = schema.Features || {};
+
+        // Checkbox + Select All
+        if (features.Checkbox) {
+            cols.push({
+                data: null,
+                orderable: false,
+                defaultContent: "",
+                className: "dt-checkbox-col",
+                title: features.SelectAll ? '<input type="checkbox" class="dt-select-all">' : "",
+                render: () => '<input type="checkbox" class="row-check">',
+                createdCell: function (td) {
+                    $(td).css({
+                        "white-space": "nowrap",
+                        "width": "1%",
+                        "text-align": "center"  // 可選：讓 checkbox 置中
+                    });
+                }
+            });
+        }
+
+        // RowButtons (每列操作)
+        if (features.RowButtons && schema.RowButtons?.length > 0) {
+
+            cols.push({
+                data: null,
+                orderable: false,
+                defaultContent: "",
+                className: "dt-row-btn-col",
+
+                createdCell: function (td) {
+
+                    $(td).css({
+                        "white-space": "nowrap",
+                        "width": "1%",
+                        //  "display": "flex",
+                        "gap": "6px"   // ⭐ 按鈕間距
+                    });
+
+                },
+
+                render: row => {
+
+                    return schema.RowButtons.map(btn => {
+
+                        let iconHtml = btn.Icon
+                            ? `<i class="bi ${btn.Icon}" style="margin-right:4px;"></i>`
+                            : "";
+
+                        let textHtml = btn.Title
+                            ? btn.Title
+                            : "";
+
+                        // ⭐ 關鍵：tooltip fallback
+                        let tooltip = btn.Tooltip || btn.Title || btn.Event || "";
+
+                        return `
+                            <button class="dt-btn ${btn.CssClass}" 
+                                    data-event="${btn.Event}" 
+                                    data-id="${row.Id}"
+                                    title="${tooltip}">
+                                ${iconHtml}${textHtml}
+                            </button>
+                        `;
+
+                    }).join("");
+
+                }
+            });
+        }
+
+        // 資料欄位
+        (schema.Columns || []).forEach(col => {
+            let c = { data: col.Field, title: col.Title ?? col.Field };
+            if (col.Formatter) c.render = v => api.formatters[col.Formatter] ? api.formatters[col.Formatter](v) : v;
+
+            // Column Filter
+            if (features.ColumnFilter) {
+                // c.footer = `<input type="text" placeholder="All" class="column-filter form-control form-control-sm" style="width:100%;"/>`;
+                c.headerFilter = `<input type="text" placeholder="All" class="column-filter form-control form-control-sm" style="width:100%; margin-top:4px;"/>`;
+
+            }
+
+            cols.push(c);
+        });
+
+        return cols;
+    }
+
+    // Render Table
+    api.render = function (opt) {
+        let schema = opt.schema;
+        let columns = buildColumns(schema);
+        let cfg = schema.Config || {};
+        let features = schema.Features || {};
+        let dtButtons = [];
+
+        if (schema.ToolbarButtons && schema.ToolbarButtons.length > 0) {
+            schema.ToolbarButtons.forEach(btn => {
+                dtButtons.push({
+                    text: `<i class="${btn.Icon}"></i> ${btn.Title}`, // 直接在此注入 Icon
+                    attr: {
+                        'title': btn.Title,
+                        'data-bs-toggle': 'tooltip'
+                    },
+                    className: btn.CssClass,
+                    // 核心修正：強制讓這個按鈕不帶 dt-button 類別
+                    init: function (api, node, config) {
+                        $(node).removeClass('dt-button');
+                    },
+                    action: function (e, dt, node, config) {
+                        if (api.events[btn.Event]) api.events[btn.Event](schema.TableId);
+                    }
+                });
+            });
+        }
+        let tableOptions = {
+            //autoWidth: true,
+            columns: columns,
+
+            stateSave: cfg.StateSave ?? true,
+            responsive: true,
+            colReorder: true,
+            searching: cfg.Searching ?? true,
+            lengthChange: cfg.LengthChange ?? true,
+            ordering: cfg.Ordering ?? true,
+            paging: cfg.Paging ?? true,
+            pageLength: cfg.PageLength ?? 10,
+            dom: '<"table-header-right" f B>rt<"table-footer d-flex justify-content-between" ip>',
+            buttons: dtButtons,//(cfg.Buttons !== false || features.Export) ? ["excel"] : [],
+            scrollY: cfg.ScrollY ?? (features.VirtualScroll ? "400px" : ""),
+            scrollCollapse: features.VirtualScroll ?? false,
+            deferRender: features.VirtualScroll ?? false,
+            scroller: features.VirtualScroll ?? false,
+            fixedHeader: features.StickyHeader ?? false,
+            // ⭐ 如果 stateSave = true，覆蓋舊的 state
+            stateLoadParams: function (settings, data) {
+                data.start = 0;                       // 從第一頁開始
+                data.length = cfg.PageLength ?? 10;   // 每頁筆數
+                return data;
+            },
+            initComplete: function () {
+                const api = this.api();
+                const thead = $(api.table().header()); 
+                // 假設前 offset 欄位是 RowButtons / Checkbox，需要跳過
+                //const columnOffset = 1; // 如果有 1 欄 RowButtons 或 Checkbox
+                // 如果你有 checkbox + rowbuttons，可以設 2
+                // 自動計算 offset：前幾欄有 class dt-checkbox-col 或 dt-btn-col
+
+                if (features.ColumnFilter) {
+                    let columnOffset = 0;
+                    api.columns().every(function (i) {
+                        const col = this.header();
+                        if ($(col).hasClass('dt-checkbox-col') || $(col).hasClass('dt-row-btn-col')) {
+                            columnOffset++;
+                        } else {
+                            return false; // 遇到第一個資料欄就停止
+                        }
+                    });
+                    // 建 filter row
+                    let filterRow = $('<tr class="filter-row"></tr>');
+                    api.columns().every(function (i) {
+                        if (i < columnOffset) {
+                            // 前幾欄空白
+                            filterRow.append('<th></th>');
+                        } else {
+                            filterRow.append('<th><input type="text" class="form-control form-control-sm column-filter" placeholder="Search"></th>');
+                        }
+                    });
+                    thead.append(filterRow);
+                    // ⭐ 最穩寫法（delegate）
+                    thead.on('keyup change clear', '.column-filter', function () {
+                        let colIndex = $(this).closest('th').index();
+                        let value = this.value;
+                        // console.log("filter:", colIndex, value); 
+                        api.column(colIndex).search(value).draw();
+                    });
+                }
+            }
+        };
+
+        // Ajax
+        if (schema.FetchMode === 0) {
+            if (schema.AjaxUrl && schema.AutoLoad !== false) { 
+                // 有 URL 才設定 Ajax 模式
+                tableOptions.ajax = {
+                    url: schema.AjaxUrl,
+                    // --- 新增：將後端傳來的 AjaxParams 帶入請求 ---
+                    data: function (d) {
+                        if (schema.AjaxParams) {
+                            // 將 schema.AjaxParams 物件屬性合併到 DataTables 請求參數 d 中
+                            $.extend(d, schema.AjaxParams);
+                        }
+                        return d;
+                    },
+                    dataSrc: function (json) {
+                        // 1. 檢查後端回傳的 success 標記
+                        if (json.success === false) {
+                            console.error(schema.TableId + " 載入失敗");
+                            return [];
+                        } 
+                        // 2. 根據 TableId 抓取對應的資料集 (例如 json["MainGrid"])
+                        let rows = json[schema.TableId] || []; 
+                        // 3. 存入快取 (選配，供後續邏輯判斷使用)
+                        api['data_' + schema.TableId] = rows;
+
+                        return rows;
+                    }
+                };
+            } else { 
+                tableOptions.data = [];
+            }
+            tableOptions.serverSide = false; 
+        } else {
+            tableOptions.serverSide = true;
+            tableOptions.processing = true;
+            tableOptions.ajax = schema.AjaxUrl;
+            if (schema.AutoLoad === false) {
+                tableOptions.deferLoading = 0; // 設定初始資料筆數為 0，阻止第一次請求
+            }
+        }
+
+        let table = $("#" + schema.TableId).DataTable(tableOptions);
+        api.tables[schema.TableId] = table;
+
+        // RowButtons event (每列 Edit / Delete)
+        $(document).on("click", `#${schema.TableId} .dt-row-btn-col .dt-btn`, function () {
+            let event = $(this).data("event");
+            let id = $(this).data("id");
+            let row = table.row($(this).closest("tr")).data();
+            if (api.events[event]) api.events[event](id, row, schema.TableId);
+        });
+
+        // Row Checkbox & Select All
+        $(document).on("change", `#${schema.TableId} .row-check`, function () {
+            if (!features.SelectAll) return;
+            let total = table.$(".row-check").length;
+            let checked = table.$(".row-check:checked").length;
+            $(`#${schema.TableId} .dt-select-all`).prop("checked", total === checked);
+        });
+        $(document).on("change", `#${schema.TableId} .dt-select-all`, function () {
+            let checked = $(this).is(":checked");
+            table.$(".row-check").prop("checked", checked);
+        });
+
+        //// Column Filter
+        //if (features.ColumnFilter) {
+        //    table.columns().every(function () {
+        //        var column = this;
+        //        $('input.column-filter', this.footer()).on('keyup change clear', function () {
+        //            if (column.search() !== this.value) column.search(this.value).draw();
+        //        });
+        //    });
+        //}
+
+        return table;
+    };
+
+    api.renderAll = function (tables) {
+        tables.forEach(schema => api.render({ schema }));
+    };
+
+    api.reload = function (target, url, params, callbacks) {
+        const success = callbacks?.success || (() => { });
+        const error = callbacks?.error || ((...args) => console.error("Reload Error:", ...args));
+        const final = callbacks?.finally || callbacks?.final || (() => { });
+
+        const regex = /[,，]/;
+        const isSingle = !regex.test(target);
+        if (isSingle) {
+            // 單表模式：直接清除該表
+            if (api.tables[target]) api.tables[target].clear().draw();
+        } else {
+            // 多表模式：清除 target 物件中定義的所有 tableId
+            var _target = target.split(',').reduce((acc, cur) => {
+                acc[cur.trim()] = cur.trim();
+                return acc;
+            }, {});
+            const mapping = _target || {}; // 如果 target 為 null 則不執行清除，由 success 邏輯處理
+            Object.keys(mapping).forEach(tableId => {
+                if (api.tables[tableId]) api.tables[tableId].clear().draw();
+            });
+        }
+
+        return $.get(url, params)
+            .done(function (res) {
+                if (res.success === false) return error("伺服器回傳失敗");
+
+                if (isSingle) {
+                    const table = api.tables[target];
+                    const data = res[target] || res.data || (Array.isArray(res) ? res : []);
+                    if (table) {
+                        // ⭐ 這裡直接 add 並 draw (前面已經 clear 過了)
+                        table.rows.add(data).draw();
+                    } else {
+                        return error(`找不到表格: ${target}`);
+                    }
+                } else {
+                    // 多表或自動模式
+                    var _target = target.split(',').reduce((acc, cur) => {
+                        acc[cur.trim()] = cur.trim();
+                        return acc;
+                    }, {});
+                    const mapping = _target || res;
+                    Object.keys(mapping).forEach(key => {
+                        if (key === "success") return;
+                        const tableId = key; 
+                        const table = api.tables[tableId];
+                        const data = res[tableId];
+                        if (table && Array.isArray(data)) {
+                            table.rows.add(data).draw();
+                        }
+                    });
+                }
+                success(res);
+            })
+            .fail(function (xhr, status, err) {
+                // ⭐ 3. 錯誤處理 (安全讀取 responseJSON)
+                const errorMessage = xhr.responseJSON?.message || err || status || "Network Error";
+                error(errorMessage, xhr);
+            })
+            .always(function () {
+                final();
+            });
+    };
+
+
+    // Toolbar event
+    $(document).on("click", ".dataTables_filter button", function () {
+        let event = $(this).data("event");
+        let tableId = $(this).data("table");
+        if (api.events[event]) api.events[event](tableId);
+    });
+
+    // Get selected rows
+    api.getSelectedRows = function (tableId) {
+        let table = api.tables[tableId];
+        let rows = [];
+        table.$(".row-check:checked").each(function () {
+            let tr = $(this).closest("tr");
+            let rowData = table.row(tr).data();
+            if (rowData) rows.push(rowData);
+        });
+        return rows;
+    };
+
+    // 取得該表格是否有資料 (回傳 boolean)
+    api.hasData = function (tableId) {
+        let table = api.tables[tableId];
+        return table ? table.data().any() : false;
+    };
+
+    // 取得當前總筆數
+    api.getRowCount = function (tableId) {
+        let table = api.tables[tableId];
+        return table ? table.rows().count() : 0;
+    };
+
+    // 清除指定表格的所有資料列
+    api.clearData = function (tableId) {
+        let table = api.tables[tableId];
+        if (table) {
+            // clear() 清除資料，draw() 更新 UI
+            table.clear().draw();
+        }
+    };
+
+    // 如果你想連「搜尋框、分頁狀態」都重置，可以使用這個擴充版本
+    api.resetTable = function (tableId) {
+        let table = api.tables[tableId];
+        if (table) {
+            // 清除資料 + 重置搜尋 + 回到第一頁
+            table.clear().search("").column().search("").page("first").draw();
+        }
+    };
+
+    // Get all data
+    api.getAllData = function (tableId) {
+        return api['data_' + tableId] || [];
+    };
+
+    return api;
+})();
+
+
+
+using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using One_Supplier_Platform.Models;
+using One_Supplier_Platform.Models.Infra;
+using One_Supplier_Platform.Services;
+
+
+namespace One_Supplier_Platform.Controllers
+{
+    public class SupplierController : BaseController
+    {
+        private static readonly List<WizardStepOption> Steps = new()
+        {
+            new WizardStepOption { StepIndex = 0, Title = "Apply New Supplier", PartialView = "Supplier/_StepApplyNewSupplier", Locked = false },
+            new WizardStepOption { StepIndex = 1, Title = "Supplier Information", PartialView = "Supplier/_StepSupplierInformation" },
+            new WizardStepOption { StepIndex = 2, Title = "File List", PartialView = "Supplier/_StepFileList" }
+        };
+
+        private readonly ISupplierService _supplierService;
+        private readonly DynamicFieldService _dynamicFieldService;
+        private readonly IMapper _mapper;
+        public SupplierController(IMapper mapper, ISupplierService supplierService, DynamicFieldService dynamicFieldService)
+        {
+            _supplierService = supplierService;
+            _dynamicFieldService = dynamicFieldService;
+            _mapper = mapper;
+        }
+
+
+        public IActionResult Index()
+        {
+            return View(Steps);
+        }
+        [HttpGet]
+        public async Task<IActionResult> Step(int stepIndex,string type, string SendData)
+        {
+            if (stepIndex < 0 || stepIndex >= Steps.Count)
+                return BadRequest("Invalid step index");
+
+            var step = Steps[stepIndex]; 
+
+            object model = stepIndex switch
+            {
+                0 => await GenerateStep(stepIndex),
+                1 => await GenerateStep(stepIndex, type, 
+                             string.IsNullOrEmpty(SendData)?null : JsonConvert.DeserializeObject<Dictionary<string, string>>(SendData) 
+                ),
+                2 => await GenerateStep(stepIndex, type),
+                _ => null
+            };
+            ViewBag.Title = step.Title;
+            return PartialView(step.PartialView, model);
+        }
+
+        async Task<IStepViewModel> GenerateStep(int stepIndex,string type="",Dictionary<string,string>? SendData =null ) 
+        {
+
+            IStepViewModel? model =null;
+
+            switch (stepIndex)
+            {
+                case 0:
+                    Dictionary<string, List<TableSchema>> dic = new Dictionary<string, List<TableSchema>>();
+                    var maker = new List<TableSchema>
+                    {
+                         new()
+                        {
+                            TableId = "tbMaker1",
+                            AjaxUrl = "/Supplier/GetMakerData",
+                            FetchMode = FetchMode.All,
+                            Message="* Existed in the company",
+                            //AjaxParams  = new
+                            //{
+                            //    makername = "MITSUI",
+                            //    companyid = "2"
+                            //},
+                    
+                            Features = new TableFeatures
+                            {
+                                Checkbox = false,
+                                Export = true,
+                                RowButtons = true,
+                                ColumnToggle = true,
+                                RowSelect = true,
+                                SelectAll = true,
+                                VirtualScroll = true,
+                                ColumnFilter = false,   // 可選，每欄都有 filter
+                                StickyHeader = true    // 可選，表頭固定
+                            },
+
+                            Config = new TableConfig
+                            {
+                                PageLength = 2,
+                                VirtualScrollHeight = "500px",
+                                Searching = false,
+                                Ordering = false,
+                                Paging = true,
+                                LengthChange = false,
+                                StateSave = true
+                            },
+
+                            //ToolbarButtons =
+                            //{
+                            //    new("Add", "add"),
+                            //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                            //    new("Reload", "reload", "btn btn-secondary")
+                            //},
+
+                            Columns =
+                            {
+                                new("MakerCode"),
+                                new("MakerLocalName"),
+                                new("MakerEngName"),
+                                new("MakerShortName"),
+                                new("Country"),
+                                new("City"),
+                                new("FacilityAddress"),
+                                //new("MakerType",visible:true)
+                            },
+
+                            RowButtons =
+                            {
+                                new(){ Title="Add Another Maker Type", Event="addMakerType", Icon="bi-pencil"},
+                                new(){ Title="Add New Site", Event="addNewSite", Icon="bi-pencil"}
+                            }
+                        }
+                        ,new()
+                        {
+                            TableId = "tbMaker2",
+                            AjaxUrl = "",
+                            FetchMode = FetchMode.All,
+                            Message="* Existed in the group companyd(excluding itself)",
+                            Features = new TableFeatures
+                            {
+                                Checkbox = false,
+                                Export = true,
+                                RowButtons = true,
+                                ColumnToggle = true,
+                                RowSelect = true,
+                                SelectAll = true,
+                                VirtualScroll = true,
+                                ColumnFilter = false,   // 可選，每欄都有 filter
+                                StickyHeader = true    // 可選，表頭固定
+                            },
+
+                            Config = new TableConfig
+                            {
+                                PageLength = 20,
+                                VirtualScrollHeight = "500px",
+                                Searching = false,
+                                Ordering = false,
+                                Paging = false,
+                                LengthChange = false,
+                                StateSave = true
+                            },
+
+                            //ToolbarButtons =
+                            //{
+                            //    new("Add", "add"),
+                            //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                            //    new("Reload", "reload", "btn btn-secondary")
+                            //},
+
+                            Columns =
+                            { 
+                                new("MakerCode"),
+                                new("MakerLocalName"),
+                                new("MakerEngName"),
+                                new("MakerShortName"),
+                                new("Country"),
+                                new("City"),
+                                new("FacilityAddress"),
+                                new("MakerStatus"),
+                                //new("MakerType",visible:true)
+                            },
+
+                            RowButtons =
+                            {
+                                new(){ Title="Copy Maker", Event="cpMaker", Icon="bi-pencil"},
+                                //new(){ Title="Copy Maker", Event="cpMaker", Icon="bi-pencil"}
+                            }
+                        }
+                    }; 
+                    var vendor = new List<TableSchema>
+                    {
+                        new()
+                        {
+                              TableId = "tbVendor",
+                              AjaxUrl = "/Supplier/GetVendorData",
+                              FetchMode = FetchMode.All,
+
+                              Features = new TableFeatures
+                              {
+                                  Checkbox = false,
+                                  Export = true,
+                                  RowButtons = true,
+                                  ColumnToggle = true,
+                                  RowSelect = true,
+                                  SelectAll = true,
+                                  VirtualScroll = true,
+                                  ColumnFilter = false,   // 可選，每欄都有 filter
+                                  StickyHeader = true    // 可選，表頭固定
+                              },
+
+                              Config = new TableConfig
+                              {
+                                  PageLength = 20,
+                                  VirtualScrollHeight = "500px",
+                                  Searching = false,
+                                  Ordering = false,
+                                  Paging = false,
+                                  LengthChange = false,
+                                  StateSave = true
+                              },
+
+                              //ToolbarButtons =
+                              //{
+                              //    new("Add", "add"),
+                              //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                              //    new("Reload", "reload", "btn btn-secondary")
+                              //},
+
+                              Columns =
+                                {
+                                    new("OUSite"),
+                                    new("Inactive"),
+                                    new("GroupName"),
+                                    new("GroupCode"),
+                                    new("VendorName"),
+                                    new("VandorNameAlt"),
+                                    new("VandorCode"),
+                                    new("SSRName"),
+                                    new("TaxRegistration"),
+                                    new("SupplierType"),
+                                }, 
+                                //RowButtons =
+                                //{
+                                //    new(){ Title="Edit", Event="edit", Icon="bi-pencil"},
+                                //    new(){ Title="Delete", Event="delete", Icon="bi-trash", CssClass="btn btn-sm btn-danger"}
+                                //}
+                        }
+                    }; 
+                    dic["maker"] = maker;
+                    dic["vendor"] = vendor;
+                    model = new StepViewModel<TableSchema>
+                    {
+                        Title = "第一頁",
+                        Data = dic
+                    };
+                     
+                    break;
+                case 1:
+                    //先找CONFIG
+                    Dictionary<string, List<DynamicField>> dic2 = new Dictionary<string, List<DynamicField>>();
+                    //string[] sections = ["Supplier Information", "Vendor Subrange", "Company Profile"];
+                    string[] sections = ["Supplier"];
+                    foreach (var item in sections)
+                    {
+                        dic2[item.Replace(" ","")] = await _supplierService.GetConfigFieldAsync(item, type);
+                    } 
+                    var userFromDb = new UserProfile { CompanyCode = "Johnny", MakerType = "Normal", RequestReason = "test@me.com" };
+
+                    _dynamicFieldService.FillSchemaWithModel(dic2, userFromDb);
+
+                    model = new StepViewModel<DynamicField>
+                    {
+                        Title = "第二頁",
+                        Data = SendData == null ? dic2 : await _supplierService.MappingSendData(dic2, SendData)
+                    };
+                    break;
+                case 2:
+                    Dictionary<string, List<DynamicSupplierFileField>> dic3 = new Dictionary<string, List<DynamicSupplierFileField>>();
+                    dic3["SupplierVC"] = await _supplierService.GetConfigFileListAsync(type);
+                    model = new StepViewModel<DynamicSupplierFileField>
+                    {
+                        Title = "第三頁",
+                        Data = dic3
+                    };
+                    break;
+            }
+            return model;
+        }
+
+        [HttpPost]
+        public IActionResult Save([FromBody] Dictionary<string, Dictionary<string, string>> finalPayload)
+        {
+            // 檢查是否有資料
+            if (finalPayload == null || !finalPayload.Any())
+            {
+                return BadRequest("未收到有效的 JSON 資料");
+            }
+
+            // 1. 這裡可以直接看到您的資料結構，例如：
+            // var userName = finalPayload["BasicSection"]["UserName"];
+
+            // 2. 接著執行您之前設定好的 AutoMapper 轉換
+            var userProfile = _mapper.Map<UserProfile>(finalPayload);
+
+            // var userProfile = _mapper.Map<UserProfile>(rawData);
+          //  var dbData = userProfile.ToDbParameters();
+
+
+            // 3. 執行 DB 儲存邏輯...
+
+            return Ok(new { success = true, message = "已成功接收並轉換" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMakerData(string makername, string companyid)
+        {
+            if (string.IsNullOrEmpty(makername))
+            {
+                return Json(new
+                {
+                    success = true,
+                    tbMaker1 = new List<vmMakerDetail>(), // 給第一個表的資料
+                    tbMaker2 = new List<vmMakerDetail>()       // 給第二個表的資料
+                });
+            }
+
+
+            var lsvwMaker1 = await _supplierService.GetMakerDataFromGroupAsync(makername, companyid);
+
+            if (lsvwMaker1.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+            var lsvwMaker2 = await _supplierService.GetMakerDataInternalAsync(makername);
+
+            if (lsvwMaker2.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+
+
+
+            return Json(new
+            {
+                success = true,
+                tbMaker1 = lsvwMaker1,  // 這裡的 Key 就是前端 <table id="SupplierGrid">
+                tbMaker2 = lsvwMaker2      // 這裡的 Key 就是前端 <table id="OrderGrid"> 
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetVendorData(string vendorname)
+        {
+            if (string.IsNullOrEmpty(vendorname))
+            {
+                return Json(new
+                {
+                    success = true,
+                    tbVendor = new List<vmVendorDetail>(),
+                });
+            }
+
+            var lsvmVender = await _supplierService.GetVendorInfoAsync(vendorname);
+
+            if (lsvmVender.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+            return Json(new
+            {
+                success = true,
+                tbVendor = lsvmVender,  // 這裡的 Key 就是前端 <table id="SupplierGrid"> 
+            });
+        }
+
+        [HttpGet]
+
+        public async Task<IActionResult> GetSupplierForm()
+        {
+
+            var sectionConfigs = new Dictionary<string, List<DynamicField>>();
+            var data = await _supplierService.GetConfigFieldAsync("Vendor","");
+            sectionConfigs["Vendor"] = data;
+
+            //// 模擬從資料庫查詢回來的結果
+            //var fieldList = new List<DynamicField>
+            //{
+            //    // 第一列
+            //    //new DynamicField {
+            //    //    ColId = "Company", ColName = "Company", Section = "Basic",
+            //    //    EnumType = FieldType.Select2, Must = true, Order = 1,
+            //    //    attribute = "AMSCTW:AMSC Taiwan,AMSCCN:AMSC China"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "Type", ColName = "Type", Section = "Basic",
+            //    //    EnumType = FieldType.Textbox, DefaultValue = "New Vendor", Readonly = true, Order = 2
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "SupplierType", ColName = "Supplier Type", Section = "Basic",
+            //    //    EnumType = FieldType.Dropdown, Must = true, Order = 3,
+            //    //    attribute = "Trade,Manufacturer,Service"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "EffectiveDate", ColName = "Effective Date", Section = "Basic",
+            //    //    EnumType = FieldType.Date, Must = true, Order = 4, DefaultValue = "2026-03-24"
+            //    //},
+
+            //    // 第二列
+            //    //new DynamicField {
+            //    //    ColId = "GroupName", ColName = "Group Name", Section = "GroupInfo",
+            //    //    EnumType = FieldType.Textbox, Must = true, Order = 5, Placeholder = "請輸入群組名稱"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "GroupCode", ColName = "Group Code", Section = "GroupInfo",
+            //    //    EnumType = FieldType.Textbox, Readonly = true, Order = 6
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "VendorType", ColName = "Vendor Type", Section = "GroupInfo",
+            //    //    EnumType =  FieldType.Dropdown, Must = true, Order = 7,
+            //    //    attribute = "Domestic,Overseas"
+            //    //},
+
+            //    // 地址與其他
+            //    //new DynamicField {
+            //    //    ColId = "City", ColName = "City", Section = "Address",
+            //    //   EnumType = FieldType.Textbox, Must = true, Order = 8
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "Address", ColName = "Address", Section = "Address",
+            //    //    EnumType = FieldType.Textarea, Must = true, Order = 9, Width = 6
+            //    //}
+            //};
+
+            //// 將 List 依照 Section 分組，轉成 Dictionary<string, List<DynamicField>>
+            //var viewModel = fieldList
+            //    .OrderBy(f => f.Order)
+            //    .GroupBy(f => f.Section)
+            //    .ToDictionary(g => g.Key, g => g.ToList());
+
+            // 回傳 Partial View 並帶入 Model
+            return PartialView("Supplier/_VendorInfo", sectionConfigs);
+        }
+
+
+     
+    }
+}
+
+
+
+namespace One_Supplier_Platform.Models.Infra
+{
+    public interface IStepViewModel { }
+    public class StepViewModel<T> : IStepViewModel
+    {
+        public int StepIndex { get; set; }
+        public string Title { get; set; }
+        public Dictionary<string, List<T>> Data { get; set; } = new Dictionary<string, List<T>>();
+    }
+}
+
+
+
+namespace One_Supplier_Platform.Models.Infra
+{
+    public class WizardOptions
+    {
+        public List<WizardStepOption> Steps { get; set; } = new();
+        public bool AllowJumpToCompletedStep { get; set; } = true;
+        public bool AutoSave { get; set; } = true;
+    }
+
+    public class WizardStepOption
+    {
+        public string Title { get; set; }
+        public string PartialView { get; set; }
+        public bool Completed { get; set; } = false;
+        public bool Locked { get; set; } = true;
+        public int StepIndex { get; set; }
+        public Dictionary<string, object> Custom { get; set; } = new();
+    }
+}
+
+
+
+
+@model List<WizardStepOption>
+  
+<div id="wizard">
+    <!-- 步驟進度條 -->
+    <div class="wizard-steps-container">
+        <ul id="wizard-steps" class="list-unstyled d-flex justify-content-between">
+            @foreach (var step in Model)
+            {
+                <li data-step="@step.StepIndex" class="@(step.StepIndex == 0 ? "active" : "")">
+                    <span class="step-icon">@(step.StepIndex + 1)</span>
+                    <span class="step-title">@step.Title</span>
+                    <!-- 預留的小勾勾 -->
+                    <span class="step-badge" style="display:none;">✔</span>
+                </li>
+            }
+        </ul>
+
+        <div class="progress mt-2" style="height: 5px;">
+            <div id="wizard-progress-bar" class="progress-bar" role="progressbar" style="width: 0%;"></div>
+        </div>
+    </div>
+
+    <hr />
+
+    <!-- 內容載入區 -->
+    <div id="wizard-content">
+        <!-- JS 會自動呼叫 /Wizard/Step?stepIndex=0 填入這裡 -->
+    </div>
+
+    <!-- 控制按鈕 -->
+    <div class="mt-4 d-flex justify-content-between">
+        <button id="prevBtn" class="btn btn-secondary">上一步</button>
+        <button id="nextBtn" class="btn btn-primary">下一步</button>
+    </div>
+</div>
+ 
+@section Scripts {
+    <!-- 1. 確保先引用了工具檔 (如果 Layout 沒引用的話) -->
+    @* <script src="~/js/wizard-pro.js"></script> *@
+
+    <script>
+        $(document).ready(function () {
+            // 2. 在這裡「啟動」這個頁面專用的 Wizard 實例
+            window.supplierWizard = new FormWizard({
+                baseUrl: "/Supplier",
+                containerId: "#wizard-content",
+                stepsId: "#wizard-steps",
+                nextBtnId: "#nextBtn",
+                prevBtnId: "#prevBtn"
+            });
+
+
+        DynamicForm.init(); // 第一次初始化
+
+
+
+      
+            // 如果你有那個「New Supplier」按鈕，也可以在這裡控制它
+            // $(document).on('click', '#vendorBtn', function() {
+            //     myWizard.next(); // 呼叫實例裡面的 next 方法
+            // });
+        });
+    </script>
+}
