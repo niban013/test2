@@ -1,0 +1,211 @@
+const WizardHook = Object.freeze({
+    BEFORE_NEXT: "beforeNext",
+    BEFORE_PREV: "beforePrev",
+    AFTER_LOAD: "afterLoad",
+    ON_LEAVE: "onLeave"
+});
+
+class FormWizard {
+    constructor(options) {
+
+        this.containerId = options.containerId || "#wizard-content";
+        this.stepsId = options.stepsId || "#wizard-steps";
+        this.nextBtnId = options.nextBtnId || "#nextBtn";
+        this.prevBtnId = options.prevBtnId || "#prevBtn";
+        this.progressBarId = options.progressBarId || "#wizard-progress-bar";
+        this.baseUrl = options.baseUrl || "/Wizard";
+
+        this.currentStep = 1;
+        this.totalSteps = $(`${this.stepsId} li`).length;
+
+        this.stepTypes = {};
+        this.stepRedirect = {};
+        this.isBack = false;
+
+        // ⭐ hook system
+        this._handlers = {};     // global hooks
+        this._stepHooks = {};    // step hooks
+        this._plugins = [];      // plugins
+
+        this.init();
+    }
+
+    // ==========================
+    // ⭐ PUBLIC API（給外部用）
+    // ==========================
+
+    beforeNext(fn) { this.#addGlobal(WizardHook.BEFORE_NEXT, fn); }
+    beforePrev(fn) { this.#addGlobal(WizardHook.BEFORE_PREV, fn); }
+    afterLoad(fn) { this.#addGlobal(WizardHook.AFTER_LOAD, fn); }
+    onLeave(fn) { this.#addGlobal(WizardHook.ON_LEAVE, fn); }
+
+    use(plugin) {
+        if (plugin) this._plugins.push(plugin);
+    }
+
+    //useStep(step, hooks) {
+    //    if (!this._stepHooks[step]) this._stepHooks[step] = {};
+
+    //    Object.keys(hooks).forEach(h => {
+    //        if (!this._stepHooks[step][h]) this._stepHooks[step][h] = [];
+    //        this._stepHooks[step][h].push(hooks[h]);
+    //    });
+    //}
+    useStep(hooks) {
+
+        //const step = this.#getCurrentStepFromDOM();
+        const step = this.currentStep; // ⭐ 核心改這裡
+        if (!step) {
+            console.warn("useStep: 找不到 step");
+            return;
+        }
+
+        if (!this._stepHooks[step]) this._stepHooks[step] = {};
+
+        Object.keys(hooks).forEach(h => {
+            if (!this._stepHooks[step][h]) this._stepHooks[step][h] = [];
+            this._stepHooks[step][h].push(hooks[h]);
+        });
+    }
+    #getCurrentStepFromDOM() {
+        const $root = $(this.containerId).find("[data-step]").first();
+        return Number($root.data("step"));
+    }
+    // ==========================
+    // ⭐ PRIVATE（關鍵🔥）
+    // ==========================
+
+    #addGlobal(hook, fn) {
+        if (!this._handlers[hook]) this._handlers[hook] = [];
+        this._handlers[hook].push(fn);
+    }
+
+    async #run(hook, payload = {}, options = {}) {
+
+        const ctx = {
+            ...payload,
+            step: this.currentStep,
+            direction: options.direction || null,
+            wizard: this
+        };
+
+        // 1️⃣ step hooks（優先）
+        const stepFns = this._stepHooks[this.currentStep]?.[hook] || [];
+        for (const fn of stepFns) {
+            if (await fn(ctx) === false) return false;
+        }
+
+        // 2️⃣ plugins
+        for (const p of this._plugins) {
+            if (p[hook]) {
+                if (await p[hook](ctx) === false) return false;
+            }
+        }
+
+        // 3️⃣ global
+        const globalFns = this._handlers[hook] || [];
+        for (const fn of globalFns) {
+            if (await fn(ctx) === false) return false;
+        }
+
+        return true;
+    }
+
+    async #runGuards(type) {
+        if (type === "next") {
+            if (!await this.#run(WizardHook.BEFORE_NEXT)) return false;
+            if (!await this.#run(WizardHook.ON_LEAVE, {}, { direction: "forward" })) return false;
+        }
+
+        if (type === "prev") {
+            if (!await this.#run(WizardHook.BEFORE_PREV)) return false;
+            if (!await this.#run(WizardHook.ON_LEAVE, {}, { direction: "backward" })) return false;
+        }
+
+        return true;
+    }
+
+    // ==========================
+    // ⭐ 核心流程
+    // ==========================
+
+    init() {
+        const self = this;
+
+        this.loadStep(this.currentStep);
+
+        $(this.nextBtnId).off().on("click", () => self.next());
+        $(this.prevBtnId).off().on("click", () => self.prev());
+
+        $(`${this.stepsId} li`).off().on("click", function () {
+            const idx = $(this).data("step");
+            if (!idx || idx === self.currentStep) return;
+
+            self.isBack = idx < self.currentStep;
+            self.currentStep = idx;
+
+            const type = self.isBack ? "" : self.stepTypes[self.currentStep - 1] || "";
+            self.loadStep(self.currentStep, type);
+        });
+    }
+
+    async loadStep(stepIndex, type) {
+
+        $(this.nextBtnId).prop("disabled", true);
+
+        try {
+            const resp = await fetch(`${this.baseUrl}/Step?stepIndex=${stepIndex}&Type=${type || ""}`);
+            const html = await resp.text();
+
+            $(this.containerId).html(html);
+
+            this.updateUI();
+
+            // ⭐ 這裡會觸發 afterLoad
+            await this.#run(WizardHook.AFTER_LOAD);
+
+        } finally {
+            $(this.nextBtnId).prop("disabled", false);
+            this.isBack = false;
+        }
+    }
+
+    async next() {
+
+        // ⭐ 關鍵：全部走這裡
+        if (!await this.#runGuards("next")) return;
+
+        if (this.currentStep < this.totalSteps) {
+            this.currentStep++;
+            this.loadStep(this.currentStep);
+        } else {
+            alert("完成");
+        }
+    }
+
+    async prev() {
+
+        if (!await this.#runGuards("prev")) return;
+
+        if (this.currentStep > 1) {
+            this.currentStep--;
+            this.isBack = true;
+            this.loadStep(this.currentStep);
+        }
+    }
+
+    updateUI() {
+        $(this.prevBtnId).css("visibility", this.currentStep === 1 ? "hidden" : "visible");
+        $(this.nextBtnId).text(this.currentStep === this.totalSteps ? "完成" : "下一步");
+
+        $(`${this.stepsId} li`).removeClass("active");
+        $(`${this.stepsId} li[data-step=${this.currentStep}]`).addClass("active");
+
+        const progress = (this.currentStep / this.totalSteps) * 100;
+        $(this.progressBarId).css("width", progress + "%");
+    }
+
+    getStepValue(step, field) {
+        return window.vm?._scopedData?.["Step" + step]?.[field] ?? null;
+    }
+}
