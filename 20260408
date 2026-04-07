@@ -1,3 +1,16 @@
+$el.on("input change", function () {
+    const path = $(this).data("key");
+    let val;
+
+    if (this.type === "checkbox") {
+        val = this.checked;
+    } else {
+        val = $(this).val();
+    }
+
+    PageVM._setNested(vm._scopedData[tabKey], path, val);
+});
+
 class PageVM {
 
     constructor() {
