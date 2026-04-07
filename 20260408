@@ -1,0 +1,330 @@
+class PageVM {
+
+    constructor() {
+        this.forms = [];
+
+        this._scopedData = {};
+        this._watchers = {};
+        this._computed = {};
+        this._computedCache = {};
+        this._dirty = {};
+        this._validators = {};
+        this._customData = {};
+        this._pagePath = window.location.pathname;
+    }
+
+    // ================= 工具 =================
+
+    static _setNested(obj, path, value) {
+        const keys = path.split(".");
+        let t = obj;
+        keys.forEach((k, i) => {
+            if (i === keys.length - 1) {
+                t[k] = value;
+            } else {
+                if (!t[k]) t[k] = {};
+                t = t[k];
+            }
+        });
+    }
+
+    static _getNested(obj, path) {
+        const keys = path.split(".");
+        let t = obj;
+        for (let k of keys) {
+            if (!t) return undefined;
+            t = t[k];
+        }
+        return t;
+    }
+
+    static _flatten(obj, prefix = "", res = {}) {
+        Object.entries(obj || {}).forEach(([k, v]) => {
+            const path = prefix ? `${prefix}.${k}` : k;
+            if (typeof v === "object" && v !== null && !(v instanceof File) && !Array.isArray(v)) {
+                this._flatten(v, path, res);
+            } else {
+                res[path] = v;
+            }
+        });
+        return res;
+    }
+
+    // ================= register =================
+
+    register(form) {
+        this.forms = this.forms.filter(f => f.key !== form.key);
+        this.forms.push(form);
+
+        const key = form.key;
+
+        if (!this._scopedData[key]) this._scopedData[key] = {};
+        if (!this._dirty[key]) this._dirty[key] = new Set();
+        if (!this._watchers[key]) this._watchers[key] = {};
+        if (!this._computed[key]) this._computed[key] = {};
+        if (!this._computedCache[key]) this._computedCache[key] = {};
+
+        // ⭐ deep reactive
+        const makeReactive = (obj, path = []) => {
+            if (typeof obj !== "object" || obj === null) return obj;
+
+            return new Proxy(obj, {
+                set: (t, k, v) => {
+                    const old = t[k];
+                    t[k] = v;
+
+                    const fullPath = [...path, k].join(".");
+                    this._dirty[key].add(fullPath);
+
+                    const fns = PageVM._getNested(this._watchers[key], fullPath);
+                    if (Array.isArray(fns)) {
+                        fns.forEach(fn => fn(v, old));
+                    }
+
+                    this._computedCache[key] = {};
+                    return true;
+                },
+                get: (t, k) => makeReactive(t[k], [...path, k])
+            });
+        };
+
+        // ⭐ 初始化資料（支援 path）
+        Object.entries(form.fieldCache).forEach(([path, v]) => {
+            if (PageVM._getNested(this._scopedData[key], path) === undefined) {
+
+                if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+                    PageVM._setNested(
+                        this._scopedData[key],
+                        path,
+                        makeReactive({ ...v }, path.split("."))
+                    );
+                } else {
+                    PageVM._setNested(this._scopedData[key], path, v);
+                }
+            }
+        });
+
+        // ⭐ root proxy（保留你原本行為）
+        const proxy = new Proxy(this._scopedData[key], {
+            set: (target, name, value) => {
+                const old = target[name];
+
+                if (typeof value === "object" && value !== null) {
+                    target[name] = makeReactive(value, [name]);
+                } else {
+                    target[name] = value;
+                }
+
+                if (old === target[name]) return true;
+
+                this._dirty[key].add(name);
+
+                const fns = this._watchers[key]?.[name];
+                if (Array.isArray(fns)) {
+                    fns.forEach(fn => fn(target[name], old));
+                }
+
+                this._computedCache[key] = {};
+                return true;
+            },
+            get: (target, name) => {
+                if (this._computed[key][name]) {
+                    if (this._computedCache[key][name] === undefined) {
+                        this._computedCache[key][name] = this._computed[key][name].call(proxy);
+                    }
+                    return this._computedCache[key][name];
+                }
+                return target[name];
+            }
+        });
+
+        form.proxy = proxy;
+        this[key] = proxy;
+    }
+
+    // ================= API =================
+
+    $watch(tabKey, path, fn) {
+        if (!this._watchers[tabKey]) this._watchers[tabKey] = {};
+
+        PageVM._setNested(this._watchers[tabKey], path, [
+            ...(PageVM._getNested(this._watchers[tabKey], path) || []),
+            fn
+        ]);
+    }
+
+    $computed(tabKey, name, fn) {
+        this._computed[tabKey][name] = fn;
+    }
+
+    $dirty(tabKey) {
+        return PageVM._flatten(this._scopedData[tabKey]);
+    }
+
+    $resetDirty(tabKey) {
+        this._dirty[tabKey].clear();
+    }
+
+    cache() {
+        this.forms.forEach(f => f.cache());
+    }
+
+    restore() {
+        this.forms.forEach(f => f.restore());
+    }
+
+    async validate() {
+        const results = await Promise.all(this.forms.map(f => f.validateAll()));
+
+        Object.entries(this._validators).forEach(([tabKey, rules]) => {
+            const flat = PageVM._flatten(this._scopedData[tabKey]);
+
+            Object.entries(flat).forEach(([path, val]) => {
+                const fns = PageVM._getNested(rules, path);
+                if (Array.isArray(fns)) {
+                    fns.forEach(fn => fn(val));
+                }
+            });
+        });
+
+        return results.every(r => r);
+    }
+
+    async getJsonString() {
+        this.cache();
+
+        let finalPayload = {};
+        const isValid = await this.validate();
+
+        if (isValid) {
+            this.forms.forEach(f => {
+
+                const serializeFiles = obj => {
+                    if (!obj) return obj;
+                    if (obj instanceof File) return obj.name;
+
+                    if (Array.isArray(obj)) return obj.map(serializeFiles);
+
+                    if (typeof obj === "object") {
+                        const res = {};
+                        Object.entries(obj).forEach(([k, v]) => {
+                            res[k] = serializeFiles(v);
+                        });
+                        return res;
+                    }
+
+                    return obj;
+                };
+
+                finalPayload[f.key] = serializeFiles(this._scopedData[f.key]);
+            });
+        }
+
+        return JSON.stringify(finalPayload, null, 4);
+    }
+
+    // ================= validator =================
+
+    $validator(tabKey, path, fn) {
+        if (!this._validators[tabKey]) this._validators[tabKey] = {};
+
+        PageVM._setNested(this._validators[tabKey], path, [
+            ...(PageVM._getNested(this._validators[tabKey], path) || []),
+            fn
+        ]);
+    }
+
+    // ================= custom =================
+
+    setCustom(tabKey, key, value) {
+        if (!this._customData[tabKey]) this._customData[tabKey] = {};
+        this._customData[tabKey][key] = value;
+    }
+
+    getCustom(tabKey, key) {
+        return this._customData[tabKey]?.[key];
+    }
+
+    // ================= File =================
+
+    setFile(tabKey, path, file) {
+        if (!this._scopedData[tabKey]) this._scopedData[tabKey] = {};
+
+        const existing = PageVM._getNested(this._scopedData[tabKey], path);
+
+        if (!Array.isArray(existing)) {
+            PageVM._setNested(this._scopedData[tabKey], path, []);
+        }
+
+        PageVM._getNested(this._scopedData[tabKey], path).push(file);
+    }
+
+    removeFile(tabKey, path, identifier) {
+        const files = PageVM._getNested(this._scopedData[tabKey], path);
+        if (!Array.isArray(files)) return;
+
+        if (typeof identifier === "number") {
+            files.splice(identifier, 1);
+        } else if (typeof identifier === "string") {
+            const filtered = files.filter(f => f.name !== identifier);
+            PageVM._setNested(this._scopedData[tabKey], path, filtered);
+        }
+
+        if (files.length === 0) {
+            PageVM._setNested(this._scopedData[tabKey], path, undefined);
+        }
+    }
+
+    clearFiles(tabKey, path) {
+        PageVM._setNested(this._scopedData[tabKey], path, undefined);
+    }
+
+    async getFilesByField(tabKey, path) {
+        let file = PageVM._getNested(this._scopedData[tabKey], path);
+        if (file) return file;
+
+        const res = await fetch(`/api/file/${tabKey}/${path}`);
+        const blob = await res.blob();
+
+        const f = new File([blob], path, { type: blob.type });
+        PageVM._setNested(this._scopedData[tabKey], path, f);
+
+        return f;
+    }
+
+    getFilename(tabKey, path) {
+        const f = PageVM._getNested(this._scopedData[tabKey], path);
+        return f?.name || "";
+    }
+
+    async previewFile(tabKey, fileOrPath) {
+        let file = fileOrPath;
+
+        if (typeof file === "string") {
+            file = await this.getFilesByField(tabKey, file);
+        }
+
+        if (!file) return;
+
+        const url = URL.createObjectURL(file);
+        window.open(url);
+    }
+
+}
+1. data-key 自動組 object
+<input data-key="userInfo.username">
+<input data-key="userInfo.address.city">
+
+→ 自動變：
+
+vm.tab1.userInfo = {
+  username: "...",
+  address: { city: "..." }
+}
+
+vm.tab1.userInfo.username = "John"
+vm.tab1.userInfo.address.city = "Taipei"
+
+vm.$watch("tab1", "userInfo.address.city", v => console.log(v))
+
+vm.setFile("tab1", "userInfo.files", file)
