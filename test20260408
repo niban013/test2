@@ -1,0 +1,3167 @@
+@using auomvc.Helper
+@Html.RenderAppConfig("FileUploadConfig")
+
+<div class="modal fade" id="uploadModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">附件上傳</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="currentStepKey">
+                <input type="hidden" id="currentField">
+                @* <input type="file" id="fileUpload" class="form-control mb-2" multiple> *@
+
+                <div class="file-upload-container border p-3"
+                     id="dragArea"
+                     style="min-height:100px; border-style: dashed !important; background-color: #f8f9fa;">
+
+                    <p class="text-muted mb-1">拖曳檔案到此，或點擊選擇檔案</p>
+
+                    <!-- ⭐ 加入警語 (N 請根據你的需求修改，例如 5MB) -->
+                    <p class="text-danger small mb-2" id="uploadLimitHint">
+                        <i class="bi bi-exclamation-circle"></i>
+                        <!-- 這裡留空，由 JS 填入 -->
+                        <span class="limit-text">載入中...</span>
+                    </p>
+
+                    <input type="file" name="Resume" class="dynamicInput form-control mb-2" style="display:none;" />
+
+                    <button type="button" class="btn btn-secondary btn-sm mb-2" id="btnSelectFile">
+                        <i class="bi bi-plus-lg"></i> 選擇檔案
+                    </button>
+
+                    <hr />
+                    <h6>附件清單</h6>
+                    <ul class="file-list list-group mt-2" id="uploadList"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+
+    $(function(){
+
+            const $dragArea = $("#dragArea");
+            const $input = $dragArea.find("input[type=file]");
+            const config = window.appConfig;
+
+            if (config) {
+                const hint = `單一檔案大小上限為 ${config.MaxFileSizeMB}MB，僅支援 ${config.AllowedExtensions}等${config.FriendlyExtName}`;
+                $('#uploadLimitHint .limit-text').text(hint);
+            }
+
+            // 設定 vm config（稍後上傳）
+            // window.vm._fileConfig = {
+            //     [tabKey]: { [field]: { uploadNow: false, uploadUrl: '/Upload/Resume' } }
+            // };
+
+            // 點擊按鈕觸發檔案選擇
+            $("#btnSelectFile").click(() => $input.trigger("click"));
+
+            // 拖曳事件
+            $dragArea.on("dragover", e => { e.preventDefault(); $dragArea.addClass("drag-over"); });
+            $dragArea.on("dragleave", e => { e.preventDefault(); $dragArea.removeClass("drag-over"); });
+            $dragArea.on("drop", async e => {
+                e.preventDefault();
+                $dragArea.removeClass("drag-over");
+                const files = e.originalEvent.dataTransfer.files;
+                await handleFiles(files);
+            });
+
+
+            function syncToParentPage(stepKey, fieldPath) {
+                if (window.activeForm) {
+                    window.activeForm.restoreFiles();
+                }
+            }
+
+            // 選檔事件
+            $input.on("change", async e => await handleFiles(e.target.files));
+
+            function appendFileToList(stepKey, fieldPath, file) {
+                   const $li = $(`<li class="list-group-item d-flex flex-column align-items-start">
+                                <div class="d-flex justify-content-between w-100 align-items-center">
+                                    <!-- 檔名區域 -->
+                                    <span class="text-truncate me-2">${file.name} (${Math.round(file.size/1024)} KB)</span>
+
+                                    <!-- 按鈕群組：使用 d-flex 確保按鈕併排並靠右 -->
+                                    <div class="d-flex gap-1 flex-shrink-0">
+                                        <button type="button" class="btn btn-sm btn-outline-primary btn-preview">預覽</button>
+                                        <button type="button" class="btn btn-sm btn-danger btn-delete">刪除</button>
+                                    </div>
+                                </div>
+                                <!-- 預覽區域 -->
+                                <div class="file-preview mt-2 w-100" style="display:none;"></div>
+                            </li>`);
+
+                $li.find(".btn-delete").click(function() {
+                    $li.remove();
+                    // ⭐ 修正：使用完整路徑刪除。這會自動觸發 PageVM 的 $watch
+                    vm.removeFile(stepKey, fieldPath, file.name);
+
+                    // 💡 既然有了 $watch，syncToParentPage 內的 restoreFiles 其實可以不用手動呼叫
+                    // 但為了保險起見保留亦可
+                    syncToParentPage(stepKey, fieldPath);
+                });
+
+                $li.find(".btn-preview").click(async function() {
+                    const $preview = $li.find(".file-preview");
+
+                    if ($preview.is(":visible")) {
+                        $preview.slideUp(200);
+                        return;
+                    }
+
+                    if ($preview.is(":empty")) {
+                        let targetFile = file;
+                         if (file.lazy) {
+                            // 如果是從後端來的 lazy 檔案，需要先抓取實體 Blob
+                            const realFiles = await vm.getFilesByField(stepKey, fieldPath);
+                            // 找出檔名匹配的那一個
+                            const match = realFiles.find(f => (f.name || f.filename) === file.name);
+                            if (!match) { alert("無法載入檔案"); return; }
+                            targetFile = match;
+                        }
+
+
+                        const fileUrl = URL.createObjectURL(targetFile instanceof File ? targetFile : targetFile.file);
+                        const fileName = (targetFile.name || targetFile.filename).toLowerCase();
+                        const fileType = targetFile.type || "";
+
+                        if (fileType.startsWith("image/")) {
+                            const img = new Image();
+                            img.src = fileUrl;
+                            img.className = "img-thumbnail";
+                            img.style.maxWidth = "100%";
+                            img.onload = function() {
+                                $preview.html(img);
+                                $preview.slideDown(300);
+                            };
+                        }
+                        else if (fileType === "application/pdf") {
+                            $preview.html(`<iframe src="${fileUrl}" style="width:100%; height:400px; border:1px solid #ccc;"></iframe>`);
+                            $preview.show();
+                        }
+                        // ⭐ 新增：支援 Word 與 Excel 的處理
+                        else if (fileName.match(/\.(docx|doc|xlsx|xls)$/)) {
+                            let icon = fileName.includes('xls') ? 'bi-file-earmark-excel text-success' : 'bi-file-earmark-word text-primary';
+
+                            $preview.html(`
+                                <div class="alert alert-light border d-flex align-items-center m-0 p-2">
+                                    <i class="bi ${icon} fs-4 me-2"></i>
+                                    <span class="me-auto">此檔案不支援線上預覽</span>
+                                    <a href="${fileUrl}" download="${file.name}" class="btn btn-sm btn-outline-secondary">下載查看</a>
+                                </div>
+                            `);
+                            $preview.slideDown(300);
+                        }
+                        else {
+                            $preview.html(`<div class="alert alert-warning py-1 m-0">此格式不支援預覽</div>`);
+                            $preview.slideDown(300);
+                        }
+                    } else {
+                        $preview.slideDown(300);
+                    }
+                });
+
+
+
+                $dragArea.find(".file-list").append($li);
+
+                //  if (window.activeForm) {
+                //     // 找到主頁面對應的那個 input 或按鈕容器
+                //     const $input = $(`[name="${field}"]`);
+                //     // 呼叫你類別裡的 showFileNames 重新渲染表格旁邊的小清單
+                //     window.activeForm.showFileNames($input, files);
+                // }
+            }
+            // 處理檔案
+            async function handleFiles(files){
+                const $fileList = $dragArea.find(".file-list");
+                const stepKey = $('#currentStepKey').val();
+                const fieldPath = $('#currentField').val();
+
+                const config = window.appConfig;
+             
+                const pattern = config.AllowedExtensions.replace(/\./g, "\\.").replace(/,/g, "|");
+                const allowedExtensions = new RegExp(`(${pattern})$`, "i");
+
+                //const allowedExtensions = /(\.jpg|\.jpeg|\.png|\.pdf|\.doc|\.docx|\.xls|\.xlsx)$/i;
+
+                const MAX_SIZE_MB = config.MaxFileSizeMB; // 💡 設定限制大小 (例如 5MB)
+
+                if (!stepKey || !fieldPath) return;
+           
+                const existingFiles = await vm.getFilesByField(stepKey, fieldPath);
+
+                 Array.from(files).forEach(file => {
+                    if (!allowedExtensions.exec(file.name)) {
+                    showAlert('提示', `檔案「${file.name}」格式不符！\n 僅支援 ${config.AllowedExtensions}等${config.FriendlyExtName}`, 'warning');
+                        return; // 跳過此檔案
+                    }
+                                        // ⭐ 檢查 1：檔案大小限制
+                    const fileSizeMB = file.size / (1024 * 1024);
+                    if (fileSizeMB > MAX_SIZE_MB) {
+                        showAlert('提示', `檔案「${file.name}」超過 ${MAX_SIZE_MB}MB，無法上傳。`, 'warning');
+                        return; // 跳過此檔案
+                    }
+
+                    const saveFileAction = (isOverwrite = false) => {
+                        if (isOverwrite) {
+                            // ⭐ 如果是覆寫，先從 vm 移除同名檔案
+                            vm.removeFile(stepKey, fieldPath, file.name);
+
+                            // 同時移除畫面上舊的 <li> (根據檔名尋找)
+                            $fileList.find(`li:contains("${file.name}")`).remove();
+                        } 
+                        vm.setFile(stepKey, fieldPath, file); 
+                        appendFileToList(stepKey, fieldPath, file);
+                        syncToParentPage(stepKey, fieldPath);
+                    };
+
+                    // ⭐ 檢查 2：重複檔名檢查
+                    // 比對現有陣列中是否有相同名稱的檔案
+                    const isDuplicate = existingFiles.some(f => f.name === file.name);
+                    if (isDuplicate) {
+                            window.showConfirm(
+                                '檔案重複',
+                                `「${file.name}」已在清單中，是否覆蓋舊檔案？`,
+                                // 💡 關鍵：用 () => 包起來，這才是一個「待命」的動作
+                                () => {
+                                    saveFileAction(true);
+                                }
+                            );
+                                                    // window.showConfirm(
+                        //     '檔案重複',
+                        //     `「${file.name}」已在清單中，是否重複加入？`,
+                        //      saveFileAction(true) // 💡 使用者按確定後會執行這個 function
+                        // );
+                    } else {
+                        // 沒重複，直接執行
+                        saveFileAction(false);
+                    }
+                });
+
+                $input.val(''); // 清空 input 讓同檔名可重複觸發
+            }
+
+            $('#uploadModal').on('show.bs.modal', function () {
+                const $fileList = $dragArea.find(".file-list");
+                $fileList.empty();
+                $fileList.html(''); // 雙重清空確保萬無一失
+                setTimeout(async () => {
+                    const stepKey = $('#currentStepKey').val();
+                    const fieldPath  = $('#currentField').val();
+               
+                    if (!stepKey || !fieldPath) return;
+                    // 從 vm 撈出該欄位現有的檔案陣列
+                    try {
+                        // ⭐ 修正：使用 PageVM 體系取得檔案
+                        // getFilesByField 內部已修正為支援 _getNested
+                        const existingFiles = await vm.getFilesByField(stepKey, fieldPath);
+
+                        // 確保 existingFiles 是陣列再遍歷
+                        if (Array.isArray(existingFiles)) {
+                            existingFiles.forEach(file => {
+                                // file 可能是實體 File，也可能是包含 {name, lazy: true} 的物件
+                                appendFileToList(stepKey, fieldPath, file);
+                            });
+                        }
+                    } catch (err) {
+                        console.error("[UploadModal] 讀取現有檔案失敗:", err);
+                    }
+                }, 100);
+            });
+            // 統一上傳
+            // $("#btnUploadAll").click(async function(){
+            //     const file = vm.getFile(tabKey, field);
+            //     const config = vm._fileConfig[tabKey][field];
+
+            //     if(file && config.uploadUrl){
+            //         const formData = new FormData();
+            //         formData.append("file", file);
+
+            //         try{
+            //             const resp = await $.ajax({
+            //                 url: config.uploadUrl,
+            //                 method: "POST",
+            //                 data: formData,
+            //                 processData: false,
+            //                 contentType: false
+            //             });
+            //             alert("檔案上傳成功");
+            //         }catch(err){
+            //             alert("檔案上傳失敗");
+            //             console.error(err);
+            //         }
+            //     }else{
+            //         alert("沒有檔案可以上傳");
+            //     }
+            // });
+        });
+
+
+
+           // // ⭐ 新增：渲染清單的函式 (放在全域或頁面 Script 區)
+           //      function renderFileList(tabKey, field) {
+           //          debugger;
+           //          let filesData = vm.getFiles(tabKey, field);
+           //          const $list = $('#uploadList').empty();
+           //          const files = Array.isArray(filesData) ? filesData : Array.from(filesData || []);
+
+           //          files.forEach((file, index) => {
+           //              $list.append(`
+           //                  <li class="list-group-item d-flex justify-content-between align-items-center">
+           //                      <span>${file.name}</span>
+           //                      <button type="button" class="btn btn-danger btn-sm"
+           //                              onclick="deleteAndRefresh('${tabKey}', '${field}', ${index})">
+           //                          刪除
+           //                      </button>
+           //                  </li>
+           //              `);
+           //          });
+           //      }
+
+           //  // ⭐ 新增：刪除並重新渲染
+           //  function deleteAndRefresh(tabKey, field, index) {
+           //      vm.removeFile(tabKey, field, index); // 呼叫你修改後的 removeFile(tabKey, field, index)
+           //      renderFileList(tabKey, field);
+           //  }
+
+           //  // --- 既有的邏輯修改 ---
+
+           //  // 1. 打開 Modal 時
+           //  $(document).on('click', '.uploadBtn', function() {
+           //      var field = $(this).data('name');
+           //      var tabKey = "SupplierVCSection";
+
+           //      $('#currentField').val(field);
+           //      $('#currentTabKey').val(tabKey);
+           //      $('#fileUpload').val('');
+
+           //      // 💡 關鍵：開窗後馬上顯示已有的檔案清單
+           //      renderFileList(tabKey, field);
+
+           //      var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal'));
+           //      modal.show();
+           //  });
+
+           //  // 2. 按下「上傳」按鈕時
+           //  $('#btnUpload').on('click', function() {
+           //      const tabKey = $('#currentTabKey').val(); // 這裡的值就是 "SupplierVCSection"
+           //      const field = $('#currentField').val();
+           //      const files = document.getElementById('fileUpload').files;
+
+           //      if (files.length > 0) {
+           //          Array.from(files).forEach(file => {
+           //              vm.setFile(tabKey, field, file); // 💡 呼叫簡化後的方法
+           //          });
+           //          renderFileList(tabKey, field);
+           //          $('#fileUpload').val('');
+           //      }
+           //  }); 
+</script>
+
+@using static auomvc.Models.Wizard
+@model StepViewModel<DynamicField>
+
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i>@Model.Title</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <div class="container mt-4">
+
+            @foreach (var m in Model.Data)
+            {
+                <div class="card mb-4" data-df="@m.Key" id="section-@m.Key">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">區塊：@m.Key</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- 呼叫你封裝好的 _DynamicForm，傳入該組的 List -->
+                        @await Html.PartialAsync("_DynamicForm", m)
+                       @*  <div class="dynamicForm"> 
+                            <df-form fields="m.Value" key="@m.Key"></df-form>
+                        </div> *@
+                    </div>
+                </div>
+            }
+
+           @*  <div class="mt-4 p-3 border bg-light">
+                <button id="btnTest">測試</button>
+                <button id="btnCache" class="btn btn-secondary mt-3">Cache All</button>
+                <button id="btnRestore" class="btn btn-warning mt-3">Restore All</button>
+                <button id="btnShowCache" class="btn btn-info mt-3">Show Cache</button>
+                <button id="btnValidateAll" class="btn btn-primary mt-2">驗證整表</button>
+                <button id="btnUpdateField" class="btn btn-primary mt-2">UpdateField</button>
+            </div> *@
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function () {
+
+        if (window.CurrentPageContext) {
+            window.CurrentPageContext.init();
+        }
+
+         $(document).on('click', '.uploadBtn', function() {
+            var colId = $(this).data('key');// $(this).data('id') || $(this).data('name');
+            console.log("目前的 ID:", colId);
+            var StepKey = "Step2";
+            
+            $('#currentField').val(colId);
+            $('#currentStepKey').val(StepKey);
+
+            // 清空舊的檔案選取
+            $('#fileUpload').val('');
+
+            // 2. 取得 Modal 實例並顯示
+            // 注意：這裡的 'uploadModal' 必須對應你 PartialView 裡的 id
+            var myModalEl = document.getElementById('uploadModal');
+            var modal = bootstrap.Modal.getOrCreateInstance(myModalEl);
+            modal.show();
+        });
+    });
+
+    
+
+
+</script>
+
+
+@using auomvc.Helper
+@model KeyValuePair<string, List<DynamicField>>
+@{
+    var model = ViewBag.Model as String;
+}
+<div class="dynamicForm">
+    <div class="table-scroll-wrapper">
+        <table class="table table-bordered dynamicForm table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th class="col-4 text-center">Item</th>
+                    <th class="col-3 text-center">Score</th>
+                    <th class="col-3 text-center">Expired Date</th>
+                    <th class="col-1 text-center">File Name</th>
+                    <th class="col-1 text-center"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var field in Model.Value.OrderBy(x => x.Order))
+                {
+                    @* if (field.Hidden)
+                    {
+                        <input type="hidden"
+                               name="@field.ColId"
+                               value="@ViewHelper.ResolveValue(field.ColValue, field.DefaultValue)" vmodel />
+                        continue;
+                    } *@
+
+                    <tr>
+                        <!-- 項目名稱 -->
+                        <td class="align-middle" style="padding:0.25rem 0.5rem;">
+                            @if (field.Must)
+                            {
+                                <span class="text-danger">*</span>
+                            }
+                            @field.Name
+                        </td>
+
+                        <!-- 項目值 -->
+                        <td class="align-middle" style="padding:0.25rem 0.5rem;">
+                            <df-field Field="@field" group-key="@(field.Name).value" has-label=false>
+                            </df-field>
+                        </td>
+
+                        <!-- 時間欄位 -->
+                        <td class="align-middle" style="padding:0.25rem 0.5rem;">
+                          @*   @if (field.IsExpired)
+                            { *@
+                            <df-field Field="@field" group-key="@(field.Name).expired" has-label=false>
+                                </df-field>
+                         @*    }
+                            else
+                            {
+                                <label class="mb-0 d-flex align-items-center">
+                                    <span class="label-text" style="display:block; width:100%; background-color:gray; color:white; padding:0 12px; height:32px; line-height:32px; box-sizing:border-box;">
+
+                                    </span>
+                                </label>
+                            } *@
+                        </td>
+
+                        <!-- 上傳按鈕 -->
+                        <td class="align-middle text-center" style="padding:0.25rem 0.5rem;">
+                            <button type="button"
+                                    class="btn btn-sm btn-primary uploadBtn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#uploadModal"
+                                    data-name="@field.Name"
+                                    data-key="@(field.Name).file"
+                                    style="padding:0 6px; height:32px; line-height:1;">
+                                上傳
+                            </button>
+                        </td>
+
+                        <!-- 狀態 -->
+                        <td class="align-middle text-center" style="padding:0.25rem 0.5rem;">
+                            <i class="bi bi-x-circle text-danger"></i>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+
+    @* <df-form fields="Model.Value" key="@Model.Key"></df-form> *@
+</div>
+
+ @* <script src="~/lib/jquery/dist/jquery.min.js"></script> *@
+<script>
+$(function(){
+  @*    const modalEl = document.getElementById("uploadModal");
+    const uploadModal = new bootstrap.Modal(modalEl);
+
+    $(document).on("click", ".uploadBtn", function () {
+        const id = $(this).data("id");
+        const name = $(this).data("name");
+
+        // 塞值進 modal
+        $("#uploadId").val(id);
+        $("#uploadName").val(name);
+
+        // 開 modal
+        uploadModal.show();
+    });
+
+    // 可選：監聽關閉事件，確保 backdrop 移除
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        document.body.classList.remove('modal-open');
+        $('.modal-backdrop').remove();
+    }); *@
+          @*   $(document).on("click", ".uploadBtn", function () {
+            const id = $(this).data("id");
+            const name = $(this).data("name");
+
+            // 塞值進 modal
+            $("#uploadId").val(id);
+            $("#uploadName").val(name);
+
+            // 開 modal
+            const modal = new bootstrap.Modal(document.getElementById("uploadModal"));
+            modal.show();
+              // 可選：監聽關閉事件，確保 backdrop 移除
+    modal.on('hidden.bs.modal', function () {
+    $(this).remove();         // 移除 modal 本身
+    $('.modal-backdrop').remove(); // 移除 backdrop
+});
+        }); *@
+})
+
+</script>
+
+
+{
+    "Logging": {
+        "LogLevel": {
+            "Default": "Information",
+            "Microsoft.AspNetCore": "Warning"
+        }
+    },
+    "AllowedHosts": "*",
+    "FileUploadConfig": {
+        "AllowedExtensions": ".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx",
+        "MaxFileSizeMB": 10,
+        "FriendlyExtName": "圖片、PDF 與 Office 文件"
+    }
+}
+
+
+using auomvc.Models;
+using Microsoft.AspNetCore.Razor.TagHelpers;
+using System.Text;
+
+namespace auomvc.Helper
+{
+    public static class FieldRenderer
+    {
+        public static string RenderField(DynamicField f,bool hasLabel = true)
+        {
+            if (f.Hidden)
+            {
+                var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+                return $"<input type='hidden' id='{f.Name}' name='{f.Name}' value='{val}' vmodel />";
+            }
+            var renderLabel = "";
+            int colWidth = 3;
+            if (hasLabel)
+            {
+                colWidth = f.Width;
+                renderLabel = RenderLabel(f, hasLabel);
+            }
+            else
+            {
+                colWidth = 12;
+            }
+
+
+            return $@" <div class='row align-items-center mb-1'>
+                            {renderLabel}
+                            <div class='col-{colWidth}'>
+                                {RenderControl(f)}
+                            </div>
+                        </div>";
+        }
+
+        // ========================
+        // Label（左側）
+        // ========================
+        private static string RenderLabel(DynamicField f, bool hasLabel)
+        {
+            int colWidth = 3;
+            if (hasLabel)
+            {
+            }
+            else
+            {
+                colWidth = 12;
+            }
+            return $@"
+                    <label class='col-{colWidth} mb-0 d-flex align-items-center'>
+                        <span class='star'>{(f.Must ? "*" : "")}</span>
+                        <span class='label-text tooltip-auto' data-title='{f.Name}'>{f.Name}</span>
+                    </label>";
+        }
+
+        // ========================
+        // 控制項核心🔥
+        // ========================
+        public static string RenderControl(DynamicField f)
+        {
+            return f.Type switch
+            {
+                FieldType.Label => RenderOnlyLabel(f),
+                FieldType.Textbox => RenderTextbox(f),
+                FieldType.Numeric => RenderNumeric(f),
+                FieldType.Date => RenderDate(f),
+                FieldType.Textarea => RenderTextarea(f),
+                FieldType.Dropdown or FieldType.Select2 => RenderDropdown(f),
+                FieldType.Radio => RenderRadio(f),
+                FieldType.File => RenderFile(f),
+                //FieldType.ShowFile => RenderShowFile(f),
+                FieldType.Hybrid => RenderHybrid(f),
+                _ => $"<span>未知控制項 {f.Type}</span>"
+            };
+        }
+
+        // ========================
+        // Label（右側顯示值）
+        // ========================
+        private static string RenderOnlyLabel(DynamicField f)
+        {
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            return $@"
+                    <label class='mb-0 d-flex align-items-center tooltip-auto'
+                           id='{f.Name}'
+                           name='{f.Name}'
+                           data-title='{f.Name}'
+                           vmodel>
+                        <span class='label-text'
+                              style='display:block; width:100%; padding:0 12px; height:32px; line-height:32px;'>
+                            {val}
+                        </span>
+                    </label>";
+        }
+
+        // ========================
+        // Textbox
+        // ========================
+        // ========================
+        private static string RenderTextbox(DynamicField f)
+        {
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+            var classList = new List<string> { "form-control" };
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+
+            return $@"
+                    <input type='text' class='{classes}'  vmodel
+                           id='{f.Name}'
+                           name='{f.Name}' 
+                           placeholder='{f.Placeholder}'
+                           data-must='{f.Must.ToString().ToLower()}'
+                           data-pattern='{f.Pattern}'
+                           data-default='{f.DefaultValue}'
+                           data-async='{f.AsyncUrl}'
+                           data-target='{f.Target}'
+                           data-key='{f.GroupKey}'
+                           value='{val}'
+                           {(f.Readonly ? "readonly" : "")} />";
+        }
+        private static string RenderHybrid(DynamicField f)
+        {
+            // 取得初始值
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            // 初始 checkbox 狀態
+            var isChecked = val != null && val.ToString() != "" ? "checked" : "";
+            var disabled = string.IsNullOrEmpty(isChecked) ? "disabled" : "";
+
+            return $@"
+        <div class='input-group hybrid-input' data-field='{f.Name}'>
+            <div class='input-group-text'>
+                <input type='checkbox' class='hybrid-checkbox' 
+                  data-hybrid-role='checkbox'
+                  data-hybrid-key='chk{f.Name}'
+                  id='{f.Name}_chk' {isChecked} />
+            </div>
+            <input type='text' class='form-control hybrid-textbox'
+                   data-hybrid-role='textbox'
+                   data-hybrid-key='txt{f.Name}' vmodel
+                   id='{f.Name}_txt'
+                   name='{f.Name}'
+                   placeholder='{f.Placeholder}'
+                   data-must='{f.Must.ToString().ToLower()}'
+                   data-pattern='{f.Pattern}'
+                   data-default='{f.DefaultValue}'
+                   value='{val}'
+                   {disabled}
+                   {(f.Readonly ? "readonly" : "")} />
+        </div> 
+    ";
+        }
+        // ========================
+        // Numeric🔥
+        // ========================
+        private static string RenderNumeric(DynamicField f)
+        {
+            var classList = new List<string> { "form-control" };
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+            var raw = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+            var value = raw;
+
+            if (decimal.TryParse(raw, out var num))
+            {
+                if (decimal.TryParse(f.Min, out var min) && num < min) value = "";
+                if (decimal.TryParse(f.Max, out var max) && num > max) value = "";
+            }
+
+            var oninput = !string.IsNullOrEmpty(f.Max)
+                ? "if(this.max && parseFloat(this.value) > parseFloat(this.max)) this.value = this.max;"
+                : "";
+
+            var onblur = @"
+if(!this.value){ this.value = this.dataset.default || ''; }
+else if(this.min && parseFloat(this.value) < parseFloat(this.min)){ this.value = this.min; }
+else if(this.max && parseFloat(this.value) > parseFloat(this.max)){ this.value = this.max; }";
+
+            return $@"
+                    <input type='number' class='{classes}' vmodel
+                           name='{f.Name}'
+                           value='{value}'
+                           id='{f.Name}'
+                           placeholder='{f.Placeholder}'
+                           data-must='{f.Must.ToString().ToLower()}'
+                           data-pattern='{f.Pattern}'
+                           data-default='{f.DefaultValue}'
+                           data-key='{f.GroupKey}'
+                           {(string.IsNullOrEmpty(f.Min) ? "" : $"min='{f.Min}'")}
+                           {(string.IsNullOrEmpty(f.Max) ? "" : $"max='{f.Max}'")}
+                           oninput=""{oninput}""
+                           onblur=""{onblur}""
+                           {(f.Readonly ? "readonly" : "")} />";
+        }
+
+        // ========================
+        // Date🔥
+        // ========================
+        private static string RenderDate(DynamicField f)
+        {
+            var classList = new List<string> { "form-control", "datepicker" };
+           // if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue)?.Replace("/", "-");
+
+            bool hasMin = DateTime.TryParse(f.Min, out var minDate);
+            bool hasMax = DateTime.TryParse(f.Max, out var maxDate);
+
+            if (DateTime.TryParse(val, out var d))
+            {
+                if ((hasMin && d < minDate) || (hasMax && d > maxDate))
+                    val = "";
+            }
+
+            var onblur = @"
+if(!this.value){ this.value = this.dataset.default || ''; }
+else{
+    if(this.min && this.value < this.min){ this.value = this.min; }
+    if(this.max && this.value > this.max){ this.value = this.max; }
+}";
+
+            return $@"
+<input type='date' class='{classes}' vmodel
+       name='{f.Name}'
+       id='{f.Name}'
+       value='{val}' 
+       placeholder='{f.Placeholder}'
+       data-must='{f.Must.ToString().ToLower()}'
+       data-pattern='{f.Pattern}'
+       data-default='{f.DefaultValue}'
+       data-key='{f.GroupKey}'
+       {(hasMin ? $"min='{minDate:yyyy-MM-dd}'" : "")}
+       {(hasMax ? $"max='{maxDate:yyyy-MM-dd}'" : "")}
+       onblur=""{onblur}""
+       {(f.Readonly ? "readonly" : "")} />";
+        }
+
+        // ========================
+        // Textarea
+        // ========================
+        private static string RenderTextarea(DynamicField f)
+        {
+            var classList = new List<string> { "form-control" };
+           // if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            return $@"
+                    <textarea class='{classes}' vmodel
+                                name='{f.Name}'
+                                id='{f.Name}'
+                                data-key='{f.GroupKey}'
+                                placeholder='{f.Placeholder}'
+                                data-must='{f.Must.ToString().ToLower()}'
+                                data-pattern='{f.Pattern}'
+                                data-default='{f.DefaultValue}'
+                                {(f.Readonly ? "readonly" : "")}>{val}</textarea>";
+        }
+
+        // ========================
+        // Dropdown🔥
+        // ========================
+        private static string RenderDropdown(DynamicField f)
+        {
+            var classList = new List<string> { "form-control" };
+            if (f.Type == FieldType.Select2) classList.AddRange(new List<string>() { "select2-container--default", "select2" });
+            if (f.Type == FieldType.Dropdown) classList.AddRange(new List<string>() { "valueInput", "dropdownColor" });
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+
+
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            var sb = new StringBuilder();
+
+            sb.Append($@"<select class='{classes}' vmodel
+                        id='{f.Name}'
+                        name='{f.Name}'
+                        data-default='{f.DefaultValue}'
+                        data-placeholder='{f.Placeholder}'
+                        data-key='{f.GroupKey}'
+                        data-async='{f.AsyncUrl}'
+                        data-must='{f.Must.ToString().ToLower()}'
+                        {(f.Readonly ? "disabled" : "")}>");
+
+            sb.Append("<option value='' data-color='white' style='background-color:white'>請選擇</option>");
+
+            if (f.Options != null)
+            {
+                foreach (var op in f.Options)
+                {
+                    var selected = op.Value == val ? "selected" : "";
+                    var color = string.IsNullOrEmpty(op.Color) ? "white" : op.Color;
+
+                    sb.Append($@"<option value='{op.Value}' data-color='{color}' style='background-color:{color}' {selected}>{op.Text}</option>");
+                }
+            }
+
+            sb.Append("</select>");
+            return sb.ToString();
+        }
+
+        // ========================
+        // Radio
+        // ========================
+        private static string RenderRadio(DynamicField f)
+        {
+            var classList = new List<string> { };
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+            var sb = new StringBuilder();
+
+            sb.Append("<div class='radio-group input-with-status'>");
+
+            foreach (var op in f.Options ?? new())
+            {
+                var isInverse = f.InverseSelect;
+
+                var isChecked = !isInverse
+                    ? (op.Value == val)
+                    : (op.Value != val);
+
+                var isDisabled = isInverse && op.Value == val;
+
+
+                sb.Append($@"
+                    <label class='radio-inline {(isDisabled ? "disabled-option" : "")}'>
+                        <input type='radio' class='{classes}' id='{f.Name}' name='{f.Name}' value='{op.Value}'
+                        {(isChecked ? "checked" : "")} 
+                        {(isDisabled ? "disabled" : "")}
+                        data-must='{f.Must.ToString().ToLower()}'
+                        data-key='{f.GroupKey}'
+                        vmodel />
+                        {op.Text}
+                    </label>");
+            }
+
+            sb.Append("</div>");
+            return sb.ToString();
+        }
+
+        // ========================
+        // File
+        // ========================
+        private static string RenderFile(DynamicField f)
+        {
+            return $@"
+                    <div class='dynamic-file-input dynamic-file'>
+                        <input type='file' id='{f.Name}' name='{f.Name}' class='form-control d-none' vmodel />
+                         <label class='btn btn-outline-primary btn-sm tooltip-auto' for='{f.Name}' style='cursor:pointer;' data-title='上傳檔案'>
+                            <i class='bi bi-upload'></i>
+                        </label>
+
+                        <!-- 中間：文字太長會自動變 ... -->
+                        <span class='filename-label'>
+        
+                        </span>
+
+                        <!-- 右側：永遠靠右 -->
+                        <div class='btn-group'>
+                            <button type='button' class='btn btn-outline-secondary btn-sm preview-btn tooltip-auto' style='display:none;' data-title='預覽'>
+                                <i class='bi bi-eye'></i>
+                            </button>
+                            <button type='button' class='btn btn-outline-danger btn-sm delete-btn tooltip-auto' style='display:none;' data-title='刪除'>
+                                <i class='bi bi-trash'></i>
+                            </button>
+                        </div>
+                    </div>";
+        }
+
+        private static string RenderShowFile(DynamicField f)
+        {
+            return $@" <div class='dynamic-file-show dynamic-file'> 
+                            <!-- 中間：文字太長會自動變 ... -->
+                            <span class='filename-label' id='{f.Name}' name='{f.Name}' vmodel>
+                                 {f.Value}
+                            </span>
+
+                            <!-- 右側：永遠靠右 -->
+                            <div class='btn-group'>
+                                <button type='button' class='btn btn-outline-secondary btn-sm preview-btn tooltip-auto' data-title='預覽'>
+                                    <i class='bi bi-eye'></i>
+                                </button>
+                            </div>
+                        </div>";
+        }
+    }
+    [HtmlTargetElement("df-field")]
+    public class DfFieldTagHelper : TagHelper
+    {
+        public DynamicField Field { get; set; }
+        // 單個屬性方式
+
+        public string Name { get; set; }
+
+        public bool hasLabel { get; set; } = true;
+
+        public string groupKey { get; set; } = "";
+        public FieldType Type { get; set; } = FieldType.Textbox;
+        public bool Must { get; set; } = false;
+        public string Placeholder { get; set; } = "";
+        public string DefaultValue { get; set; } = "";
+        public bool Readonly { get; set; } = false;
+        public int? Min { get; set; }
+        public int? Max { get; set; }
+        public override void Process(TagHelperContext context, TagHelperOutput output)
+        {
+            if ((Type != FieldType.Numeric) && (Min.HasValue || Max.HasValue))
+            {
+                throw new InvalidOperationException("Min/Max 只能用在 Number 類型的欄位上");
+            }
+            DynamicField fieldToRender;
+
+            
+
+
+            if (Field != null)
+            {
+                Field.GroupKey = groupKey;
+                // 使用完整 BaseDynamicField
+                fieldToRender = Field;
+            }
+            else
+            {
+                // 使用單個屬性組成 BaseDynamicField
+                fieldToRender = new DynamicField
+                {
+                    Name = Name,
+                    Type = Type,
+                    Must = Must,
+                    Placeholder = Placeholder,
+                    GroupKey = groupKey,
+                    DefaultValue = DefaultValue,
+                    Readonly = Readonly,
+                    Min = Min?.ToString(),
+                    Max = Max?.ToString()
+                };
+            }
+
+            output.TagName = null; // 移除 <df-field> 標籤
+            output.Content.SetHtmlContent(FieldRenderer.RenderField(fieldToRender, hasLabel));
+        }
+    }
+
+    [HtmlTargetElement("df-form")]
+    public class DfFormTagHelper : TagHelper
+    {
+        public List<DynamicField> Fields { get; set; }
+        public string Key { get; set; }
+        public override void Process(TagHelperContext context, TagHelperOutput output)
+        {
+            //output.TagName = "div";
+            //output.Attributes.SetAttribute("class", "dynamicForm");
+            //output.Attributes.SetAttribute("data-df", Key);
+            var sb = new StringBuilder();
+
+            foreach (var f in Fields.OrderBy(x => x.Order))
+            {
+                sb.Append(FieldRenderer.RenderField(f));
+            }
+
+            output.Content.SetHtmlContent(sb.ToString());
+        }
+    }
+}
+
+
+using auomvc.Models;
+using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using System.Text;
+using System.Text.Json;
+namespace auomvc.Helper
+{
+    public static class ViewHelper
+    {
+        public static string ResolveValue(string value, string defaultValue)
+        {
+            return !string.IsNullOrEmpty(value) ? value : (defaultValue ?? "");
+        }
+        public static IHtmlContent RenderAppConfig(this IHtmlHelper htmlHelper, string sectionName = "FileUploadConfig")
+        {
+            var config = htmlHelper.ViewContext.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+
+            // 1. 取得指定的整個區塊 (例如 FrontendConfig)
+            var section = config.GetSection(sectionName);
+
+            // 2. 將該區塊轉換為 Dictionary，方便序列化
+            var settings = section.AsEnumerable()
+                .Where(x => x.Value != null)
+                .ToDictionary(x => x.Key.Replace($"{sectionName}:", ""), x => x.Value);
+
+            // 3. 序列化為 JSON (使用 CamelCase 讓 JS 好讀)
+            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            var json = System.Text.Json.JsonSerializer.Serialize(settings, jsonOptions);
+
+            return new HtmlString($"<script>window.appConfig = {json};</script>");
+        }
+
+        /// <summary>
+        /// 取得 Controller_Action
+        /// </summary>
+        public static string GetPageKey(this IHtmlHelper html)
+        {
+            var route = html.ViewContext.RouteData.Values;
+            var controller = route["controller"]?.ToString();
+            var action = route["action"]?.ToString();
+
+            return $"{controller}_{action}";
+        }
+
+        /// <summary>
+        /// Controller_Action_Tab
+        /// </summary>
+        public static string GetPageTabKey(this IHtmlHelper html, string tabId)
+        {
+            var baseKey = html.GetPageKey();
+            return $"{baseKey}_{tabId}";
+        }
+
+        public static IHtmlContent RenderDynamicFormTypesAuto(this IHtmlHelper html, Dictionary<string, List<DynamicField>> model)
+        {
+            if (model is not Dictionary<string, List<DynamicField>> dict)
+                return HtmlString.Empty;
+
+            var sb = new StringBuilder();
+
+            sb.AppendLine("<script>");
+            foreach (var tab in model)
+            {
+                sb.AppendLine($"/**");
+                sb.AppendLine($" * @typedef {{");
+
+                foreach (var field in tab.Value)
+                {
+                    var type = "string"; // 預設
+
+                    if (field.Type.ToString() == "number" || field.Type.ToString() == "int") type = "number";
+                    if (field.Type.ToString() == "date") type = "string"; // date 可改成 string 或 Date
+                    sb.AppendLine($" *   {field.Name}: {type};");
+                }
+
+                sb.AppendLine($" * }} {tab.Key};");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("/// <reference types=\"jquery\" />");
+            sb.AppendLine("/** @type {Object.<string, any>} */");
+            sb.AppendLine("var vm = vm || {};");
+            sb.AppendLine("</script>");
+
+            return new HtmlString(sb.ToString());
+        }
+    }
+}
+
+
+
+function buildContext($el, val, vm, form, key, name) {
+    return {
+        val,
+        el: $el,
+        vm,
+        form,
+        tabKey: key,
+        field: name,
+
+        type: resolveType($el),
+
+        must: $el.data("must"),
+        pattern: $el.data("pattern"),
+        minlength: $el.data("minlength"),
+        maxlength: $el.data("maxlength"),
+        min: $el.attr("min"),
+        max: $el.attr("max"),
+        conditional: $el.data("conditional"),
+        cross: $el.data("cross"),
+        asyncUrl: $el.data("async"),
+        keyPath: $el.data("key")
+    };
+}
+
+const ControlRuleMap = {
+
+    text: ["required", "pattern", "minlength", "maxlength"],
+    textarea: ["required", "minlength", "maxlength"],
+
+    number: ["required", "min", "max"],
+
+    date: ["required", "min", "max"],
+
+    select: ["required"],
+
+    checkbox: ["required"],
+
+    file: [] // ⭐ 完全跳過（或只留 required 看需求）
+};
+const ValidatorRules = {
+
+    required: {
+        validate: (val, ctx) => {
+            if (ctx.must && (val === "" || val == null)) return "必填";
+            return true;
+        }
+    },
+
+    pattern: {
+        validate: (val, ctx) => {
+            if (!ctx.pattern || !val) return true;
+            return new RegExp(ctx.pattern).test(val) || "格式錯誤";
+        }
+    },
+
+    minlength: {
+        validate: (val, ctx) => {
+            if (!ctx.minlength || !val) return true;
+            return val.length >= ctx.minlength || `至少${ctx.minlength}字`;
+        }
+    },
+
+    maxlength: {
+        validate: (val, ctx) => {
+            if (!ctx.maxlength || !val) return true;
+            return val.length <= ctx.maxlength || `最多${ctx.maxlength}字`;
+        }
+    },
+
+    min: {
+        validate: (val, ctx) => {
+            if (!ctx.min || !val) return true;
+
+            // ⭐ 日期 or 數字
+            if (ctx.type === "date") {
+                return new Date(val) >= new Date(ctx.min) || `不可小於${ctx.min}`;
+            }
+
+            return parseFloat(val) >= parseFloat(ctx.min) || `不可小於${ctx.min}`;
+        }
+    },
+
+    max: {
+        validate: (val, ctx) => {
+            if (!ctx.max || !val) return true;
+
+            if (ctx.type === "date") {
+                return new Date(val) <= new Date(ctx.max) || `不可大於${ctx.max}`;
+            }
+
+            return parseFloat(val) <= parseFloat(ctx.max) || `不可大於${ctx.max}`;
+        }
+    },
+
+    conditional: {
+        validate: (val, ctx) => {
+            if (!ctx.conditional) return true;
+
+            let cond = JSON.parse(ctx.conditional);
+            if ($(cond.selector).val() && val === "") {
+                return "條件必填";
+            }
+            return true;
+        }
+    },
+
+    cross: {
+        validate: (val, ctx) => {
+            if (!ctx.cross) return true;
+
+            let c = JSON.parse(ctx.cross);
+            let otherVal = $(c.selector).val();
+
+            if (c.op === ">" && val && otherVal) {
+                return parseFloat(val) > parseFloat(otherVal) || `必須大於${c.selector}`;
+            }
+            return true;
+        }
+    }
+
+};
+
+ 
+function setSelect2ByValue($el, value) {
+    const url = $el.data("async");
+
+    $.ajax({
+        url: url,
+        data: { id: value }
+    }).then(function (data) {
+        if (data.items && data.items.length > 0) {
+            const item = data.items[0];
+
+            const option = new Option(item.text, item.id, true, true);
+            $el.append(option).trigger('change');
+        }
+    });
+}
+
+var DynamicForm = (function () {
+
+    class PageVM {
+
+        constructor() {
+            this.forms = [];
+            this._scopedData = {};
+            this._watchers = {};
+            this._computed = {};
+            this._computedCache = {};
+            this._dirty = {};
+            this._validators = {};
+            this._customData = {};
+            this._pagePath = window.location.pathname;
+        }
+
+        // ================= 工具 =================
+
+        static _setNested(obj, path, value) {
+            if (!obj) return;
+            const keys = path.split(".");
+            let t = obj;
+            keys.forEach((k, i) => {
+                if (i === keys.length - 1) {
+                    t[k] = value;
+                } else {
+                    if (!t[k] || typeof t[k] !== "object") t[k] = {};
+                    t = t[k];
+                }
+            });
+        }
+
+        static _getNested(obj, path) {
+            if (!obj || !path) return undefined;
+            const keys = path.split(".");
+            let t = obj;
+            for (let k of keys) {
+                // 防禦性檢查：確保中間節點存在且不是 null
+                if (t === null || t === undefined || typeof t !== "object") return undefined;
+                t = t[k];
+            }
+            return t;
+        }
+
+        static _flatten(obj, prefix = "", res = {}) {
+            const entries = Object.entries(obj || {});
+            if (entries.length === 0 && prefix) {
+                res[prefix] = obj; // 保留原始值(如空物件或空陣列)
+                return res;
+            }
+            entries.forEach(([k, v]) => {
+                const path = prefix ? `${prefix}.${k}` : k;
+                // 排除 File, Array 與 null
+                if (typeof v === "object" && v !== null && !(v instanceof File) && !Array.isArray(v)) {
+                    PageVM._flatten(v, path, res);
+                } else {
+                    res[path] = v;
+                }
+            });
+            return res;
+        }
+
+        // ================= register =================
+
+        register(form) {
+            this.forms = this.forms.filter(f => f.key !== form.key);
+            this.forms.push(form);
+
+            const key = form.key;
+            this._scopedData[key] = this._scopedData[key] || {};
+            this._dirty[key] = this._dirty[key] || new Set();
+            this._watchers[key] = this._watchers[key] || {};
+            this._computed[key] = this._computed[key] || {};
+            this._computedCache[key] = {};
+
+            const proxyCache = new WeakMap();
+
+            const makeReactive = (obj, path = []) => {
+                if (typeof obj !== "object" || obj === null || obj instanceof File) return obj;
+                if (proxyCache.has(obj)) return proxyCache.get(obj);
+
+                const proxy = new Proxy(obj, {
+                    set: (t, k, v) => {
+                        const old = t[k];
+                        if (old === v) return true;
+
+                        const fullPath = [...path, k].join(".");
+                        // 賦值時，如果是物件則繼續包裝 Proxy
+                        t[k] = (typeof v === "object" && v !== null) ? makeReactive(v, [...path, k]) : v;
+
+                        this._dirty[key].add(fullPath);
+
+                        // 觸發監聽
+                        const fns = PageVM._getNested(this._watchers[key], fullPath);
+                        if (Array.isArray(fns)) {
+                            fns.forEach(fn => fn(t[k], old));
+                        }
+
+                        this._computedCache[key] = {};
+                        return true;
+                    },
+                    get: (t, k) => {
+                        if (path.length === 0 && this._computed[key][k]) {
+                            if (this._computedCache[key][k] === undefined) {
+                                this._computedCache[key][k] = this._computed[key][k].call(this[key]);
+                            }
+                            return this._computedCache[key][k];
+                        }
+                        const val = t[k];
+                        return makeReactive(val, [...path, k]);
+                    }
+                });
+
+                proxyCache.set(obj, proxy);
+                return proxy;
+            };
+
+            // 初始化資料
+            Object.entries(form.fieldCache || {}).forEach(([path, v]) => {
+                PageVM._setNested(this._scopedData[key], path, v);
+            });
+
+            const rootProxy = makeReactive(this._scopedData[key]);
+            form.proxy = rootProxy;
+            this[key] = rootProxy;
+        }
+
+        // ================= API =================
+
+        $watch(tabKey, path, fn) {
+            if (!this._watchers[tabKey]) this._watchers[tabKey] = {};
+            let handlers = PageVM._getNested(this._watchers[tabKey], path);
+            if (!Array.isArray(handlers)) handlers = [];
+            handlers.push(fn);
+            PageVM._setNested(this._watchers[tabKey], path, handlers);
+        }
+
+        $computed(tabKey, name, fn) {
+            this._computed[tabKey][name] = fn;
+        }
+
+        $dirty(tabKey) {
+            return PageVM._flatten(this._scopedData[tabKey]);
+        }
+
+        $resetDirty(tabKey) {
+            this._dirty[tabKey].clear();
+        }
+
+        cache() {
+            this.forms.forEach(f => f.cache());
+        }
+
+        restore() {
+            this.forms.forEach(f => f.restore());
+        }
+
+        async validate() {
+            // 1. 各表單 UI 驗證
+            const results = await Promise.all(this.forms.map(f => f.validateAll()));
+
+            // 2. 自定義 $validator 驗證
+            for (const [tabKey, rulesTree] of Object.entries(this._validators)) {
+                const flatRules = PageVM._flatten(rulesTree);
+                for (const [path, fns] of Object.entries(flatRules)) {
+                    if (Array.isArray(fns)) {
+                        const val = PageVM._getNested(this._scopedData[tabKey], path);
+                        for (const fn of fns) {
+                            const res = await fn(val);
+                            if (res !== true) results.push(false);
+                        }
+                    }
+                }
+            }
+            return results.every(r => r === true);
+        }
+
+        async getJsonString() {
+            this.cache();
+            const isValid = await this.validate();
+            if (!isValid) return null;
+
+            const serializeFiles = obj => {
+                if (!obj) return obj;
+                if (obj instanceof File) return obj.name;
+                if (obj.file instanceof File) return obj.filename || obj.file.name;
+                if (Array.isArray(obj)) return obj.map(serializeFiles);
+                if (typeof obj === "object") {
+                    const res = {};
+                    Object.entries(obj).forEach(([k, v]) => res[k] = serializeFiles(v));
+                    return res;
+                }
+                return obj;
+            };
+
+            let finalPayload = {};
+            this.forms.forEach(f => {
+                finalPayload[f.key] = serializeFiles(this._scopedData[f.key]);
+            });
+            return JSON.stringify(finalPayload, null, 4);
+        }
+
+        // ================= validator =================
+
+        $validator(tabKey, path, fn) {
+            if (!this._validators[tabKey]) this._validators[tabKey] = {};
+            let handlers = PageVM._getNested(this._validators[tabKey], path);
+            if (!Array.isArray(handlers)) handlers = [];
+            handlers.push(fn);
+            PageVM._setNested(this._validators[tabKey], path, handlers);
+        }
+
+        // ================= custom =================
+
+        setCustom(tabKey, key, value) {
+            if (!this._customData[tabKey]) this._customData[tabKey] = {};
+            this._customData[tabKey][key] = value;
+        }
+
+        getCustom(tabKey, key) {
+            return this._customData[tabKey]?.[key];
+        }
+
+        // ================= File =================
+
+        setFile(tabKey, path, file) {
+            // 1. 確保該 Tab 槽位存在
+            this._scopedData[tabKey] = this._scopedData[tabKey] || {};
+
+            // 2. 優先從 Proxy (this[tabKey]) 取得資料，這樣 push 才會觸發響應式
+            const dataSource = this[tabKey] || this._scopedData[tabKey];
+
+            let existing = PageVM._getNested(dataSource, path);
+
+            // 3. 如果路徑下不是陣列，初始化為空陣列
+            if (!Array.isArray(existing)) {
+                PageVM._setNested(dataSource, path, []);
+                existing = PageVM._getNested(dataSource, path);
+            }
+
+            // 4. ⭐ 執行 Push
+            // 如果 dataSource 是 Proxy，這一步會觸發 PageVM 內部 Proxy 的 set
+            // 進而觸發 $watch，讓畫面上的「檔案數量 Badge」自動更新
+            existing.push(file);
+        }
+
+        removeFile(tabKey, path, identifier) {
+            // 1. 優先取得 Proxy 來源，確保操作能觸發 $watch
+            const dataSource = this[tabKey] || this._scopedData[tabKey];
+            if (!dataSource) return;
+
+            const files = PageVM._getNested(dataSource, path);
+            if (!Array.isArray(files)) return;
+
+            // 2. 執行刪除邏輯
+            if (typeof identifier === "number") {
+                // splice 會觸發 Proxy 的變動通知
+                files.splice(identifier, 1);
+            } else if (typeof identifier === "string") {
+                // filter 會產生新陣列，必須重新 setNested 才能觸發 Proxy 的 set
+                const filtered = files.filter(f => (f.name || f.filename) !== identifier);
+                PageVM._setNested(dataSource, path, filtered);
+            }
+
+            // 3. 如果清空了，設定為空陣列（建議保留空陣列而非 undefined，避免 getNested 後續報錯）
+            const updatedFiles = PageVM._getNested(dataSource, path);
+            if (updatedFiles && updatedFiles.length === 0) {
+                PageVM._setNested(dataSource, path, []);
+            }
+        }
+
+        clearFiles(tabKey, path) {
+            PageVM._setNested(this._scopedData[tabKey], path, undefined);
+        }
+
+        // ⭐ 取得檔案
+        async getFilesByField(tabKey, fieldPath) {
+            // 1. 使用 _getNested 支援路徑存取
+            let file = PageVM._getNested(this._scopedData[tabKey], fieldPath);
+
+            // 如果本地已有實體 File 物件（非 lazy），直接回傳
+            if (file && (file instanceof File || (Array.isArray(file) && file[0] instanceof File))) {
+                return file;
+            }
+
+            // ⭐ 後端抓檔案方法
+            const fetchBackendFile = async (tabKey, path) => {
+                // 如果後端 API 不支援點分隔路徑，可能需要將點轉成其他字元或編碼
+                const safePath = encodeURIComponent(path);
+                const res = await fetch(`/api/file/${tabKey}/${safePath}`);
+                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+
+                const blob = await res.blob();
+                // 嘗試從 Content-Disposition 取得檔名，若無則使用路徑末端
+                const fileName = path.split('.').pop() + (blob.type === "application/pdf" ? ".pdf" : ".img");
+
+                return {
+                    name: fileName,
+                    type: blob.type,
+                    blob: blob
+                };
+            };
+
+            try {
+                const backendData = await fetchBackendFile(tabKey, fieldPath);
+                const newFile = new File([backendData.blob], backendData.name, { type: backendData.type });
+
+                // 2. ⭐ 透過 Proxy 寫入，確保連動 UI (如綠色打勾圖示)
+                if (this[tabKey]) {
+                    PageVM._setNested(this[tabKey], fieldPath, [newFile]);
+                } else {
+                    PageVM._setNested(this._scopedData[tabKey], fieldPath, [newFile]);
+                }
+
+                return [newFile];
+            } catch (err) {
+                console.error("從後端抓檔案失敗", err);
+                // 失敗時回傳目前本地有的（可能是 lazy 物件）或空陣列
+                return PageVM._getNested(this._scopedData[tabKey], fieldPath) || [];
+            }
+        }
+
+
+        getFilename(tabKey, path) {
+            const f = PageVM._getNested(this._scopedData[tabKey], path);
+            return f?.name || "";
+        }
+
+        async previewFile(tabKey,file,fieldPath) {
+
+            if (file instanceof File) {
+
+            } else if (typeof file === "string") {
+
+                file = { name: file, lazy: true };
+            }
+
+            if (!file) return; 
+
+            // ⭐ lazy load
+            if (file?.lazy && fieldPath) {
+                // 假設實體檔案存在於後端，這裡應呼叫你原有的下載/獲取 Blob 邏輯
+                // 如果你的 getFilesByField 已經處理好路徑，請確保傳入的是完整 path
+                const realFile = await this.getFilesByField(tabKey, fieldPath);
+                if (!realFile) {
+                    alert("檔案載入失敗");
+                    return;
+                }
+                file = realFile[0].file;
+            }
+             
+            const win = window.open("", "_blank", "width=1000,height=700");
+            if (!win) {
+                alert("請允許彈出視窗");
+                return;
+            } 
+            
+            const url = URL.createObjectURL(file);
+
+            // ===== 內部專用 helper: 圖片/PDF互動 =====
+            const _initPreviewInteraction = (type, targetId, sliderId, options = {}) => {
+                const el = win.document.getElementById(targetId);
+                const slider = win.document.getElementById(sliderId);
+                if (!el || !slider) return;
+
+                let scale = 1;
+                let translateX = 0, translateY = 0;
+                let isDragging = false;
+                let startX, startY;
+
+                const minScale = options.minScale || 0.5;
+                const maxScale = options.maxScale || 5;
+                const step = options.step || 0.01;
+
+                const applyTransform = () => {
+                    if (type === "image") {
+                        el.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+                    } else if (type === "pdf") {
+                        el.style.transformOrigin = "top left";
+                        el.style.transform = `scale(${scale})`;
+                    }
+                };
+
+                slider.min = minScale;
+                slider.max = maxScale;
+                slider.step = step;
+                slider.value = scale;
+
+                slider.oninput = e => {
+                    scale = parseFloat(e.target.value);
+                    applyTransform();
+                };
+
+                if (type === "image") {
+                    el.style.cursor = "grab";
+                    el.onwheel = e => {
+                        e.preventDefault();
+                        scale += e.deltaY * -0.001;
+                        scale = Math.min(Math.max(minScale, scale), maxScale);
+                        applyTransform();
+                        slider.value = scale;
+                    };
+                    el.onmousedown = e => {
+                        isDragging = true;
+                        startX = e.clientX - translateX;
+                        startY = e.clientY - translateY;
+                        el.style.cursor = "grabbing";
+                    };
+                    win.document.onmouseup = () => {
+                        isDragging = false;
+                        el.style.cursor = "grab";
+                    };
+                    win.document.onmousemove = e => {
+                        if (!isDragging) return;
+                        translateX = e.clientX - startX;
+                        translateY = e.clientY - startY;
+                        applyTransform();
+                    };
+                }
+
+                if (type === "pdf" && options.zoomInId && options.zoomOutId) {
+                    const zoomInBtn = win.document.getElementById(options.zoomInId);
+                    const zoomOutBtn = win.document.getElementById(options.zoomOutId);
+                    if (zoomInBtn) zoomInBtn.onclick = () => { scale = Math.min(scale + 0.1, maxScale); applyTransform(); slider.value = scale; };
+                    if (zoomOutBtn) zoomOutBtn.onclick = () => { scale = Math.max(scale - 0.1, minScale); applyTransform(); slider.value = scale; };
+                }
+            };
+
+            // ===== 決定內容 =====
+            let content = "";
+            if (file.type.startsWith("image/")) {
+                content = `
+        <div style="display:flex; flex-direction:column; align-items:center; width:100%; height:100%;">
+            <img id="previewImg" src="${url}" 
+                 style="max-width:100%; max-height:80%; cursor:grab; transform:scale(1);" />
+            <input type="range" id="imgZoom" min="0.5" max="5" step="0.01" value="1" style="width:80%; margin-top:5px;">
+        </div>`;
+            } else if (file.type === "application/pdf") {
+                content = `
+        <div style="display:flex; flex-direction:column; height:100%; width:100%;">
+            <div style="display:flex; gap:5px; padding:5px; align-items:center;">
+                <button id="pdfZoomIn">+</button>
+                <button id="pdfZoomOut">-</button>
+                <input type="range" id="pdfZoomSlider" min="0.5" max="3" step="0.01" value="1" style="flex:1;">
+            </div>
+            <iframe id="pdfFrame" src="${url}" style="width:100%; flex:1; border:none;"></iframe>
+        </div>`;
+            } else {
+                // fallback: 下載
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = file.name;
+                a.click();
+                URL.revokeObjectURL(url);
+                return;
+            }
+
+            // ===== render =====
+            win.document.body.style.margin = "0";
+            win.document.body.innerHTML = `
+    <div style="height:100%; display:flex; flex-direction:column;">
+        <div style="padding:5px; background:#f1f1f1;">${file.name}</div>
+        <div id="content" style="flex:1; display:flex; justify-content:center; align-items:center;">
+            ${content}
+        </div>
+    </div>`;
+
+            // ===== 初始化互動 =====
+            if (file.type.startsWith("image/")) {
+                _initPreviewInteraction("image", "previewImg", "imgZoom");
+            } else if (file.type === "application/pdf") {
+                _initPreviewInteraction("pdf", "pdfFrame", "pdfZoomSlider", {
+                    minScale: 0.5,
+                    maxScale: 3,
+                    step: 0.01,
+                    zoomInId: "pdfZoomIn",
+                    zoomOutId: "pdfZoomOut"
+                });
+            }
+
+            // ===== 清理 ObjectURL =====
+            win.addEventListener("beforeunload", () => URL.revokeObjectURL(url));
+        }
+
+        // ⭐ 處理檔案輸入（inline / modal 共用）
+        async handleFileInput(tabKey, fieldPath, file, options) {
+            if (!file?.lazy) {
+                this.setFile(tabKey, field, file);
+            }
+
+
+            if (options.inline) {
+                const $group = options.$group;
+                const $previewBtn = $group.find(".preview-btn");
+                const $deleteBtn = $group.find(".delete-btn");
+                const $filenameLabel = $group.find(".filename-label");
+                const $input = options.$input;
+
+                $filenameLabel.text(file.name);
+                $previewBtn.show();
+                $deleteBtn.show();
+
+                $deleteBtn.off("click").on("click", () => {
+                    $input.val(null);
+                    $filenameLabel.text("未選檔案");
+                    $previewBtn.hide();
+                    $deleteBtn.hide();
+
+                    // 使用路徑刪除檔案
+                    this.removeFile(tabKey, field, file.name);
+
+                    // 如果需要觸發 UI 驗證
+                    const $targetInput = this.container.find(`[data-key="${field}"]`);
+                    if ($targetInput.length) this.validateField($targetInput);
+                });
+
+                $previewBtn.off("click").on("click", async () => {
+                    // 傳入路徑以便 previewFile 進行 lazy 檢索
+                    await this.previewFile(tabKey, file, fieldPath);
+                });
+            }
+            else if (options.modal) {
+                const $fileList = options.$fileList;
+                const $li = $(`
+                    <li class="list-group-item d-flex justify-content-between align-items-center flex-column align-items-start">
+                        <div class="d-flex justify-content-between w-100 align-items-center">
+                            <span>${file.name} (${Math.round(file.size / 1024)} KB)</span>
+                            <button type="button" class="btn btn-sm btn-danger btn-delete">刪除</button>
+                        </div>
+                        <div class="file-preview mt-2"></div>
+                    </li>
+                `);
+                $fileList.append($li);
+
+                $li.find(".btn-delete").click(() => {
+                    $li.remove();
+                    this.removeFile(tabKey, field);
+                });
+            }
+        }
+
+
+    }
+    // =========================
+    // ⭐ Form Instance
+    // =========================
+    class DynamicFormInstance {
+        constructor(container, sharedVm) {
+            this.container = $(container);
+            this.fields = this.container.find("[vmodel]");
+            this.vm = sharedVm; // 使用傳入的共用 VM  
+            this.key = this.container.data("df"); // ⭐ 每個 tab 的 key
+
+            // 2. 初始化儲存空間
+            this.fieldCache = {}; // 快取（現在會存成巢狀結構）
+            this.fieldMap = {};   // 快速索引：{ "user.name": $inputElement }
+            this.asyncCache = {};
+            this.asyncTokens = {};
+           /* this.data = {};*/
+            this.fieldMap = {};
+
+            //this.proxyData = new Proxy(this.data, {
+            //    set: (target, key, value) => {
+            //        if (target[key] === value) return true;
+            //        target[key] = value;
+            //        this.updateField(key, value, false);
+            //        return true;
+            //    }
+            //});
+
+          
+
+            // ⭐ 自動註冊到 VM
+            this.vm.register(this);
+
+            this.init();
+            this.container.data("df-initialized", true);
+            //this.bindFileInputs();
+            //this.restoreFiles();
+        }
+
+
+
+        init() {
+            this.vm._scopedData[this.key] = this.vm._scopedData[this.key] || {};
+            this.fields.each((_, el) => {
+
+                const $el = $(el);
+                const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+                if (!name) return; 
+
+                const isInput = $el.is("input, select, textarea");
+                /*let isFile = resolveType($el) === "file";*/
+
+                // ⭐ NEW：判斷 hybrid
+                const $hybrid = $el.closest(".hybrid-input");
+                const isHybridChild = $hybrid.length > 0;
+
+                // =========================================
+                // ⭐ ① Hybrid 優先處理（直接跳過原流程🔥）
+                // =========================================
+                if (isHybridChild) {
+
+                    const fieldName = $hybrid.data("key") || $hybrid.data("field") || name;
+                    const $chk = $hybrid.find('[data-hybrid-role="checkbox"]');
+                    const $txt = $hybrid.find('[data-hybrid-role="textbox"]');
+
+                    this.fieldMap[fieldName] = $txt; // 統一映射到文字方塊 
+ 
+                    const hybridVal = PageVM._getNested(this.vm._scopedData[this.key], fieldName);
+                    if (hybridVal) {
+                        $chk.prop("checked", !!hybridVal.enabled);
+                        $txt.val(hybridVal.value || "").prop("disabled", !hybridVal.enabled);
+                    } else {
+                        const initVal = { enabled: $chk.is(":checked"), value: $txt.val() || "" };
+                        PageVM._setNested(this.vm._scopedData[this.key], fieldName, initVal);
+                        $txt.prop("disabled", !initVal.enabled);
+                    }
+
+                    this.vm.$watch(this.key, fieldName, (newVal) => {
+                        this.updateField(fieldName, newVal, true);
+                    });
+                    return; // ⭐🔥 完全跳過原本 input 流程
+                }
+
+                // =========================================
+                // ⭐ ② 一般欄位（原本邏輯，簡化版）
+                // =========================================
+                if (isInput) {
+                     
+                    if (!$el.parent().hasClass("input-with-status") && resolveType($el) !== "file") {
+                        $el.wrap('<div class="input-with-status"></div>');
+                    }
+                    if ($el.hasClass("select2") && !$el.hasClass("select2-hidden-accessible")) {
+                        this.initSelect2($el);
+                    }
+                    const savedValue = PageVM._getNested(this.vm._scopedData[this.key], name);
+                     
+                    if (savedValue !== undefined && savedValue !== null) {
+                        if (resolveType($el) === "file") {
+                            // 檔案恢復邏輯 (簡化)
+                            const fileObj = { name: savedValue[0]?.filename || savedValue.name, lazy: true };
+                            ValueHandler.set($el, fileObj, { vm: this.vm, tabKey: this.key, field: name, inline: true });
+                        } else {
+                            if (resolveType($el) === "select2") setSelect2ByValue($el, savedValue);
+                            else $el.val(savedValue);
+                        }
+                    } else {
+                        if ($el.hasClass("dropdownColor")) {
+                            $el.css("background-color", $el.find("option:selected").data("color"));
+                        }
+                        const currentVal = ValueHandler.get($el);
+                        PageVM._setNested(this.vm._scopedData[this.key], name, currentVal);
+                    }
+                }
+
+                // =========================================
+                // ⭐ ③ 共用收尾（不動）
+                // =========================================
+                this.fieldMap[name] = $el;
+                const finalVal = ValueHandler.get($el);
+                PageVM._setNested(this.fieldCache, name, finalVal);  
+                this.vm.$watch(this.key, name, (newVal) => {
+                    if (this.updateField) {
+                        this.updateField(name, newVal, true);
+                    }
+                });
+                this.clearStatusIcon($el);
+                if (!(resolveType($el) === "file") && finalVal.length > 0) {
+                    this.setStatusIcon($el, 'success');
+                }
+            });
+
+            this.container.find('.uploadBtn').each((_, el) => {
+                const $btn = $(el);
+                const fieldPath = $btn.data('key') || $btn.data('name');
+                if (!fieldPath) return;
+
+                // 監聽該檔案路徑，只要 vm 裡的檔案陣列變動，就自動更新 UI
+                this.vm.$watch(this.key, fieldPath, (newFiles) => {
+                    console.log(`[File Watch] ${fieldPath} changed`, newFiles);
+                    this.restoreFiles(); // 這裡偷懶可以直接刷全部，或寫一個 updateSingleFileUI($btn, newFiles)
+                });
+            });
+
+            this.restoreFiles(); // 初始化時先刷一次 UI
+
+            this.bindEvents();
+            //this.bindHybridControls(); // ⭐ 保留
+        }
+
+         
+
+        restoreFiles() {
+            const tabData = this.vm._scopedData[this.key] || {};
+
+            // 💡 改為：遍歷容器內「所有的上傳按鈕」
+            this.container.find('.uploadBtn').each((index, el) => {
+                const $btn = $(el);
+                const fieldPath = $btn.data('key') || $btn.data('name');
+                if (!fieldPath) return;
+                const files = PageVM._getNested(tabData, fieldPath) || [];
+                // 定位到狀態格 (Status TD)
+                const $statusTd = $btn.closest('td').next('td');
+
+                if (Array.isArray(files) && files.length > 0) {
+                    // 狀態 A：有檔案
+                    $statusTd.html(`
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span class="badge rounded-pill bg-success ms-1">${files.length}</span>
+                            `);
+                } else {
+                    // 狀態 B：無檔案 (還原為初始狀態)
+                    $statusTd.html(`<i class="bi bi-x-circle text-danger"></i>`);
+                } 
+            }); 
+        }
+
+
+
+        initSelect2($el) {
+            const url = $el.data("async");
+            const placeholder = $el.data("placeholder");
+            const name = $el.data("key") || $el.attr("name") || $el.attr("id");
+            $el.select2({
+                width: '100%',
+                placeholder: placeholder,
+                minimumInputLength: 0,
+                ajax: {
+                    url: url,   // MVC Action
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) {
+                        return {
+                            term: params.term,   // 使用者輸入
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function (data, params) {
+                        params.page = params.page || 1;
+
+                        return {
+                            results: data.items,
+                            pagination: {
+                                more: data.hasMore   // ⭐ 關鍵：是否還有下一頁
+                            }
+                        };
+                    },
+                    cache: true
+                }
+                ,
+
+
+                templateResult: item =>
+                    item.id
+                        ? $(`<div style="background:${$(item.element).data("color") || ''};padding:4px 6px;">${item.text}</div>`)
+                        : item.text,
+                templateSelection: item => item.text
+            }).on("select2:select select2:unselect change", (e) => {
+                if (e.originalEvent || e.type === 'select2:select' || e.type === 'select2:unselect') {
+                    this.updateSelect2Background($el);
+
+                    const val = ValueHandler.get($el);
+
+                    // ⭐ 修正 1：寫入 VM Proxy，這會觸發 PageVM 的 $watch 與 dirty 標記
+                    if (this.vm[this.key]) {
+                        PageVM._setNested(this.vm[this.key], name, val);
+                    }
+
+                    // ⭐ 修正 2：手動更新快取
+                    PageVM._setNested(this.fieldCache, name, val);
+
+                    // ⭐ 修正 3：執行驗證 (此處 name 會在 validateField 內再次取 data-key)
+                    this.validateField($el);
+                }
+            });
+
+            this.updateSelect2Background($el);
+        }
+
+        updateSelect2Background($el) {
+            const color = $el.find("option:selected").data("color") || "";
+            $el.next(".select2-container")
+                .find(".select2-selection--single")
+                .css("background-color", color);
+        }
+        //updateLocalData(name, value) {
+        //    this.fieldCache[name] = value;
+        //    // ⚠️ 不要再寫 proxyData，避免觸發 Proxy
+        //    // this.proxyData[name] = value;
+        //    if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+        //    this.vm._scopedData[this.key][name] = value;
+        //}
+
+        updateField(name, value, isFromProxy = false) {
+            const $el = this.fieldMap[name];
+            if (!$el) return;
+            // 防止重複更新
+            const current = ValueHandler.get($el);
+
+            if (JSON.stringify(current) === JSON.stringify(value)) return;
+
+            // 如果是資料變動帶動 UI (Console / DataTable / Other Field Watch)
+            if (isFromProxy) {
+                // 特殊處理 Hybrid
+                if ($el.closest(".hybrid-input").length) {
+                    const $h = $el.closest(".hybrid-input");
+                    $h.find('[data-hybrid-role="checkbox"]').prop("checked", !!value.enabled);
+                    $h.find('[data-hybrid-role="textbox"]').val(value.value || "").prop("disabled", !value.enabled);
+                } else {
+                    ValueHandler.set($el, value, { silent: true });
+                } 
+                // 如果是從 Proxy (Console/DataTable) 改的，通常也需要觸發 UI 驗證
+                this.validateField($el).catch(err => console.error("validate error:", err));
+            }
+
+
+
+
+            //const isFileDisplay = $el.closest(".dynamic-file-show").length > 0;
+
+            //if (isFileDisplay && value) {
+
+            //    const file = typeof value === "object"
+            //        ? value
+            //        : {
+            //            name: value,
+            //            lazy: true
+            //        };
+
+            //    ValueHandler.set($el, file, {
+            //        silent: !isFromProxy,
+            //        vm: this.vm,
+            //        tabKey: this.key,
+            //        field: name
+            //    });
+            //}
+            //else {
+            //    // ⭐ 一般欄位（統一入口）
+            //    ValueHandler.set($el, value, { silent: !isFromProxy });
+            //}
+
+            //if (!this.isEditableField($el)) {
+
+            //    $el.text(value);
+
+
+            //    const $group = $el.closest(".dynamic-file-show");
+            //    if ($group.length > 0) {
+            //        const file = {
+            //            name: "example.pdf",
+            //            size: 1024 * 200,  // 200 KB
+            //            id: "abc123",      // 後端識別用
+            //            blob: null,         // 目前沒載入 byte
+            //            lazy: true
+            //        };
+            //        this.vm.handleFileInput(this.key, name, file, { inline: true, $group, $input: $el });
+
+            //    }
+            //}
+
+
+          
+            
+
+            PageVM._setNested(this.fieldCache, name, value);
+
+            // 存入 _scopedData (確保資料結構正確)
+            this.vm._scopedData[this.key] = this.vm._scopedData[this.key] || {};
+            PageVM._setNested(this.vm._scopedData[this.key], name, value);
+
+            // 如果不是從 Proxy 來的（即：從 UI 輸入觸發的），則要更新 Proxy
+            // 這樣才能觸發其他欄位的 $watch 或 $computed
+            if (!isFromProxy && this.vm[this.key]) {
+                PageVM._setNested(this.vm[this.key], name, value);
+            }
+        }
+
+        //setStatusIcon($el, status, msg = "") {
+
+
+        //    if ($el.is(":radio")) {
+        //        $el = $el.closest(".radio-group");
+        //    }
+
+        //    const $w = $el.hasClass("radio-group")
+        //        ? $el
+        //        : $el.parent(".input-with-status");
+
+        //    $w.find(".status-icon").remove();
+        //    this.clearStatusIcon($el);
+        //    this.clearError($el);
+
+        //    const icons = {
+        //        success: '<i class="bi bi-check-circle text-success"></i>',
+        //        error: '<i class="bi bi-x-circle text-danger"></i>',
+        //        processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+        //    };
+
+        //    if (status) $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+        //    if (msg) this.showFieldError($el, msg);
+        //}
+        setStatusIcon($el, status) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove();
+            this.clearStatusIcon($el);
+            this.clearError($el);
+
+            const val = ValueHandler.get($el);
+            if ($el.data("must") && val === "") return;
+
+            const icons = {
+                success: '<i class="bi bi-check-circle text-success"></i>',
+                error: '<i class="bi bi-x-circle text-danger"></i>',
+                processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+            };
+
+            if (icons[status]) {
+                $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+            }
+        }
+        clearStatusIcon($el) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove().end().removeClass("has-icon");
+        }
+        //clearStatusIcon($el) {
+        //    $el.parent(".input-with-status").find(".status-icon").remove().end().removeClass("has-icon");
+        //}
+
+        setError($el, msg) {
+            $el.addClass("is-invalid").css("border", "1px solid red").attr("title", msg || "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "1px solid red");
+        }
+
+        clearError($el) {
+            $el.removeClass("is-invalid").css("border", "").attr("title", "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "");
+        }
+        isEditableField($el) {
+            if (!$el.is("input,textarea,select")) return false;
+            if ($el.is(":disabled") || $el.prop("readonly")) return false;
+
+            // 如果 display:none / hidden / hidden by parent
+            if (!$el.is(":visible")) return false;
+
+            return true;
+        }
+
+        async validateField(el) {
+
+            const $el = $(el); 
+
+            let val = ValueHandler.get($el);
+            if (val !== "") this.setStatusIcon($el, 'processing'); 
+            const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+            const hybridVal = PageVM._getNested(this.vm._scopedData[this.key], name);
+
+            if (hybridVal && typeof hybridVal === "object" && "enabled" in hybridVal) {
+                val = hybridVal.enabled ? hybridVal.value : "";
+            }
+            this.clearError($el);
+            this.clearStatusIcon($el);
+
+            // ⭐ file 直接略過（你原本邏輯）
+            if (resolveType($el) === "file") return true;
+
+            const ctx = buildContext($el, val, this.vm, this, this.key, name);
+
+            // ⭐ 空值快速通過
+            if (!ctx.must && val === "") return true;
+
+            // =========================
+            // ⭐ 根據控件取得規則
+            // =========================
+            const rules = [...(ControlRuleMap[ctx.type] || [])];
+            // ⭐ 額外規則（可混用 data-*）
+            if (ctx.conditional) rules.push("conditional");
+            if (ctx.cross) rules.push("cross");
+
+            // =========================
+            // ⭐ 同步驗證
+            // =========================
+            for (let r of rules) {
+
+                const rule = ValidatorRules[r];
+                if (!rule) continue;
+
+                const result = await rule.validate(val, ctx);
+
+                if (result !== true) {
+                    this.setError($el, result);
+                    this.setStatusIcon($el, 'error', result);
+                    return false;
+                }
+            }
+
+            // =========================
+            // ⭐ 自訂驗證
+            // =========================
+            const customValidators = PageVM._getNested(this.vm._validators[this.key], name);
+
+            if (customValidators?.length) {
+                for (let fn of customValidators) {
+
+                    let result = await fn(val, ctx);
+
+                    if (result !== true) {
+                        this.setError($el, result || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                        return false;
+                    }
+                }
+            }
+
+            // =========================
+            // ⭐ async 驗證（原樣保留）
+            // =========================
+            if (ctx.asyncUrl && val && ctx.type != 'select2') {
+
+                const cacheKey = `${this.key}_${name}_${val}`;
+                const token = Symbol();
+                this.asyncTokens[cacheKey] = token;
+
+                this.setStatusIcon($el, 'processing');
+
+                try {
+                    const resp = await $.ajax({
+                        url: ctx.asyncUrl,
+                        data: { value: val }
+                    });
+
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.asyncCache[cacheKey] = resp.valid;
+
+                    if (!resp.valid) {
+                        this.setError($el, resp.message || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                    } else {
+
+                        // ⭐⭐⭐ 新增：自動填值（核心）
+                        if (resp.data) {
+                            Object.keys(resp.data).forEach(targetField => {
+
+                                const value = resp.data[targetField];
+
+                                if (this.fieldMap[targetField]) {
+                                    // ⭐ 更新 VM
+                                    PageVM._setNested(this.vm[this.key], targetField, value);
+
+                                    // ⭐ 更新 UI
+                                    const $target = this.container.find(`[name='${targetField}'], #${targetField}`);
+                                    if ($target.length) {
+                                        ValueHandler.set($target, value);
+                                        $target.trigger("change");
+                                    } 
+                                    this.setStatusIcon(this.fieldMap[targetField], 'success');
+                                } 
+                            });
+                        }
+
+                        this.setStatusIcon($el, 'success');
+                        this.saveValidValue(name, val); 
+                    }
+                  
+                    return resp.valid;
+
+                } catch {
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.setError($el, "異步驗證失敗");
+                    this.setStatusIcon($el, 'error');
+                    return false;
+                }
+            }
+            else
+            {
+                // =========================
+                // ⭐ 成功
+                // =========================
+                this.setStatusIcon($el, 'success');
+                this.saveValidValue(name, val); 
+                return true;
+            }  
+        }
+        saveValidValue(name, val) {
+            // 1. 存入 VM (透過 Proxy 觸發 watch)
+            if (this.vm[this.key]) {
+                PageVM._setNested(this.vm[this.key], name, val);
+            } else {
+                PageVM._setNested(this.vm._scopedData[this.key], name, val);
+            }
+
+            // 2. 存入快取 (支援結構化)
+            PageVM._setNested(this.fieldCache, name, val);
+
+            // 3. 移除 proxyData (舊時代遺物)
+        }
+        async validateAll() {
+            const results = [];
+
+            for (const name in this.fieldMap) {
+                const $el = this.fieldMap[name];
+
+                try {
+                    const valid = await this.validateField($el[0]); // ⭐ 注意這裡
+                    results.push(valid);
+                } catch (err) {
+                    console.error("validateAll error:", name, err);
+                    results.push(false);
+                }
+            }
+
+            return results.every(r => r);
+        }
+
+       
+        cache() {
+            // 1. 先清空舊快取，確保重新建立正確的結構
+            this.fieldCache = {};
+
+            for (const name in this.fieldMap) {
+                const $el = this.fieldMap[name];
+                let finalVal = (resolveType($el) === "file") ? ($el.data("file") || []) : ValueHandler.get($el); 
+                // ⭐ 修正：使用 _setNested 建立結構化的快取
+                PageVM._setNested(this.fieldCache, name, finalVal);
+
+                // ⭐ 同步更新至 VM 的原始資料，確保 getJsonString 拿到最新狀態
+                if (this.vm._scopedData[this.key]) {
+                    PageVM._setNested(this.vm._scopedData[this.key], name, finalVal);
+                }
+            }
+        }
+
+
+
+        getJsonData() {
+            // 確保快取是最新的
+            this.cache();
+            // 直接回傳 fieldCache 物件（這在 JS 中就是 JSON 格式的物件）
+            return this.fieldCache;
+        }
+
+        getJsonString() {
+            this.cache();
+            return JSON.stringify(this.fieldCache);
+        }
+
+        //restore() {
+        //    Object.entries(this.fieldCache).forEach(([k, v]) => {
+        //        this.proxyData[k] = v;
+        //    });
+        //}
+
+        restore() {
+            // 1. 因為 fieldCache 是巢狀物件，不能用單層 foreach
+            // 2. 最快的方式是利用 PageVM 的 flatten 工具，將物件轉回「點路徑」陣列
+            const flatData = PageVM._flatten(this.fieldCache);
+
+            Object.entries(flatData).forEach(([path, val]) => {
+                // ⭐ 修正：透過 Proxy (this.vm[this.key]) 寫入，才能觸發 $watch 同步到畫面
+                if (this.vm[this.key]) {
+                    PageVM._setNested(this.vm[this.key], path, val);
+                }
+
+                // 如果你還有其他自定義的 updateField 邏輯也可以補在這裡
+                this.updateField(path, val, true);
+            });
+        }
+
+        bindEvents() {
+            const eventName = "change.validate";
+
+            if (!this.debouncedValidate) {
+                this.debouncedValidate = this.debounce(async e => {
+                    try {
+                        await this.validateField(e.currentTarget);
+                    } catch (err) {
+                        console.error("validate error:", err);
+                    }
+                }, 500);
+            }
+
+            //this.container.on("input", "[vmodel]", e => {
+            //    const $el = $(e.currentTarget);
+            //    if ($el.closest(".hybrid-input").length) return;
+            //    if (resolveType($el) === "file") return;
+            //    if (ValueHandler.get($el) !== "") this.setStatusIcon($el, 'processing');
+
+            //    // ⭐ 同步到 tab 專屬 VM scope
+            //    if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+            //    this.vm._scopedData[this.key][$el.attr("id") || $el.attr("name")] = ValueHandler.get($el);
+            //    debounced(e);
+            //    // ⭐ 同步到 proxyData & fieldCache
+            //    const name = $el.attr("id") || $el.attr("name");
+            //    this.proxyData[name] = ValueHandler.get($el);
+            //    this.fieldCache[name] = ValueHandler.get($el);
+            //});
+
+            this.container.off(eventName, "[vmodel]");
+            this.container.on(eventName, "[vmodel]", e => {  
+                const $el = $(e.currentTarget);
+                if ($el.closest(".hybrid-input").length) return;
+                // ⭐ 排除 file（關鍵🔥）
+                if (resolveType($el) === "file") return; 
+                this.debouncedValidate(e);
+            });
+
+            this.container.on("change", "input[type=file][vmodel]", e => {
+
+                const $el = $(e.currentTarget);
+                const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+                const file = e.currentTarget.files[0];
+
+                if (!file) return;
+
+                // ===== 驗證 =====
+                const maxSizeMB = $el.data("maxsize");
+
+                if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+                    this.setError($el, `檔案不可超過 ${maxSizeMB} MB`);
+                    $el.val("");
+                    ValueHandler.set($el, null, { silent: true });
+                    return;
+                }
+
+                this.clearError($el);
+              
+                //// ===== 資料 =====
+                PageVM._setNested(this.vm._scopedData[this.key], name, []);
+
+            /*    this.vm.clearFiles(this.key, name); // 清掉舊檔*/
+                this.vm.setFile(this.key, name, {
+                    file: file,        // File 物件
+                    filename: file.name // 檔名方便 UI 顯示或 JSON
+                }); // 設定新檔
+                //this.vm._scopedData[this.key][name] = file.name;
+
+                //if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+
+                //// 直接覆蓋原本檔案
+                //this.vm._scopedData[this.key][name] = {
+                //    file: file,        // File 物件
+                //    filename: file.name // 檔名方便 UI 顯示或 JSON
+                //};
+                $el.data("file", file);
+                // ===== UI + 行為 =====
+                ValueHandler.set($el, file, {
+                    silent: true,
+                    vm: this.vm,
+                    tabKey: this.key,
+                    field: name,
+                    inline : true
+                }); 
+                this.setStatusIcon($el, 'success');
+
+            });
+
+
+            this.container.on("change", ".dropdownColor", (e) => {
+                let $el = $(e.currentTarget);
+                let color = $el.find("option:selected").data("color");
+                $el.css("background-color", color);
+            });
+        }
+
+        //bindFileInputs() {
+        //    this.container.on("change", 'input[type="file"]', e => {
+        //        const $el = $(e.currentTarget);
+        //        const name = $el.attr("name");
+        //        const files = $el[0].files;
+
+        //        // ⭐ 存到 PageVM
+        //        this.vm.setFile(this.key, name, Array.from(files));
+
+        //        // ⭐ 顯示檔名
+        //        this.showFileNames($el, Array.from(files));
+        //    });
+
+        //    // ⭐ 刪除檔案按鈕
+        //    this.container.on("click", ".file-remove-btn", e => {
+        //        const $btn = $(e.currentTarget);
+        //        const $wrapper = $btn.closest(".file-item");
+        //        const field = $wrapper.data("field");
+        //        const fileName = $wrapper.data("filename");
+
+        //        // 刪除 cache
+        //        this.vm.removeFile(this.key, field, fileName);
+
+        //        // 移除畫面
+        //        $wrapper.remove();
+        //    });
+        //}
+
+        //showFileNames($input, files) {
+        //    const $container = $input.closest(".input-with-status");
+        //    $container.find(".file-list").remove();
+
+        //    const $list = $('<div class="file-list"></div>');
+        //    files.forEach(f => {
+        //        $list.append(`
+        //        <div class="file-item" data-field="${$input.attr("name")}" data-filename="${f.name}">
+        //            <span class="file-name-text">${f.name}</span>
+        //            <button type="button" class="file-remove-btn btn btn-sm btn-danger">刪除</button>
+        //        </div>
+        //    `);
+        //    });
+        //    $container.append($list);
+        //}
+
+        //// ⭐ 回復檔案顯示（restore）
+        //restoreFiles() {
+        //    Object.entries(this.vm._fileData[this.key] || {}).forEach(([field, files]) => {
+        //        const $el = this.container.find(`[name="${field}"]`);
+        //        if ($el.length && files && files.length) {
+        //            this.showFileNames($el, files);
+        //        }
+        //    });
+        //}
+
+        debounce(fn, delay = 500) {
+            let timer;
+            return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+        }
+    }
+     
+    // ================================
+    // ⭐ HYBRID 修改處（修正版）
+    // ================================
+    DynamicFormInstance.prototype.bindHybridControls = function () {
+        const self = this;
+
+        this.container.find(".hybrid-input").each((_, el) => {
+            const $group = $(el);
+            // ⭐ 修正：優先支援 data-key (路徑字串)
+            const fieldPath = $group.data("key") || $group.data("field");
+            if (!fieldPath) return;
+
+            const $chk = $group.find('[data-hybrid-role="checkbox"]');
+            const $txt = $group.find('[data-hybrid-role="textbox"]');
+
+            // ---------- 1️⃣ 初始化 VM (使用 _getNested / _setNested) ----------
+            let currentVal = PageVM._getNested(self.vm._scopedData[self.key], fieldPath);
+
+            if (!currentVal) {
+                currentVal = {
+                    enabled: $chk.is(":checked"),
+                    value: $txt.val() || ""
+                };
+                PageVM._setNested(self.vm._scopedData[self.key], fieldPath, currentVal);
+            }
+
+            // ---------- 2️⃣ UI 同步 ----------
+            $chk.prop("checked", !!currentVal.enabled);
+            $txt.val(currentVal.value || "").prop("disabled", !currentVal.enabled);
+
+            // ---------- 3️⃣ Checkbox 事件 ----------
+            $chk.off("change").on("change", function () {
+                const checked = this.checked;
+                $txt.prop("disabled", !checked);
+
+                // 取得當前資料並更新
+                const val = PageVM._getNested(self.vm._scopedData[self.key], fieldPath) || {};
+                val.enabled = checked;
+                if (!checked) {
+                    val.value = "";
+                    $txt.val("");
+                }
+
+                // ⭐ 關鍵：透過 Proxy 寫入以觸發響應式
+                if (self.vm[self.key]) {
+                    PageVM._setNested(self.vm[self.key], fieldPath, { ...val });
+                }
+
+                if (self.validateField) {
+                    self.validateField($txt[0]).catch(console.error);
+                }
+            });
+
+            // ---------- 4️⃣ Textbox 事件 ----------
+            $txt.off("input").on("input", function () {
+                const val = PageVM._getNested(self.vm._scopedData[self.key], fieldPath) || {};
+
+                if (!val.enabled) return;
+
+                val.value = $(this).val();
+
+                // ⭐ 關鍵：透過 Proxy 寫入
+                if (self.vm[self.key]) {
+                    PageVM._setNested(self.vm[self.key], fieldPath, { ...val });
+                }
+
+                if (self.validateField) {
+                    self.validateField(this).catch(console.error);
+                }
+            });
+        });
+    };
+
+
+    return {
+
+        init: function () {
+            const currentPath = window.location.pathname;
+
+            // 1. 檢查全域 VM 是否存在或是否換頁
+            if (!window.vm || window.vm._pagePath !== currentPath) {
+                window.vm = new PageVM();
+                // 開放門戶給隨後載入的 PartialView 呼叫
+                window.CurrentPageContext = { init: () => this.init() };
+            }
+
+            // 2. 掃描所有尚未初始化的 [data-df]
+            $("[data-df]:not([data-df-initialized])").each(function () {
+                const formInstance = new DynamicFormInstance(this, window.vm);
+                window.activeForm = formInstance;
+                console.log("Tab 自動註冊成功:", $(this).data("df"));
+            });
+        }
+    };
+
+})();
+
+
+
+function resolveType($el) {
+
+    if ($el.is(":file")) return "file";
+    if ($el.is(":radio")) return "radio";
+    if ($el.is(":checkbox")) return "checkbox";
+    if ($el.is("select") && $el.hasClass("select2")) return "select2";
+    if ($el.is("select") && !$el.hasClass("select2")) return "select";
+    if ($el.is("textarea")) return "textarea";
+
+    if ($el.is("input")) {
+        return $el.prop("type") || "text"; // text/number/date...
+    }
+
+    return "unknown";
+}
+
+
+const ValueHandler = {
+
+    // =========================
+    // ⭐ 取得值（統一出口）
+    // =========================
+    get($el) {
+
+        const type = resolveType($el);
+
+        switch (type) {
+
+            case "file":
+                return $el.data("file") || null;
+
+            case "radio":
+                return $(`input[name="${$el.attr("name")}"]:checked`).val() || "";
+
+            case "checkbox":
+                return $el.is(":checked");
+
+            case "select":
+                return $el.val();
+            case "select2":
+                return $el.val()?.trim() || "";
+            case "textarea":
+            case "text":
+            case "number":
+            case "date":
+                return $el.val()?.trim() || "";
+
+            default:
+                return $el.text().trim() || "";
+        }
+    },
+
+    // =========================
+    // ⭐ 設定值（統一入口🔥）
+    // =========================
+    set($el, value, options = {}) {
+
+        const type = resolveType($el);
+        const { silent = false, vm, tabKey, field, inline } = options;
+
+        switch (type) {
+
+            case "file":
+                if (!value) return;
+
+                if (inline) {
+                    const $group = $el.closest(".dynamic-file");
+                    const $filenameLabel = $group.find(".filename-label");
+                    const $previewBtn = $group.find(".preview-btn");
+                    const $deleteBtn = $group.find(".delete-btn");
+
+                    const fileObj = Array.isArray(value) ? value[0] : value;
+                    const fileName = fileObj?.filename || fileObj?.name || "";
+
+                    $filenameLabel.text(fileName);
+                    $previewBtn.show();
+                    $deleteBtn.show();
+
+
+                    $deleteBtn.off("click").on("click", () => {
+                        $el.val("");
+                        $el.data("file", null);
+
+                        $filenameLabel.text("");
+                        $previewBtn.hide();
+                        $deleteBtn.hide();
+
+                        if (vm && vm.removeFile) {
+                            vm.removeFile(tabKey, field, fileName);
+                        }
+                    });
+
+                    $previewBtn.off("click").on("click", async () => {
+                        if (vm && vm.previewFile) {
+                            await vm.previewFile(tabKey, fileObj, field);
+                        }
+                   /*     await vm.previewFile(tabKey, { name: field, lazy: true });*/
+                    });
+                }
+                return;
+
+            case "radio":
+                $(`input[name="${$el.attr("name")}"][value="${value}"]`).prop("checked", true);
+                break;
+
+            case "checkbox":
+                $el.prop("checked", !!value);
+                break;
+
+            case "select":
+                $el.val(value).trigger("change");
+                break;
+
+            default:
+                if ($el.is("input, textarea")) {
+                    $el.val(value);
+                } else {
+                    $el.text(value);
+                }
+        }
+
+        if (!silent) {
+            $el.trigger("input");
+        }
+    }
+};
+
+
+
+
+namespace auomvc.Models
+{
+    public enum FieldType
+    {
+        Label,
+        Textbox,
+        Dropdown,
+        Select2,
+        Numeric,
+        Date,
+        Textarea,
+        File,
+        ShowFile,
+        Radio,
+        Hybrid
+    }
+
+    public class DynamicField
+    {
+        public string Name { get; set; }
+
+        public string Id { get; set; }
+
+        public string Value { get; set; }
+        public bool Must { get; set; }
+
+        public FieldType Type { get; set; }
+        public string Min { get; set; } // 使用 string 以相容數字(0)與日期(2024-01-01)
+        public string Max { get; set; }
+        public string? DefaultValue { get; set; }
+        public string Pattern { get; set; } = ""; // string / number /yyyy/mm/dd
+        public string? Placeholder { get; set; }
+
+        public bool Readonly { get; set; }
+        public string AsyncUrl { get; set; } = "";
+        public string Target { get; set; } = "";
+        public bool Hidden { get; set; }
+
+        public int Width { get; set; } = 6; // bootstrap col
+        public int Order { get; set; }   // 顯示順序
+        public List<SelectItem>? Options { get; set; }
+        public bool InverseSelect { get; set; } = false;
+
+        public string GroupKey { get; set; } = "";
+
+    }
+
+    public class SelectItem
+    {
+        public string Value { get; set; }
+        public string Color { get; set; }  // 新增顏色
+        public string Text { get; set; }
+    }
+
+
+
+
+}
+
+
+@using static auomvc.Models.Wizard
+@model StepViewModel<TableSchema>
+
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i> 產品設計詳情</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <div class="container mt-3" data-df="Step1">
+          
+            <!-- text -->
+            <div class="row mb-2">
+                <df-field name="username"
+                          type="@FieldType.Textbox"
+                          must="true"
+                          ></df-field>
+            @*     <df-field label="username" name="username"
+                          type="@FieldType.Textbox"
+                          must="true"
+                          placeholder="請輸入">
+                </df-field> *@
+            </div>
+           
+            <!-- number -->
+            <div class="row mb-2">
+                <div class="col-3">年齡</div>
+                <div class="col-6">
+                    <input vmodel name="age"
+                           type="number"
+                           class="form-control pageredirect"
+                           data-must="true"
+                           min="18"
+                           max="60" />
+                </div>
+            </div>
+
+            <!-- date -->
+            @* <div class="row mb-2">
+                <div class="col-3">生日</div>
+                <div class="col-6">
+                    <input vmodel name="birthday"
+                           type="date"
+                           class="form-control"
+                           data-must="true"
+                           min="2000-01-01" />
+                </div>
+            </div> *@
+
+            <!-- select -->
+           @*  <div class="row mb-2">
+                <div class="col-3">顏色</div>
+                <div class="col-6">
+                    <select vmodel name="color"
+                            class="form-control"
+                            data-must="true">
+                        <option value="">請選擇</option>
+                        <option value="red">紅</option>
+                        <option value="blue">藍</option>
+                    </select>
+                </div>
+            </div> *@
+
+            <!-- file -->
+            <div class="row mb-2">
+                <df-field name="filetw"
+                          type="@FieldType.File"
+                          must="true"></df-field>
+               @*  <div class="col-3">上傳檔案</div>
+                <div class="col-6 dynamic-file">
+                    <input vmodel name="file1"
+                           type="file"
+                           class="form-control"
+                           data-maxsize="2" />
+
+                    <div class="mt-1">
+                        <button type="button" class="btn btn-sm btn-primary preview-btn" style="display:none">預覽</button>
+                        <button type="button" class="btn btn-sm btn-danger delete-btn" style="display:none">刪除</button>
+                        <span class="filename-label"></span>
+                    </div>
+                </div> *@
+            </div>
+
+            <div class="row mb-2">
+                <input type="text" name="customerId" class="pageredirect" />
+                <select name="type" class="pageredirect">
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                </select>
+            </div>
+            <!-- submit -->
+            <div class="row mt-3">
+                <div class="col-6">
+                    <button id="btnSubmit" class="btn btn-success">送出</button>
+                    <button id="btnjson" class="btn btn-success">json</button>
+                    <button id="btnvalidate" class="btn btn-success">validate</button>
+                    <button id="testBtn1">測試條件1</button>
+                    <button id="testBtn2">測試條件2</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+
+        if (window.CurrentPageContext) {
+            window.CurrentPageContext.init();
+        }
+        wizard.useStep(1, {
+        beforeNext: async (ctx) => {
+            // const val = ctx.wizard.getStepValue(1, "customerId");
+            // if (!val) {
+                // alert("Step 1 partial: 請選客戶");
+                // return true; // 阻止下一步
+            // }
+            // return true;
+        },
+        // afterLoad: async (ctx) => {
+        //     console.log("Step 1 partial 已載入");
+        //     $(ctx.wizard.containerId).find('[name="customerId"]').val("預設客戶");
+        // }
+    });
+    //       wizard.beforeNext(ctx => {
+    //     if (ctx.step === 1) {
+    //         // const val = ctx.wizard.getStepValue(1, "customerId");
+    //         // if (!val) {
+    //             alert("Step 1: 請選客戶2");
+    //             return false;
+    //         // }
+    //     }
+    // });
+
+       //      FormWizard.bindHook("#wizard-content", WizardHook.BEFORE_NEXT, (ctx) => {
+       // // console.log("partial 驗證");
+       // alert("請選客戶2");
+    // });
+    //         FormWizard.bindHook("#wizard-content", WizardHook.BEFORE_NEXT, (ctx) => {
+    //     // if (!validateForm()) {
+    //         alert("未完成");
+    //         return false;
+    //     // }
+    // });
+
+        $("#btnjson").on("click", async function() {
+            const jsonStr = await vm.getJsonString();
+            console.log("送出的 JSON:", jsonStr);
+        });
+         $("#btnvalidate").on("click", async function () {
+            const result = await vm.validate();
+             console.log("送出的 validate:", result);
+         });
+
+
+           $("#btnSubmit").on("click", async function () {
+        console.log("===== 測試每個 tab =====");
+
+        $("[data-df]").each(async function () {
+            const $formDiv = $(this);
+            const tabKey = $formDiv.attr("data-df");  // 直接用 data-df
+            const form = vm.forms.find(f => f.key === tabKey);  // 從全局 vm 找對應 FormInstance
+            if (!form) {
+                console.warn(`找不到 form for tabKey=${tabKey}`);
+                return;
+            }
+
+            // 0️⃣ 驗證整個表單
+            const valid = await form.vm.validate();
+            console.log(`表單驗證結果: ${valid}`);
+
+            // 1️⃣ proxyData
+            console.log("proxyData:");
+            Object.keys(form.proxyData).forEach(field => {
+                console.log(`  ${field} =`, form.proxyData[field]);
+            });
+
+            // 2️⃣ dirty
+            console.log("dirty:", form.vm.$dirty(tabKey));
+
+            // 3️⃣ computed
+            if (form.vm._computed[tabKey]) {
+                console.log("computed:");
+                Object.keys(form.vm._computed[tabKey]).forEach(c => {
+                    console.log(`  ${c} =`, form.proxy[c]);
+                });
+            }
+
+            // 4️⃣ 每個欄位的驗證錯誤訊息
+            // console.log("欄位錯誤訊息:");
+            // Object.entries(form.getErrors()).forEach(([field, msg]) => {
+            //     console.log(`  ${field}: ${msg}`);
+            // });
+
+            // 5️⃣ 檔案欄位
+            console.log("檔案欄位:");
+            const fileData = form.vm._fileData[tabKey] || {};
+            Object.entries(fileData).forEach(([field, files]) => {
+                if (Array.isArray(files)) {
+                    console.log(`  ${field}:`, files.map(f => f.name));
+                }
+            });
+
+            // 6️⃣ Hybrid 欄位
+            console.log("Hybrid 欄位:");
+            const scopedData = form.vm._scopedData[tabKey] || {};
+            Object.entries(scopedData).forEach(([field, val]) => {
+                if (!val) return;
+
+                // 1️⃣ 排除 File 或 FileList
+                const isFile = val instanceof File || val instanceof FileList;
+                if (isFile) return;
+
+                // 2️⃣ 只抓 Hybrid 格式
+                if (typeof val === "object" && ("chk" in val || "txt" in val)) {
+                    console.log(`  ${field}:`, val);
+                }
+            });
+
+            // 7️⃣ 普通欄位 (非 Hybrid、非 File)
+            console.log("普通欄位:");
+            Object.entries(scopedData).forEach(([field, val]) => {
+                if (!val) return;
+
+                const isFile = val instanceof File || val instanceof FileList;
+                const isHybrid = typeof val === "object" && ("chk" in val || "txt" in val);
+                if (!isFile && !isHybrid) {
+                    console.log(`  ${field} =`, val);
+                }
+            });
+
+        });
+
+        alert("已輸出每個 tab 的狀態到 console");
+    });
+
+        
+
+    });
+
+
+</script>
+
+
