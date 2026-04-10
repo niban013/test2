@@ -1,0 +1,2577 @@
+function isEmpty(val) {
+    return (val === undefined || val == null || val.length <= 0) ? true : false;
+}
+
+function buildContext($el, val, vm, form, key, name) {
+    return {
+        val,
+        el: $el,
+        vm,
+        form,
+        tabKey: key,
+        field: name,
+
+        type: resolveType($el),
+
+        must: $el.data("must"),
+        pattern: $el.data("pattern"),
+        minlength: $el.data("minlength"),
+        maxlength: $el.data("maxlength"),
+        min: $el.attr("min"),
+        max: $el.attr("max"),
+        conditional: $el.data("conditional"),
+        cross: $el.data("cross"),
+        asyncUrl: $el.data("async"),
+        keyPath: $el.data("key")
+    };
+}
+
+const ControlRuleMap = {
+
+    text: ["required", "pattern", "minlength", "maxlength"],
+    textarea: ["required", "minlength", "maxlength"],
+
+    number: ["required", "min", "max"],
+
+    date: ["required", "min", "max"],
+
+    select: ["required"],
+
+    checkbox: ["required"],
+
+    file: [] // ⭐ 完全跳過（或只留 required 看需求）
+};
+const ValidatorRules = {
+
+    required: {
+        validate: (val, ctx) => {
+            if (ctx.must && (val === "" || val == null)) return "必填";
+            return true;
+        }
+    },
+
+    pattern: {
+        validate: (val, ctx) => {
+            if (!ctx.pattern || !val) return true;
+            return new RegExp(ctx.pattern).test(val) || "格式錯誤";
+        }
+    },
+
+    minlength: {
+        validate: (val, ctx) => {
+            if (!ctx.minlength || !val) return true;
+            return val.length >= ctx.minlength || `至少${ctx.minlength}字`;
+        }
+    },
+
+    maxlength: {
+        validate: (val, ctx) => {
+            if (!ctx.maxlength || !val) return true;
+            return val.length <= ctx.maxlength || `最多${ctx.maxlength}字`;
+        }
+    },
+
+    min: {
+        validate: (val, ctx) => {
+            if (!ctx.min || !val) return true;
+
+            // ⭐ 日期 or 數字
+            if (ctx.type === "date") {
+                return new Date(val) >= new Date(ctx.min) || `不可小於${ctx.min}`;
+            }
+
+            return parseFloat(val) >= parseFloat(ctx.min) || `不可小於${ctx.min}`;
+        }
+    },
+
+    max: {
+        validate: (val, ctx) => {
+            if (!ctx.max || !val) return true;
+
+            if (ctx.type === "date") {
+                return new Date(val) <= new Date(ctx.max) || `不可大於${ctx.max}`;
+            }
+
+            return parseFloat(val) <= parseFloat(ctx.max) || `不可大於${ctx.max}`;
+        }
+    },
+
+    conditional: {
+        validate: (val, ctx) => {
+            if (!ctx.conditional) return true;
+
+            let cond = JSON.parse(ctx.conditional);
+            if ($(cond.selector).val() && val === "") {
+                return "條件必填";
+            }
+            return true;
+        }
+    },
+
+    cross: {
+        validate: (val, ctx) => {
+            if (!ctx.cross) return true;
+
+            let c = JSON.parse(ctx.cross);
+            let otherVal = $(c.selector).val();
+
+            if (c.op === ">" && val && otherVal) {
+                return parseFloat(val) > parseFloat(otherVal) || `必須大於${c.selector}`;
+            }
+            return true;
+        }
+    }
+
+};
+
+
+function setSelect2ByValue($el, value) {
+    const url = $el.data("async");
+    if (!isEmpty(url)) {
+        $.ajax({
+            url: url,
+            data: { id: value }
+        }).then(function (data) {
+            if (data.items && data.items.length > 0) {
+                const item = data.items[0];
+                const option = new Option(item.text, item.id, true, true);
+                $el.append(option).trigger('change');
+            }
+        });
+    }
+}
+
+var DynamicForm = (function () {
+
+    // ================== 私有欄位 WeakMap ==================
+    const _scopedData = new WeakMap();
+    const _watchers = new WeakMap();
+    const _computed = new WeakMap();
+    const _computedCache = new WeakMap();
+    const _dirty = new WeakMap();
+    const _validators = new WeakMap();
+    const _customData = new WeakMap();
+    const _utils = new WeakMap();
+    const _pageMetadata = new WeakMap();
+    const _batchState = new WeakMap();
+    class PageVM {
+        constructor() {
+            this.forms = [];
+            // 將路徑存入私有 WeakMap
+            _pageMetadata.set(this, {
+                path: typeof window !== 'undefined' ? window.location.pathname : ''
+            });
+            _batchState.set(this, {
+                active: false,
+                queue: new Map(), // path -> {newVal, oldVal}
+                computedReset: false
+            });
+            // 初始化 WeakMap 儲存空物件
+            const maps = [_scopedData, _watchers, _computed, _computedCache, _dirty, _validators, _customData];
+            maps.forEach(m => m.set(this, {}));
+
+            // ================== 用 WeakMap 實作工具函數 ==================
+            _utils.set(this, {
+                getNested: (obj, path) => {
+                    if (!obj || !path) return undefined;
+                    return path.split(".").reduce((t, k) => (t && typeof t === "object" ? t[k] : undefined), obj);
+                },
+                setNested: (obj, path, value) => {
+                    if (!obj || typeof obj !== "object") return;
+                    const keys = path.split(".");
+                    let t = obj;
+
+                    for (let i = 0; i < keys.length; i++) {
+                        const k = keys[i];
+                        if (i === keys.length - 1) {
+                            t[k] = value; // 觸發 Proxy set
+                        } else {
+                            // 如果下一層不是物件，建立一個新的
+                            // 如果 t 是 Proxy，這行賦值會觸發 set 攔截器並自動封裝成子 Proxy
+                            if (!t[k] || typeof t[k] !== "object") {
+                                t[k] = {};
+                            }
+                            t = t[k];
+                        }
+                    }
+                },
+                flatten: function (obj, prefix = "", res = {}) {
+                    const entries = Object.entries(obj || {});
+                    if (entries.length === 0 && prefix) {
+                        res[prefix] = obj;
+                        return res;
+                    }
+                    entries.forEach(([k, v]) => {
+                        const path = prefix ? `${prefix}.${k}` : k;
+                        if (typeof v === "object" && v !== null && !(v instanceof File) && !Array.isArray(v)) {
+                            this.flatten(v, path, res); // 這裡的 this 指向 _utils 內的對象
+                        } else {
+                            res[path] = v;
+                        }
+                    });
+                    return res;
+                }
+            });
+        }
+
+        // ================= API =================
+        batch(fn) {
+            const state = _batchState.get(this);
+            if (state.active) return fn(); // 防止巢狀炸掉
+
+            state.active = true;
+
+            try {
+                fn();
+            } finally {
+                state.active = false;
+
+                const watchers = _watchers.get(this);
+
+                // 🔥 flush watcher（去重）
+                state.queue.forEach((payload, key) => {
+                    const [tabKey, path] = key.split("|");
+                    const fns = _utils.get(this).getNested(watchers[tabKey], path);
+                    if (Array.isArray(fns)) {
+                        fns.forEach(fn => fn(payload.newVal, payload.oldVal));
+                    }
+                });
+
+                state.queue.clear();
+
+                // 🔥 computed reset（一次）
+                if (state.computedReset) {
+                    const cc = _computedCache.get(this);
+                    Object.keys(cc).forEach(k => cc[k] = {});
+                }
+
+                state.computedReset = false;
+            }
+        }
+        get(tabKey, fieldPath) {
+            const data = this[tabKey] || this.ensureScope(tabKey);
+            const { getNested } = _utils.get(this);
+            return fieldPath ? getNested(data, fieldPath) : data;
+        }
+        set(tabKey, fieldPath, value) {
+            if (!tabKey || !fieldPath) return;
+            const { setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            setNested(target, fieldPath, value);
+        }
+        delete(tabKey, fieldPath) {
+            if (!tabKey || !fieldPath) return;
+
+            // 1. 確保拿到的是 Root Proxy
+            const rootProxy = this[tabKey];
+            if (!rootProxy) {
+                console.warn(`[PageVM] ${tabKey} 尚未註冊，無法刪除欄位`);
+                return;
+            }
+
+            const { getNested } = _utils.get(this);
+            const keys = fieldPath.split(".");
+            const lastKey = keys.pop();
+            const parentPath = keys.join(".");
+
+            // 2. 找到父層 Proxy (必須透過 rootProxy 找，才會維持代理鏈)
+            let target = parentPath ? getNested(rootProxy, parentPath) : rootProxy;
+
+            if (target && typeof target === "object") {
+                // ⭐ 這裡的序列化會排除 undefined 的 Key，幫助你檢查
+                console.log(`--- [1] 刪除前快照 ---`, JSON.parse(JSON.stringify(target)));
+
+                // 3. 執行物理刪除 (會觸發 deleteProperty 攔截器)
+                const success = delete target[lastKey];
+
+                if (success) {
+                    console.log(`[PageVM] 已成功執行 delete 指令: ${tabKey}.${fieldPath}`);
+
+                    // ⭐ 診斷：檢查物理空間是否真的空了
+                    const rawRoot = _scopedData.get(this)[tabKey];
+                    console.log(`--- [2] 刪除後原始數據 (ScopedData) ---`, JSON.parse(JSON.stringify(rawRoot)));
+
+                    // ⭐ 檢查 Key 是否還在
+                    const stillHasKey = Object.prototype.hasOwnProperty.call(target, lastKey);
+                    console.log(`--- [3] Key 是否徹底消失? ---`, !stillHasKey ? "是 (已拔除)" : "否 (僅值為 undefined)");
+                } else {
+                    console.warn(`[PageVM] 物理刪除失敗`);
+                }
+            } else {
+                console.warn(`[PageVM] 找不到路徑父層: ${parentPath}`);
+            }
+        }
+
+        //delete(tabKey, fieldPath) {
+        //    if (!tabKey || !fieldPath) return;
+
+        //    // 確保拿的是 this[tabKey]，這是 register 裡賦值的 rootProxy
+        //    let target = this[tabKey];
+        //    if (!target) return;
+
+        //    const keys = fieldPath.split(".");
+        //    const lastKey = keys.pop();
+
+        //    // 透過 Proxy 一層一層往內找，這樣每一層拿到的 target 都會是 Proxy
+        //    for (let k of keys) {
+        //        if (!target || typeof target !== "object") return;
+        //        target = target[k];
+        //    }
+
+        //    if (target && typeof target === "object") {
+        //        // 因為 target 是 Proxy，這行會觸發 deleteProperty 攔截器
+        //        console.log(`--- 執行刪除前 ---`, {
+        //            lastKey,
+        //            targetContent: JSON.parse(JSON.stringify(target)) // 紀錄刪除前的快照
+        //        });
+
+        //        // 執行刪除（這行應觸發 Proxy 的 deleteProperty）
+        //        delete target[lastKey];
+
+        //        console.log(`--- 執行刪除後 ---`, {
+        //            lastKey,
+        //            targetContent: JSON.parse(JSON.stringify(target)), // 紀錄刪除後的快照
+        //            exists: lastKey in target // 檢查屬性是否還存在
+        //        });
+        //    }
+        //}
+        //delete(tabKey, fieldPath) {
+        //    if (!tabKey || !fieldPath) return;
+
+        //    const data = this[tabKey] || this.ensureScope(tabKey); // ⭐ 改這裡
+        //    if (!data) return;
+
+        //    const keys = fieldPath.split(".");
+        //    const lastKey = keys.pop();
+
+        //    let target = data;
+        //    for (let k of keys) {
+        //        if (!target || typeof target !== "object") return;
+        //        target = target[k];
+        //    }
+
+        //    if (!target || typeof target !== "object") return;
+
+        //    // ⭐ 改這行（走 Proxy）
+        //    delete target[lastKey];
+        //}
+        dump(tabKey) {
+            const data = this.get(tabKey);
+            return data ? _utils.get(this).flatten(data) : {};
+        }
+        getPagePath() {
+            return _pageMetadata.get(this)?.path || '';
+        }
+        getFlattenData(tabKey) {
+            return this.dump(tabKey);
+        }
+
+        addValidator(tabKey, fieldPath, fn) {
+            const val = _validators.get(this);
+            if (!val[tabKey]) val[tabKey] = {};
+            if (!val[tabKey][fieldPath]) val[tabKey][fieldPath] = [];
+            val[tabKey][fieldPath].push(fn);
+        }
+
+        getValidators(tabKey, fieldPath) {
+            const { getNested } = _utils.get(this);
+            return getNested(_validators.get(this)?.[tabKey], fieldPath) || [];
+        }
+
+
+
+        ensureScope(tabKey) {
+            if (!tabKey) return null;
+            const maps = [_scopedData, _dirty, _watchers, _computed, _computedCache, _validators, _customData];
+            maps.forEach(s => {
+                const map = s.get(this);
+                if (!map[tabKey]) map[tabKey] = (s === _dirty) ? new Set() : {};
+            });
+            return _scopedData.get(this)[tabKey];
+        }
+
+        // ================= register =================
+        register(form) {
+            this.forms = this.forms.filter(f => f.key !== form.key);
+            this.forms.push(form);
+
+            const key = form.key;
+            this.ensureScope(key);
+            const { getNested, setNested } = _utils.get(this);
+            const proxyCache = new WeakMap();
+
+            const trigger = (tabKey, path, newVal, oldVal) => {
+                if (newVal !== undefined) {
+                    console.warn(`[數據回寫追蹤] 路徑: ${tabKey}.${path}`, { newVal });
+                    console.trace(); // 這會印出是哪個 Watcher 觸發了這個 set 操作
+                }
+                const state = _batchState.get(this);
+                if (state.active) {
+                    state.queue.set(`${tabKey}|${path}`, { newVal, oldVal });
+                    state.computedReset = true;
+                    return;
+                }
+                const fns = getNested(_watchers.get(this)[tabKey], path);
+                if (Array.isArray(fns)) {
+                    fns.forEach(fn => fn(newVal, oldVal));
+                }
+                _computedCache.get(this)[tabKey] = {};
+            };
+
+            const makeReactive = (obj, path = []) => {
+                if (typeof obj !== "object" || obj === null || obj instanceof File) return obj;
+                if (proxyCache.has(obj)) return proxyCache.get(obj);
+
+                const proxy = new Proxy(obj, {
+                    set: (target, prop, value) => {
+                        const fullPath = [...path, prop].join(".");
+                        const currentPathKey = `${key}.${fullPath}`;
+
+                        // ⭐ 如果目前正在執行 delete，且 UI 試圖回寫空值，則阻斷它
+                        if (this._isDeleting === currentPathKey && value === "") {
+                            return true;
+                        }
+                        const oldValue = target[prop]; 
+                        if (oldValue === value) return true;
+
+                      
+                        if (fullPath.includes("maker_code")) {
+                            console.warn(`[偵測到回寫] 欄位 ${fullPath} 被賦值為:`, value);
+                            console.trace(); // ❗ 這行是關鍵，它會印出「誰」在呼叫 set
+                        }
+                        target[prop] = (typeof value === "object" && value !== null && !(value instanceof File))
+                            ? makeReactive(value, [...path, prop])
+                            : value;
+
+                        _dirty.get(this)[key].add(fullPath);
+                        trigger(key, fullPath, target[prop], oldValue);
+
+                        let parentPath = fullPath;
+                        while (parentPath.includes(".")) {
+                            parentPath = parentPath.substring(0, parentPath.lastIndexOf("."));
+                            const val = getNested(_scopedData.get(this)[key], parentPath);
+                            trigger(key, parentPath, val, val);
+                        }
+                        return true;
+                    },
+                    get: (target, prop) => {
+                        if (path.length === 0 && _computed.get(this)[key][prop]) {
+                            const cache = _computedCache.get(this)[key];
+                            if (cache[prop] === undefined) {
+                                cache[prop] = _computed.get(this)[key][prop].call(proxy);
+                            }
+                            return cache[prop];
+                        }
+
+                        const val = target[prop];
+                        if (Array.isArray(target) && typeof val === "function") {
+                            const mutatingMethods = ["push", "pop", "shift", "unshift", "splice", "sort", "reverse"];
+                            if (mutatingMethods.includes(prop)) {
+                                return (...args) => {
+                                    const oldArr = target.slice();
+                                    const result = Array.prototype[prop].apply(target, args);
+                                    const fullPath = path.join(".");
+                                    _dirty.get(this)[key].add(fullPath);
+                                    trigger(key, fullPath, target, oldArr);
+                                    return result;
+                                };
+                            }
+                        }
+                        return makeReactive(val, [...path, prop]);
+                    },
+                    deleteProperty: (target, prop) => {
+                        // 1. 如果屬性本來就不存在，直接回傳 true
+                        if (!(prop in target)) return true;
+
+                        const fullPath = [...path, prop].join(".");
+                        const old = target[prop]; // ⭐ 必須在刪除前先取出舊值
+                        // ⭐ 標記正在物理刪除這個路徑
+                        this._isDeleting = `${key}.${fullPath}`;
+
+
+                        console.log('--- 物理刪除診斷 ---');
+                        console.log('目標欄位:', fullPath);
+                        console.log('刪除前內容:', { ...target });
+
+                        // 2. 執行物理刪除
+                        const success = Reflect.deleteProperty(target, prop);
+
+                        console.log('Reflect 執行結果:', success);
+                        console.log('物理檢查是否還在:', target.hasOwnProperty(prop));
+
+                        if (success) {
+                            // 3. 紀錄髒數據
+                            _dirty.get(this)[key].add(fullPath);
+
+                            // 4. 觸發當前欄位更新（通知值變為 undefined）
+                            trigger(key, fullPath, undefined, old, true);
+
+                            // 5. 通知所有父層路徑
+                            let parentPath = fullPath;
+                            while (parentPath.includes(".")) {
+                                parentPath = parentPath.substring(0, parentPath.lastIndexOf("."));
+
+                                // 這裡直接從原始 ScopedData 拿值，避免觸發 Proxy get 導致重新封裝
+                                const rawRoot = _scopedData.get(this)[key];
+                                const val = _utils.get(this).getNested(rawRoot, parentPath);
+
+                                trigger(key, parentPath, val, val, false);
+                            }
+                        }
+                        this._isDeleting = null; 
+                        return success;
+                    }
+
+                });
+
+                proxyCache.set(obj, proxy);
+                return proxy;
+            };
+
+            // ⭐ 修正重點 1：先從 _scopedData 拿到空的原始物件並建立根代理
+            const rootProxy = makeReactive(_scopedData.get(this)[key]);
+
+            // ⭐ 修正重點 2：先掛載到 VM 實例上，確保對外引用一致
+            this[key] = rootProxy;
+            form.proxy = rootProxy;
+           
+            // ⭐ 修正重點 3：透過 rootProxy 寫入初始資料
+            // 這樣 setNested 內部每一層的賦值都會經過 Proxy 的 set 攔截器
+            Object.entries(form.fieldCache || {}).forEach(([p, v]) => {
+                setNested(rootProxy, p, v);
+            });
+        }
+
+
+
+        // ================= watch/computed =================
+        $watch(tabKey, path, fn) {
+            this.ensureScope(tabKey);
+            const { getNested, setNested } = _utils.get(this);
+            const wt = _watchers.get(this)[tabKey];
+            let handlers = getNested(wt, path) || [];
+            if (!Array.isArray(handlers)) handlers = [];
+            handlers.push(fn);
+            setNested(wt, path, handlers);
+        }
+
+        $computed(tabKey, name, fn) {
+            this.ensureScope(tabKey);
+            _computed.get(this)[tabKey][name] = fn;
+        }
+
+        $dirty(tabKey) {
+            return Array.from((_dirty.get(this)[tabKey] || []));
+        }
+
+        $resetDirty(tabKey) {
+            if (_dirty.get(this)[tabKey]) _dirty.get(this)[tabKey].clear();
+        }
+
+        setCustom(tabKey, key, value) {
+            this.ensureScope(tabKey);
+            _customData.get(this)[tabKey][key] = value;
+        }
+
+        getCustom(tabKey, key) {
+            return _customData.get(this)?.[tabKey]?.[key];
+        }
+
+        $validator(tabKey, path, fn) {
+            this.ensureScope(tabKey);
+            const { getNested, setNested } = _utils.get(this);
+            const valStore = _validators.get(this)[tabKey];
+            let handlers = getNested(valStore, path) || [];
+            if (!Array.isArray(handlers)) handlers = [];
+            handlers.push(fn);
+            setNested(valStore, path, handlers);
+        }
+
+        // ================= File =================
+        setFile(tabKey, path, file) {
+            const { getNested, setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            let existing = getNested(target, path);
+            if (!Array.isArray(existing)) {
+                setNested(target, path, []);
+                existing = getNested(target, path);
+            }
+            existing.push(file);
+        }
+
+        removeFile(tabKey, path, identifier) {
+            const { getNested, setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            let files = getNested(target, path);
+            if (!Array.isArray(files)) return;
+
+            if (typeof identifier === "number") {
+                files.splice(identifier, 1);
+            } else {
+                const filtered = files.filter(f => (f.name || f.filename) !== identifier);
+                setNested(target, path, filtered);
+            }
+
+            files = getNested(target, path);
+            if (!files || files.length === 0) setNested(target, path, []);
+        }
+
+        clearFiles(tabKey, path) {
+            const { setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            setNested(target, path, []);
+        }
+
+        async getFilesByField(tabKey, fieldPath) {
+            const { getNested, setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            let files = getNested(target, fieldPath);
+            if (!files) files = [];
+            if (!Array.isArray(files)) files = [files];
+
+            const hasRealFile = files.some(f => f instanceof File || (f?.file instanceof File));
+            if (hasRealFile) return files.map(f => f instanceof File ? f : f.file).filter(Boolean);
+
+            const fetchBackendFile = async (tabKey, path) => {
+                const safePath = encodeURIComponent(path);
+                const res = await fetch(`/api/file/${tabKey}/${safePath}`);
+                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+                const blob = await res.blob();
+                const fileName = path.split("/").pop() || path.split(".").pop();
+                return { name: fileName, type: blob.type, blob };
+            };
+
+            try {
+                const backendData = await fetchBackendFile(tabKey, fieldPath);
+                const newFile = new File([backendData.blob], backendData.name, { type: backendData.type });
+                setNested(target, fieldPath, [newFile]);
+                return [newFile];
+            } catch (err) {
+                let fallback = getNested(target, fieldPath);
+                if (!fallback) return [];
+                if (!Array.isArray(fallback)) fallback = [fallback];
+                return fallback;
+            }
+        }
+
+        getFilename(tabKey, path) {
+            const { getNested } = _utils.get(this);
+            const files = getNested(this.ensureScope(tabKey), path);
+            if (!files) return "";
+            if (Array.isArray(files)) return files.map(f => f?.name || f?.filename).filter(Boolean).join(", ");
+            return files?.name || files?.filename || "";
+        }
+
+        async previewFile(tabKey, file, fieldPath) {
+            if (typeof file === "string") file = { name: file, lazy: true };
+            if (!file) return;
+
+            // lazy load
+            if (file.lazy && fieldPath) {
+                const realFile = await this.getFilesByField(tabKey, fieldPath);
+                if (!realFile.length) { alert("檔案載入失敗"); return; }
+                file = realFile[0];
+            }
+
+            const win = window.open("", "_blank", "width=1000,height=700");
+            if (!win) { alert("請允許彈出視窗"); return; }
+            const url = URL.createObjectURL(file);
+
+            const _initPreviewInteraction = (type, targetId, sliderId, options = {}) => {
+                const el = win.document.getElementById(targetId);
+                const slider = win.document.getElementById(sliderId);
+                if (!el || !slider) return;
+
+                let scale = 1, tx = 0, ty = 0, dragging = false, startX, startY;
+                const min = options.minScale || 0.5, max = options.maxScale || 5, step = options.step || 0.01;
+
+                const apply = () => {
+                    el.style.transform = type === "image"
+                        ? `scale(${scale}) translate(${tx}px,${ty}px)`
+                        : `scale(${scale})`;
+                    if (type === "pdf") el.style.transformOrigin = "top left";
+                };
+
+                slider.min = min; slider.max = max; slider.step = step; slider.value = scale;
+                slider.oninput = e => { scale = parseFloat(e.target.value); apply(); };
+
+                if (type === "image") {
+                    el.style.cursor = "grab";
+                    el.onwheel = e => { e.preventDefault(); scale += e.deltaY * -0.001; scale = Math.min(Math.max(min, scale), max); apply(); slider.value = scale; };
+                    el.onmousedown = e => { dragging = true; startX = e.clientX - tx; startY = e.clientY - ty; el.style.cursor = "grabbing"; };
+                    win.document.onmouseup = () => { dragging = false; el.style.cursor = "grab"; };
+                    win.document.onmousemove = e => { if (!dragging) return; tx = e.clientX - startX; ty = e.clientY - startY; apply(); };
+                }
+                if (type === "pdf" && options.zoomInId && options.zoomOutId) {
+                    const zin = win.document.getElementById(options.zoomInId);
+                    const zout = win.document.getElementById(options.zoomOutId);
+                    if (zin) zin.onclick = () => { scale = Math.min(scale + 0.1, max); apply(); slider.value = scale; };
+                    if (zout) zout.onclick = () => { scale = Math.max(scale - 0.1, min); apply(); slider.value = scale; };
+                }
+            };
+
+            let content = "";
+            if (file.type.startsWith("image/")) content = `
+            <div style="display:flex; flex-direction:column; align-items:center; width:100%; height:100%;">
+                <img id="previewImg" src="${url}" style="max-width:100%; max-height:80%; cursor:grab; transform:scale(1);" />
+                <input type="range" id="imgZoom" min="0.5" max="5" step="0.01" value="1" style="width:80%; margin-top:5px;">
+            </div>`;
+            else if (file.type === "application/pdf") content = `
+            <div style="display:flex; flex-direction:column; height:100%; width:100%;">
+                <div style="display:flex; gap:5px; padding:5px; align-items:center;">
+                    <button id="pdfZoomIn">+</button>
+                    <button id="pdfZoomOut">-</button>
+                    <input type="range" id="pdfZoomSlider" min="0.5" max="3" step="0.01" value="1" style="flex:1;">
+                </div>
+                <iframe id="pdfFrame" src="${url}" style="width:100%; flex:1; border:none;"></iframe>
+            </div>`;
+            else { const a = document.createElement("a"); a.href = url; a.download = file.name; a.click(); URL.revokeObjectURL(url); return; }
+
+            win.document.body.style.margin = "0";
+            win.document.body.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column;">
+                <div style="padding:5px; background:#f1f1f1;">${file.name}</div>
+                <div id="content" style="flex:1; display:flex; justify-content:center; align-items:center;">
+                    ${content}
+                </div>
+            </div>`;
+
+            if (file.type.startsWith("image/")) _initPreviewInteraction("image", "previewImg", "imgZoom");
+            else if (file.type === "application/pdf") _initPreviewInteraction("pdf", "pdfFrame", "pdfZoomSlider", { minScale: 0.5, maxScale: 3, step: 0.01, zoomInId: "pdfZoomIn", zoomOutId: "pdfZoomOut" });
+
+            win.addEventListener("beforeunload", () => URL.revokeObjectURL(url));
+        }
+
+        async handleFileInput(tabKey, fieldPath, file, options) {
+            if (!file?.lazy) this.setFile(tabKey, fieldPath, file);
+
+            if (options.inline) {
+                const $group = options.$group;
+                const $previewBtn = $group.find(".preview-btn");
+                const $deleteBtn = $group.find(".delete-btn");
+                const $filenameLabel = $group.find(".filename-label");
+                const $input = options.$input;
+
+                $filenameLabel.text(file.name);
+                $previewBtn.show();
+                $deleteBtn.show();
+
+                $deleteBtn.off("click").on("click", () => {
+                    $input.val(null);
+                    $filenameLabel.text("未選檔案");
+                    $previewBtn.hide();
+                    $deleteBtn.hide();
+                    this.removeFile(tabKey, fieldPath, file.name);
+                });
+
+                $previewBtn.off("click").on("click", async () => {
+                    await this.previewFile(tabKey, file, fieldPath);
+                });
+            }
+            else if (options.modal) {
+                const $fileList = options.$fileList;
+                const $li = $(`
+                <li class="list-group-item d-flex justify-content-between align-items-center flex-column align-items-start">
+                    <div class="d-flex justify-content-between w-100 align-items-center">
+                        <span>${file.name} (${Math.round(file.size / 1024)} KB)</span>
+                        <button type="button" class="btn btn-sm btn-danger btn-delete">刪除</button>
+                    </div>
+                    <div class="file-preview mt-2"></div>
+                </li>
+            `);
+                $fileList.append($li);
+                $li.find(".btn-delete").click(() => { $li.remove(); this.vm.removeFile(tabKey, fieldPath); });
+            }
+        }
+
+
+    }
+    // =========================
+    // ⭐ Form Instance
+    // =========================
+    class DynamicFormInstance {
+        constructor(container, sharedVm) {
+            this.container = $(container);
+            this.fields = this.container.find("[vmodel]");
+            this.vm = sharedVm; // 使用傳入的共用 VM  
+            this.key = this.container.data("df"); // ⭐ 每個 tab 的 key
+
+            // 2. 初始化儲存空間
+            this.fieldCache = {}; // 快取（現在會存成巢狀結構）
+            this.fieldMap = {};   // 快速索引：{ "user.name": $inputElement }
+            this.asyncCache = {};
+            this.asyncTokens = {};
+
+            // ⭐ 自動註冊到 VM
+            this.vm.register(this);
+
+            this.init();
+            this.container.data("df-initialized", true);
+            //this.bindFileInputs();
+            //this.restoreFiles();
+        }
+
+
+
+        init() {
+            this.vm.ensureScope(this.key);
+            this.fields.each((_, el) => {
+
+                const $el = $(el);
+                const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+                if (!name) return;
+
+                const isInput = $el.is("input, select, textarea");
+                const isLabel = resolveType($el) === "label";
+
+                // ⭐ NEW：判斷 hybrid
+                const $hybrid = $el.closest(".hybrid-input");
+                const isHybridChild = $hybrid.length > 0;
+
+                // =========================================
+                // ⭐ ① Hybrid 優先處理（直接跳過原流程🔥）
+                // =========================================
+                if (isHybridChild) {
+
+                    const fieldName = $hybrid.data("key") || $hybrid.data("field") || name;
+                    const $chk = $hybrid.find('[data-hybrid-role="checkbox"]');
+                    const $txt = $hybrid.find('[data-hybrid-role="textbox"]');
+
+                    this.fieldMap[fieldName] = $txt; // 統一映射到文字方塊 
+                    const hybridVal = this.vm.get(this.key, fieldName);
+
+                    if (hybridVal) {
+                        $chk.prop("checked", !!hybridVal.enabled);
+                        $txt.val(hybridVal.value || "").prop("disabled", !hybridVal.enabled);
+                    } else {
+                        const initVal = { enabled: $chk.is(":checked"), value: $txt.val() || "" };
+                        //PageVM._setNested(this.vm._scopedData[this.key], fieldName, initVal);
+                        //PageVM._setNested(this.vm[this.key], fieldName, initVal);
+                        this.vm.set(this.key, fieldName, initVal);
+                        $txt.prop("disabled", !initVal.enabled);
+                    }
+                    this.vm.$watch(this.key, fieldName, (newVal, oldVal) => {
+                        if (this.updateField) {
+                            // ⭐ 如果是刪除動作，強制 updateField 進入「唯讀模式」，不回寫 VM
+                            this.updateField(name, newVal,true);
+                        }
+                    });
+                    //this.vm.$watch(this.key, fieldName, (newVal) => {
+                    //    this.updateField(fieldName, newVal, true);
+                    //});
+                    return; // ⭐🔥 完全跳過原本 input 流程
+                }
+
+                // =========================================
+                // ⭐ ② 一般欄位（原本邏輯，簡化版）
+                // =========================================
+                if (isInput || isLabel) {
+
+                    if (!$el.parent().hasClass("input-with-status") && resolveType($el) !== "file" && resolveType($el) !== "hidden") {
+                        $el.wrap('<div class="input-with-status"></div>');
+                    }
+                    if ($el.hasClass("select2") && !$el.hasClass("select2-hidden-accessible")) {
+                        this.initSelect2($el);
+                    }
+
+                    const savedValue = this.vm.get(this.key, name);
+                    if (savedValue !== undefined && savedValue !== null) {
+                        // ⭐ FIX：安全處理 file 格式
+                        if (resolveType($el) === "file") {
+
+                            let fileObj = null;
+
+                            if (Array.isArray(savedValue) && savedValue.length > 0) {
+                                const f = savedValue[0];
+
+                                fileObj = (f instanceof File)
+                                    ? f
+                                    : {
+                                        name: f?.filename || f?.name || f,
+                                        lazy: !(f instanceof File)
+                                    };
+                            } else if (typeof savedValue === "string") {
+                                fileObj = { name: savedValue, lazy: true };
+                            }
+
+                            if (fileObj) {
+                                ValueHandler.set($el, fileObj, {
+                                    vm: this.vm,
+                                    tabKey: this.key,
+                                    field: name,
+                                    inline: true
+                                });
+                            }
+                        }
+                        else {
+                            ValueHandler.set($el, savedValue, {
+                                vm: this.vm,
+                                tabKey: this.key,
+                                field: name,
+                                inline: true
+                            });
+                            //if (resolveType($el) === "select2") {
+                            //    setSelect2ByValue($el, savedValue);
+                            //}
+                            //else if (resolveType($el) === "label")
+                            //{
+
+                            //}
+
+                            //else $el.val(savedValue);
+                        }
+                    } else {
+                        if ($el.hasClass("dropdownColor")) {
+                            $el.css("background-color", $el.find("option:selected").data("color"));
+                        }
+                        const currentVal = ValueHandler.get($el);
+                        //PageVM._setNested(this.vm[this.key], name, currentVal);
+                        this.vm.set(this.key, name, currentVal);
+                        //PageVM._setNested(this.vm._scopedData[this.key], name, currentVal);
+                    }
+                }
+
+                // =========================================
+                // ⭐ ③ 共用收尾（不動）
+                // =========================================
+                this.fieldMap[name] = $el;
+                const finalVal = ValueHandler.get($el);
+                this.fieldCache[name] = finalVal;
+
+                this.vm.$watch(this.key, name, (newVal, oldVal) => {
+                    if (this.updateField) {
+                        // ⭐ 如果是刪除動作，強制 updateField 進入「唯讀模式」，不回寫 VM
+                        this.updateField(name, newVal);
+                    }
+                });
+                //this.vm.$watch(this.key, name, (newVal) => {
+                //    if (this.updateField) {
+                //        this.updateField(name, newVal, true);
+                //    }
+                //});
+                this.clearStatusIcon($el);
+                if (!(resolveType($el) === "file") && finalVal.length > 0) {
+                    this.setStatusIcon($el, 'success');
+                }
+            });
+
+            this.container.find('.uploadBtn').each((_, el) => {
+                const $btn = $(el);
+                const fieldPath = $btn.data('key') || $btn.data('id') || $btn.data('name');
+                if (!fieldPath) return;
+
+                // 監聽該檔案路徑，只要 vm 裡的檔案陣列變動，就自動更新 UI
+
+                this.vm.$watch(this.key, fieldPath, (newFiles) => {
+                    if (this.updateField) {
+                        console.log(`[File Watch] ${fieldPath} changed`, newFiles);
+                        this.restoreFiles(); // 這裡偷懶可以直接刷全部，或寫一個 updateSingleFileUI($btn, newFiles)
+                    }
+                });
+
+                //this.vm.$watch(this.key, fieldPath, (newFiles) => {
+                //    console.log(`[File Watch] ${fieldPath} changed`, newFiles);
+                //    this.restoreFiles(); // 這裡偷懶可以直接刷全部，或寫一個 updateSingleFileUI($btn, newFiles)
+                //});
+            });
+
+            this.restoreFiles(); // 初始化時先刷一次 UI
+
+            this.bindEvents();
+            //this.bindHybridControls(); // ⭐ 保留
+        }
+
+
+
+        restoreFiles() {
+            // 💡 改為：遍歷容器內「所有的上傳按鈕」
+            this.container.find('.uploadBtn').each((index, el) => {
+                const $btn = $(el);
+                const fieldPath = $btn.data('key') || $btn.data('id') || $btn.data('name');
+                if (!fieldPath) return;
+                const files = this.vm.get(this.key, fieldPath);
+                // 定位到狀態格 (Status TD)
+                const $statusTd = $btn.closest('td').next('td');
+
+                if (Array.isArray(files) && files.length > 0) {
+                    // 狀態 A：有檔案
+                    $statusTd.html(`
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span class="badge rounded-pill bg-success ms-1">${files.length}</span>
+                            `);
+                } else {
+                    // 狀態 B：無檔案 (還原為初始狀態)
+                    $statusTd.html(`<i class="bi bi-x-circle text-danger"></i>`);
+                }
+            });
+        }
+
+
+
+        initSelect2($el) {
+            const url = $el.data("async");
+            const placeholder = $el.data("placeholder");
+            const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+            $el.select2({
+                width: '100%',
+                placeholder: placeholder,
+                minimumInputLength: 0,
+                ajax: {
+                    url: url,   // MVC Action
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) {
+                        return {
+                            term: params.term,   // 使用者輸入
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function (data, params) {
+                        params.page = params.page || 1;
+
+                        return {
+                            results: data.items,
+                            pagination: {
+                                more: data.hasMore   // ⭐ 關鍵：是否還有下一頁
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                templateResult: item =>
+                    item.id
+                        ? $(`<div style="background:${$(item.element).data("color") || ''};padding:4px 6px;">${item.text}</div>`)
+                        : item.text,
+                templateSelection: item => item.text
+            }).on("select2:select select2:unselect change", (e) => {
+                if (e.originalEvent || e.type === 'select2:select' || e.type === 'select2:unselect') {
+                    this.updateSelect2Background($el);
+
+                    const val = ValueHandler.get($el);
+
+                    // ⭐ 修正 1：寫入 VM Proxy，這會觸發 PageVM 的 $watch 與 dirty 標記
+                    this.vm.set(this.key, name, val);
+
+                    // ⭐ 修正 2：手動更新快取
+                    this.fieldCache[name] = val;
+
+                    // ⭐ 修正 3：執行驗證 (此處 name 會在 validateField 內再次取 data-key)
+                    if (typeof this.validateField === "function") {
+                        this.validateField($el);
+                    }
+                }
+            });
+
+            this.updateSelect2Background($el);
+        }
+
+        updateSelect2Background($el) {
+            const color = $el.find("option:selected").data("color") || "";
+            $el.next(".select2-container")
+                .find(".select2-selection--single")
+                .css("background-color", color);
+        }
+        //updateLocalData(name, value) {
+        //    this.fieldCache[name] = value;
+        //    // ⚠️ 不要再寫 proxyData，避免觸發 Proxy
+        //    // this.proxyData[name] = value;
+        //    if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+        //    this.vm._scopedData[this.key][name] = value;
+        //}
+
+        updateField(name, value, isFromProxy = false) {
+            const $el = this.fieldMap[name];
+            if (!$el) return; 
+
+            // 1. 防止重複更新
+            const current = ValueHandler.get($el);
+            // 1. 防止重複更新的邏輯微調
+            // ⭐ 關鍵：如果 value 是 undefined (來自 delete)，我們不跳過，
+            // 必須讓程式往下跑去執行 delete this.fieldCache[name]
+            if (value !== undefined) {
+                const compareValue = value; // 此時 value 可能是 "" 或其他值
+                const isSame = (typeof compareValue === 'object')
+                    ? JSON.stringify(current) === JSON.stringify(compareValue)
+                    : current === compareValue;
+
+                if (isSame) return;
+            }
+
+            // 如果是資料變動帶動 UI (Console / DataTable / Other Field Watch)
+            if (isFromProxy) {
+                const $hybrid = $el.closest(".hybrid-input");
+                if ($hybrid.length) {
+                    // 特殊處理 Hybrid 複合控制項
+                    const enabled = value && value.enabled ? true : false;
+                    const val = value && value.value ? value.value : "";
+                    $hybrid.find('[data-hybrid-role="checkbox"]').prop("checked", enabled);
+                    $hybrid.find('[data-hybrid-role="textbox"]').val(val).prop("disabled", !enabled); 
+
+                } else { 
+                    // 物理刪除時給予空字串清空 UI
+                    ValueHandler.set($el, value === undefined ? "" : value, { silent: true }); 
+                }
+                // 如果是從 Proxy (Console/DataTable) 改的，通常也需要觸發 UI 驗證
+                if (typeof this.validateField === "function") {
+                    this.validateField($el).catch(err => { });
+                }
+            }
+
+
+
+
+            //const isFileDisplay = $el.closest(".dynamic-file-show").length > 0;
+
+            //if (isFileDisplay && value) {
+
+            //    const file = typeof value === "object"
+            //        ? value
+            //        : {
+            //            name: value,
+            //            lazy: true
+            //        };
+
+            //    ValueHandler.set($el, file, {
+            //        silent: !isFromProxy,
+            //        vm: this.vm,
+            //        tabKey: this.key,
+            //        field: name
+            //    });
+            //}
+            //else {
+            //    // ⭐ 一般欄位（統一入口）
+            //    ValueHandler.set($el, value, { silent: !isFromProxy });
+            //}
+
+            //if (!this.isEditableField($el)) {
+
+            //    $el.text(value);
+
+
+            //    const $group = $el.closest(".dynamic-file-show");
+            //    if ($group.length > 0) {
+            //        const file = {
+            //            name: "example.pdf",
+            //            size: 1024 * 200,  // 200 KB
+            //            id: "abc123",      // 後端識別用
+            //            blob: null,         // 目前沒載入 byte
+            //            lazy: true
+            //        };
+            //        this.vm.handleFileInput(this.key, name, file, { inline: true, $group, $input: $el });
+
+            //    }
+            //} 
+
+            // 3. 更新本地快取 (本地物件直接賦值，不需 PageVM 工具)
+            // 如果 fieldCache 是簡單對象，直接賦值；如果是巢狀，建議也改用 vm.get('key') 直接獲取完整對象
+
+            // 3. 更新本地快取 (物理同步)
+            if (value === undefined) {
+                // ⭐ 這裡執行後，DynamicFormInstance 內部的 Key 才會消失
+                delete this.fieldCache[name];
+            } else {
+                // 一般賦值 (包括初始化時的 "")，保留 Key
+                this.fieldCache[name] = value;
+            }
+
+            // 4. 同步回 VM
+            // ⭐ 只有在「非 Proxy 觸發」且「不是正在刪除」的情況下才寫回
+            // 配合 PageVM 的 _isDeleting 標記，這裡的 vm.set 會被 Proxy 層擋掉或不執行
+            if (!isFromProxy && value !== undefined) {
+                this.vm.set(this.key, name, value);
+            }
+        }
+
+        //setStatusIcon($el, status, msg = "") {
+
+
+        //    if ($el.is(":radio")) {
+        //        $el = $el.closest(".radio-group");
+        //    }
+
+        //    const $w = $el.hasClass("radio-group")
+        //        ? $el
+        //        : $el.parent(".input-with-status");
+
+        //    $w.find(".status-icon").remove();
+        //    this.clearStatusIcon($el);
+        //    this.clearError($el);
+
+        //    const icons = {
+        //        success: '<i class="bi bi-check-circle text-success"></i>',
+        //        error: '<i class="bi bi-x-circle text-danger"></i>',
+        //        processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+        //    };
+
+        //    if (status) $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+        //    if (msg) this.showFieldError($el, msg);
+        //}
+        setStatusIcon($el, status) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove();
+            this.clearStatusIcon($el);
+            this.clearError($el);
+
+            const val = ValueHandler.get($el);
+            if ($el.data("must") && val === "") return;
+
+            const icons = {
+                success: '<i class="bi bi-check-circle text-success"></i>',
+                error: '<i class="bi bi-x-circle text-danger"></i>',
+                processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+            };
+
+            if (icons[status]) {
+                $w.append(`<span class="status-icon">${icons[status]}</span>`).addClass("has-icon");
+            }
+        }
+        clearStatusIcon($el) {
+            if ($el.is(":radio")) {
+                $el = $el.closest(".radio-group");
+            }
+
+            const $w = $el.hasClass("radio-group")
+                ? $el
+                : $el.parent(".input-with-status");
+
+            $w.find(".status-icon").remove().end().removeClass("has-icon");
+        }
+        //clearStatusIcon($el) {
+        //    $el.parent(".input-with-status").find(".status-icon").remove().end().removeClass("has-icon");
+        //}
+
+        setError($el, msg) {
+            $el.addClass("is-invalid").css("border", "1px solid red").attr("title", msg || "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "1px solid red");
+        }
+
+        clearError($el) {
+            $el.removeClass("is-invalid").css("border", "").attr("title", "");
+            $el.next(".select2-container").find(".select2-selection").css("border", "");
+        }
+        isEditableField($el) {
+            if (!$el.is("input,textarea,select")) return false;
+            if ($el.is(":disabled") || $el.prop("readonly")) return false;
+
+            // 如果 display:none / hidden / hidden by parent
+            if (!$el.is(":visible")) return false;
+
+            return true;
+        }
+
+        async validateField(el) {
+
+            const $el = $(el);
+
+            let val = ValueHandler.get($el);
+            if (val !== "") this.setStatusIcon($el, 'processing');
+            const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+            const hybridVal = this.vm.get(this.key, name);
+            if (hybridVal && typeof hybridVal === "object" && "enabled" in hybridVal) {
+                val = hybridVal.enabled ? hybridVal.value : "";
+            }
+            this.clearError($el);
+            this.clearStatusIcon($el);
+
+            // ⭐ file 直接略過（你原本邏輯）
+            if (resolveType($el) === "file") return true;
+
+            const ctx = buildContext($el, val, this.vm, this, this.key, name);
+
+            // ⭐ 空值快速通過
+            if (!ctx.must && val === "") return true;
+
+            // =========================
+            // ⭐ 根據控件取得規則
+            // =========================
+            const rules = [...(ControlRuleMap[ctx.type] || [])];
+            // ⭐ 額外規則（可混用 data-*）
+            if (ctx.conditional) rules.push("conditional");
+            if (ctx.cross) rules.push("cross");
+
+            // =========================
+            // ⭐ 同步驗證
+            // =========================
+            for (let r of rules) {
+
+                const rule = ValidatorRules[r];
+                if (!rule) continue;
+
+                const result = await rule.validate(val, ctx);
+
+                if (result !== true) {
+                    this.setError($el, result);
+                    this.setStatusIcon($el, 'error', result);
+                    return false;
+                }
+            }
+
+            // =========================
+            // ⭐ 自訂驗證
+            // =========================
+            //const customValidators = PageVM._getNested(this.vm._validators[this.key], name);
+            const customValidators = this.vm.getValidators(this.key, name); // 如果 PageVM 有提供
+            if (customValidators?.length) {
+                for (let fn of customValidators) {
+
+                    let result = await fn(val, ctx);
+
+                    if (result !== true) {
+                        this.setError($el, result || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                        return false;
+                    }
+                }
+            }
+
+            // =========================
+            // ⭐ async 驗證（原樣保留）
+            // =========================
+            if (ctx.asyncUrl && val && ctx.type != 'select2') {
+
+                const cacheKey = `${this.key}_${name}_${val}`;
+                const token = Symbol();
+                this.asyncTokens[cacheKey] = token;
+
+                this.setStatusIcon($el, 'processing');
+
+                try {
+                    const resp = await $.ajax({
+                        url: ctx.asyncUrl,
+                        data: { value: val }
+                    });
+
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.asyncCache[cacheKey] = resp.valid;
+
+                    if (!resp.valid) {
+                        this.setError($el, resp.message || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                    } else {
+
+                        // ⭐⭐⭐ 新增：自動填值（核心）
+                        if (resp.data) {
+                            Object.keys(resp.data).forEach(targetField => {
+
+                                const value = resp.data[targetField];
+
+                                if (this.fieldMap[targetField]) {
+                                    // ⭐ 更新 VM
+                                    //PageVM._setNested(this.vm[this.key], targetField, value);
+                                    this.vm.set(this.key, targetField, value);
+                                    // ⭐ 更新 UI
+                                    const $target = this.container.find(`[name='${targetField}'], #${targetField}`);
+                                    if ($target.length) {
+                                        ValueHandler.set($target, value);
+                                        $target.trigger("change");
+                                    }
+                                    this.setStatusIcon(this.fieldMap[targetField], 'success');
+                                }
+                            });
+                        }
+
+                        this.setStatusIcon($el, 'success');
+                        this.saveValidValue(name, val);
+                    }
+
+                    return resp.valid;
+
+                } catch {
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.setError($el, "異步驗證失敗");
+                    this.setStatusIcon($el, 'error');
+                    return false;
+                }
+            }
+            else {
+                // =========================
+                // ⭐ 成功
+                // =========================
+                this.setStatusIcon($el, 'success');
+                this.saveValidValue(name, val);
+                return true;
+            }
+        }
+        saveValidValue(name, val) {
+            // 1. 存入 VM (透過 Proxy 觸發 watch)
+            //if (this.vm[this.key]) {
+            //    PageVM._setNested(this.vm[this.key], name, val);
+            //} else {
+            //    PageVM._setNested(this.vm._scopedData[this.key], name, val);
+            //}
+            this.vm.set(this.key, name, val);
+            //PageVM._setNested(this.vm[this.key], name, val);
+            // 2. 存入快取 (支援結構化) 
+            this.fieldCache[name] = val;
+
+        }
+        async validateField(el, writeToVm = true) {
+            const $el = $(el);
+            let val = ValueHandler.get($el);
+            if (val !== "") this.setStatusIcon($el, 'processing');
+            const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+
+            // hybrid 處理
+            const hybridVal = this.vm.get(this.key, name);
+            if (hybridVal && typeof hybridVal === "object" && "enabled" in hybridVal) {
+                val = hybridVal.enabled ? hybridVal.value : "";
+            }
+
+            this.clearError($el);
+            this.clearStatusIcon($el);
+
+            // file 直接略過
+            if (resolveType($el) === "file") {
+                this.fieldCache[name] = val;       // 更新快取
+                if (writeToVm) this.vm.set(this.key, name, val); // 單次 validate 才寫 VM
+                return true;
+            }
+
+            const ctx = buildContext($el, val, this.vm, this, this.key, name);
+
+            // 空值快速通過
+            if (!ctx.must && val === "") {
+                this.fieldCache[name] = val;
+                if (writeToVm) this.vm.set(this.key, name, val);
+                return true;
+            }
+
+            // 控件規則
+            const rules = [...(ControlRuleMap[ctx.type] || [])];
+            if (ctx.conditional) rules.push("conditional");
+            if (ctx.cross) rules.push("cross");
+
+            // 同步驗證
+            for (let r of rules) {
+                const rule = ValidatorRules[r];
+                if (!rule) continue;
+                const result = await rule.validate(val, ctx);
+                if (result !== true) {
+                    this.setError($el, result);
+                    this.setStatusIcon($el, 'error', result);
+                    return false;
+                }
+            }
+
+            // 自訂驗證
+            const customValidators = this.vm.getValidators(this.key, name);
+            if (customValidators?.length) {
+                for (let fn of customValidators) {
+                    let result = await fn(val, ctx);
+                    if (result !== true) {
+                        this.setError($el, result || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                        return false;
+                    }
+                }
+            }
+
+            // async 驗證
+            if (ctx.asyncUrl && val && ctx.type !== 'select2') {
+                const cacheKey = `${this.key}_${name}_${val}`;
+                const token = Symbol();
+                this.asyncTokens[cacheKey] = token;
+
+                this.setStatusIcon($el, 'processing');
+
+                try {
+                    const resp = await $.ajax({ url: ctx.asyncUrl, data: { value: val } });
+
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+
+                    this.asyncCache[cacheKey] = resp.valid;
+
+                    if (!resp.valid) {
+                        this.setError($el, resp.message || "驗證失敗");
+                        this.setStatusIcon($el, 'error');
+                    } else {
+                        // 自動填值
+                        if (resp.data) {
+                            Object.keys(resp.data).forEach(targetField => {
+                                const value = resp.data[targetField];
+                                if (this.fieldMap[targetField]) {
+                                    if (writeToVm) this.vm.set(this.key, targetField, value);
+                                    const $target = this.container.find(`[name='${targetField}'], #${targetField}`);
+                                    if ($target.length) {
+                                        ValueHandler.set($target, value);
+                                        $target.trigger("change");
+                                        this.setStatusIcon(this.fieldMap[targetField], 'success');
+                                    }
+                                }
+                            });
+                        }
+
+                        this.setStatusIcon($el, 'success');
+                        this.saveValidValue(name, val);
+                    }
+
+                    this.fieldCache[name] = val; // ⭐ 更新快取
+                    if (writeToVm) this.vm.set(this.key, name, val);
+                    return resp.valid;
+                } catch {
+                    if (this.asyncTokens[cacheKey] !== token) return false;
+                    this.setError($el, "異步驗證失敗");
+                    this.setStatusIcon($el, 'error');
+                    return false;
+                }
+            } else {
+                // 成功
+                this.setStatusIcon($el, 'success');
+                this.saveValidValue(name, val);
+                this.fieldCache[name] = val;
+                if (writeToVm) this.vm.set(this.key, name, val);
+                return true;
+            }
+        }
+        // ============================
+        // ⭐ 批次驗證 + 快取 + VM batch 更新
+        // ============================
+
+        //    // 批次驗證並更新 VM
+        //    const allValid = await form.validateAndCacheAll();
+        //    if(allValid) {
+        //        console.log("全部驗證通過，VM 已統一更新");
+        //    } else {
+        //    console.warn("部分欄位驗證失敗，VM 仍已更新快取值");
+        //}
+        async validateAndCacheAll() {
+            const tasks = [];
+
+            // 1️⃣ 收集所有驗證 Promise（不 await）
+            for (const name in this.fieldMap) {
+                const $el = this.fieldMap[name];
+                tasks.push(this.validateField($el[0], false).catch(err => {
+                    console.error("validateAndCacheAll error:", name, err);
+                    return false;
+                }));
+            }
+
+            // 2️⃣ 等待全部驗證完成
+            const results = await Promise.all(tasks);
+
+            // 3️⃣ 批次寫入 VM
+            if (this.vm.batch) {
+                this.vm.batch(() => {
+                    for (const name in this.fieldCache) {
+                        const val = this.fieldCache[name];
+                        this.vm.set(this.key, name, val);
+                    }
+                });
+            } else {
+                // fallback：沒有 batch 方法也寫一次
+                for (const name in this.fieldCache) {
+                    this.vm.set(this.key, name, this.fieldCache[name]);
+                }
+            }
+
+            // 4️⃣ 返回是否全部驗證成功
+            return results.every(Boolean);
+        }
+
+        // ============================
+        // ⭐ validateField 已改為支援 writeToVm flag
+        // async validateField(el, writeToVm = true) { ... }
+        // ============================
+
+        //    const { allValid, fields } = await formInstance.validateAll();
+
+        //if (allValid) {
+        //    console.log("全部驗證通過");
+        //} else {
+        //    console.log("有欄位驗證失敗：", fields);
+        //}const { allValid, fields } = await formInstance.validateAll();
+        //console.log(allValid); // true / false
+        //console.log(fields);   // { "username": true, "email": false, ... }
+        async validateAll({ batchUpdate = true } = {}) {
+            const tasks = [];
+            const fieldResults = {};
+
+            for (const name in this.fieldMap) {
+                const $el = this.fieldMap[name];
+
+                tasks.push(
+                    (async () => {
+                        try {
+                            // ⭐ 智能跳過不可編輯欄位
+                            if (!this.isEditableField($el)) {
+                                fieldResults[name] = true;
+                                return true;
+                            }
+
+                            // ⭐ 支援 Hybrid / Select2 / File
+                            const valid = await this.validateField($el[0]);
+                            fieldResults[name] = valid;
+
+                            return valid;
+                        } catch (err) {
+                            console.error("validateAll error:", name, err);
+                            fieldResults[name] = false;
+                            return false;
+                        }
+                    })()
+                );
+            }
+
+            // ⭐ 等待所有驗證完成
+            const results = await Promise.all(tasks);
+
+            // ⭐ Batch 更新 VM（可選）
+            if (batchUpdate && this.vm.batch) {
+                this.vm.batch(() => {
+                    for (const [name, valid] of Object.entries(fieldResults)) {
+                        // Hybrid / async validator 可能有自動填值
+                        const value = this.vm.get(this.key, name);
+                        this.vm.set(this.key, name, value); // 觸發 batch 一次性刷新
+                    }
+                });
+            }
+
+            return {
+                allValid: results.every(Boolean),
+                fields: fieldResults
+            };
+        }
+        //async validateAll() {
+        //    const results = [];
+
+        //    for (const name in this.fieldMap) {
+        //        const $el = this.fieldMap[name];
+
+        //        try {
+        //            const valid = await this.validateField($el[0]); // ⭐ 注意這裡
+        //            results.push(valid);
+        //        } catch (err) {
+        //            console.error("validateAll error:", name, err);
+        //            results.push(false);
+        //        }
+        //    }
+
+        //    return results.every(r => r);
+        //}
+
+        cache() {
+            // 1. 清空舊快取
+            this.fieldCache = {};
+
+            // 2. 收集所有欄位值
+            const batchData = {};
+
+            for (const name in this.fieldMap) {
+                const $el = this.fieldMap[name];
+                const finalVal = (resolveType($el) === "file") ? ($el.data("file") || []) : ValueHandler.get($el);
+
+                // 更新 local cache
+                this.fieldCache[name] = finalVal;
+
+                // 暫存到 batchData
+                batchData[name] = finalVal;
+            }
+
+            // 3. ⭐ 使用 PageVM batch 更新，一次性寫入
+            if (this.vm.batch) {
+                this.vm.batch(() => {
+                    for (const [name, val] of Object.entries(batchData)) {
+                        this.vm.set(this.key, name, val);
+                    }
+                });
+            } else {
+                // 如果沒有 batch API，退回原本逐欄更新
+                for (const [name, val] of Object.entries(batchData)) {
+                    this.vm.set(this.key, name, val);
+                }
+            }
+        }
+        //cache() {
+        //    // 1. 先清空舊快取，確保重新建立正確的結構
+        //    this.fieldCache = {};
+
+        //    for (const name in this.fieldMap) {
+        //        const $el = this.fieldMap[name];
+        //        let finalVal = (resolveType($el) === "file") ? ($el.data("file") || []) : ValueHandler.get($el);
+
+        //        this.fieldCache[name] = finalVal;
+        //        // ⭐ 同步更新至 VM 的原始資料，確保 getJsonString 拿到最新狀態
+
+
+        //        this.vm.set(this.key, name, finalVal);
+        //        //PageVM._setNested(this.vm[this.key], name, finalVal);
+        //        //PageVM._setNested(this.vm._scopedData[this.key], name, finalVal);
+
+        //    }
+        //}
+
+
+
+        getJsonData() {
+            // 確保快取是最新的
+            this.cache();
+            // 直接回傳 fieldCache 物件（這在 JS 中就是 JSON 格式的物件）
+            return this.fieldCache;
+        }
+
+        getJsonString() {
+            this.cache();
+            return JSON.stringify(this.fieldCache);
+        }
+
+        //restore() {
+        //    Object.entries(this.fieldCache).forEach(([k, v]) => {
+        //        this.proxyData[k] = v;
+        //    });
+        //}
+
+        restore() {
+            // 1. 因為 fieldCache 可能與 VM 數據不一致，
+            // 最安全且符合新架構的方式是直接從 VM 取得該 TabKey 的所有扁平化數據
+            // 我們使用先前在 PageVM 定義的 dump(tabKey) 方法
+            const flatData = this.vm.dump(this.key);
+
+            // 2. 遍歷所有路徑與數值
+            ////Object.entries(flatData).forEach(([path, val]) => {
+            ////    // ⭐ 修正：不再存取 PageVM._setNested
+            ////    // 直接調用 vm.set，這會觸發 Proxy 攔截器，進而執行 $watch 並同步 UI
+            ////    this.vm.set(this.key, path, val);
+
+            ////    // 如果有需要手動強制 UI 刷新（例如某些非綁定控制項）
+            ////    // 可以視情況呼叫：
+            ////    // this.updateField(path, val, true);
+            ////});
+            this.vm.batch(() => {
+                Object.entries(flatData).forEach(([path, val]) => {
+                    this.vm.set(this.key, path, val);
+                });
+            });
+            // 3. 額外觸發一次檔案 UI 刷新
+            if (typeof this.restoreFiles === "function") {
+                this.restoreFiles();
+            }
+        }
+
+        bindEvents() {
+            const eventName = "change.validate";
+
+            if (!this.debouncedValidate) {
+                this.debouncedValidate = this.debounce(async e => {
+                    try {
+                        await this.validateField(e.currentTarget);
+                    } catch (err) {
+                        console.error("validate error:", err);
+                    }
+                }, 500);
+            }
+
+            //this.container.on("input", "[vmodel]", e => {
+            //    const $el = $(e.currentTarget);
+            //    if ($el.closest(".hybrid-input").length) return;
+            //    if (resolveType($el) === "file") return;
+            //    if (ValueHandler.get($el) !== "") this.setStatusIcon($el, 'processing');
+
+            //    // ⭐ 同步到 tab 專屬 VM scope
+            //    if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+            //    this.vm._scopedData[this.key][$el.attr("id") || $el.attr("name")] = ValueHandler.get($el);
+            //    debounced(e);
+            //    // ⭐ 同步到 proxyData & fieldCache
+            //    const name = $el.attr("id") || $el.attr("name");
+            //    this.proxyData[name] = ValueHandler.get($el);
+            //    this.fieldCache[name] = ValueHandler.get($el);
+            //});
+
+            this.container.off(eventName, "[vmodel]");
+            this.container.on(eventName, "[vmodel]", e => {
+                const $el = $(e.currentTarget);
+                if ($el.closest(".hybrid-input").length) return;
+                // ⭐ 排除 file（關鍵🔥）
+                if (resolveType($el) === "file") return;
+                this.debouncedValidate(e);
+            });
+
+            this.container.on("change", "input[type=file][vmodel]", e => {
+
+                const $el = $(e.currentTarget);
+                const name = $el.data("key") || $el.attr("id") || $el.attr("name");
+                const file = e.currentTarget.files[0];
+
+                if (!file) return;
+
+                // ===== 驗證 =====
+                const maxSizeMB = $el.data("maxsize");
+
+                if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+                    this.setError($el, `檔案不可超過 ${maxSizeMB} MB`);
+                    $el.val("");
+                    ValueHandler.set($el, null, { silent: true });
+                    return;
+                }
+
+                this.clearError($el);
+
+                // ⭐ FIX：統一用 PageVM API
+                this.vm.clearFiles(this.key, name);
+
+                this.vm.setFile(this.key, name, {
+                    file: file,
+                    filename: file.name
+                });
+
+
+                //this.vm._scopedData[this.key][name] = file.name;
+
+                //if (!this.vm._scopedData[this.key]) this.vm._scopedData[this.key] = {};
+
+                //// 直接覆蓋原本檔案
+                //this.vm._scopedData[this.key][name] = {
+                //    file: file,        // File 物件
+                //    filename: file.name // 檔名方便 UI 顯示或 JSON
+                //};
+                $el.data("file", file);
+                // ===== UI + 行為 =====
+                ValueHandler.set($el, file, {
+                    silent: true,
+                    vm: this.vm,
+                    tabKey: this.key,
+                    field: name,
+                    inline: true
+                });
+                this.setStatusIcon($el, 'success');
+
+            });
+
+
+            this.container.on("change", ".dropdownColor", (e) => {
+                let $el = $(e.currentTarget);
+                let color = $el.find("option:selected").data("color");
+                $el.css("background-color", color);
+            });
+        }
+
+        //bindFileInputs() {
+        //    this.container.on("change", 'input[type="file"]', e => {
+        //        const $el = $(e.currentTarget);
+        //        const name = $el.attr("name");
+        //        const files = $el[0].files;
+
+        //        // ⭐ 存到 PageVM
+        //        this.vm.setFile(this.key, name, Array.from(files));
+
+        //        // ⭐ 顯示檔名
+        //        this.showFileNames($el, Array.from(files));
+        //    });
+
+        //    // ⭐ 刪除檔案按鈕
+        //    this.container.on("click", ".file-remove-btn", e => {
+        //        const $btn = $(e.currentTarget);
+        //        const $wrapper = $btn.closest(".file-item");
+        //        const field = $wrapper.data("field");
+        //        const fileName = $wrapper.data("filename");
+
+        //        // 刪除 cache
+        //        this.vm.removeFile(this.key, field, fileName);
+
+        //        // 移除畫面
+        //        $wrapper.remove();
+        //    });
+        //}
+
+        //showFileNames($input, files) {
+        //    const $container = $input.closest(".input-with-status");
+        //    $container.find(".file-list").remove();
+
+        //    const $list = $('<div class="file-list"></div>');
+        //    files.forEach(f => {
+        //        $list.append(`
+        //        <div class="file-item" data-field="${$input.attr("name")}" data-filename="${f.name}">
+        //            <span class="file-name-text">${f.name}</span>
+        //            <button type="button" class="file-remove-btn btn btn-sm btn-danger">刪除</button>
+        //        </div>
+        //    `);
+        //    });
+        //    $container.append($list);
+        //}
+
+        //// ⭐ 回復檔案顯示（restore）
+        //restoreFiles() {
+        //    Object.entries(this.vm._fileData[this.key] || {}).forEach(([field, files]) => {
+        //        const $el = this.container.find(`[name="${field}"]`);
+        //        if ($el.length && files && files.length) {
+        //            this.showFileNames($el, files);
+        //        }
+        //    });
+        //}
+
+        debounce(fn, delay = 500) {
+            let timer;
+            return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+        }
+    }
+
+    // ================================
+    // ⭐ HYBRID 修改處（修正版）
+    // ================================
+    //DynamicFormInstance.prototype.bindHybridControls = function () {
+    //    const self = this;
+
+    //    this.container.find(".hybrid-input").each((_, el) => {
+    //        const $group = $(el);
+    //        // ⭐ 修正：優先支援 data-key (路徑字串)
+    //        const fieldPath = $group.data("key") || $group.data("field");
+    //        if (!fieldPath) return;
+
+    //        const $chk = $group.find('[data-hybrid-role="checkbox"]');
+    //        const $txt = $group.find('[data-hybrid-role="textbox"]');
+
+    //        // ---------- 1️⃣ 初始化 VM (使用 _getNested / _setNested) ----------
+    //        let currentVal = PageVM._getNested(self.vm._scopedData[self.key], fieldPath);
+
+    //        if (!currentVal) {
+    //            currentVal = {
+    //                enabled: $chk.is(":checked"),
+    //                value: $txt.val() || ""
+    //            };
+    //            PageVM._setNested(self.vm._scopedData[self.key], fieldPath, currentVal);
+    //        }
+
+    //        // ---------- 2️⃣ UI 同步 ----------
+    //        $chk.prop("checked", !!currentVal.enabled);
+    //        $txt.val(currentVal.value || "").prop("disabled", !currentVal.enabled);
+
+    //        // ---------- 3️⃣ Checkbox 事件 ----------
+    //        $chk.off("change").on("change", function () {
+    //            const checked = this.checked;
+    //            $txt.prop("disabled", !checked);
+
+    //            // 取得當前資料並更新
+    //            const val = PageVM._getNested(self.vm._scopedData[self.key], fieldPath) || {};
+    //            val.enabled = checked;
+    //            if (!checked) {
+    //                val.value = "";
+    //                $txt.val("");
+    //            }
+
+    //            // ⭐ 關鍵：透過 Proxy 寫入以觸發響應式
+    //            if (self.vm[self.key]) {
+    //                PageVM._setNested(self.vm[self.key], fieldPath, { ...val });
+    //            }
+
+    //            if (self.validateField) {
+    //                self.validateField($txt[0]).catch(console.error);
+    //            }
+    //        });
+
+    //        // ---------- 4️⃣ Textbox 事件 ----------
+    //        $txt.off("input").on("input", function () {
+    //            const val = PageVM._getNested(self.vm._scopedData[self.key], fieldPath) || {};
+
+    //            if (!val.enabled) return;
+
+    //            val.value = $(this).val();
+
+    //            // ⭐ 關鍵：透過 Proxy 寫入
+    //            if (self.vm[self.key]) {
+    //                PageVM._setNested(self.vm[self.key], fieldPath, { ...val });
+    //            }
+
+    //            if (self.validateField) {
+    //                self.validateField(this).catch(console.error);
+    //            }
+    //        });
+    //    });
+    //};
+
+
+    return {
+
+        init: function () {
+            const currentPath = window.location.pathname;
+
+            // 1. 檢查全域 VM 是否存在或是否換頁
+            if (!window.vm || window.vm.getPagePath() !== currentPath) {
+                window.vm = new PageVM();
+                // 開放門戶給隨後載入的 PartialView 呼叫
+                window.CurrentPageContext = { init: () => this.init() };
+            }
+
+            // 2. 掃描所有尚未初始化的 [data-df]
+            $("[data-df]:not([data-df-initialized])").each(function () {
+                const formInstance = new DynamicFormInstance(this, window.vm);
+                window.activeForm = formInstance;
+                console.log("Tab 自動註冊成功:", $(this).data("df"));
+            });
+        }
+    };
+
+})();
+
+
+
+==============================================================
+
+
+
+
+
+
+const WizardHook = Object.freeze({
+    BEFORE_NEXT: "beforeNext",
+    BEFORE_PREV: "beforePrev",
+    AFTER_LOAD: "afterLoad",
+    ON_LEAVE: "onLeave"
+});
+
+const privateState = new WeakMap();
+
+const ensureJsonString = (val) => {
+    // 判斷是否為物件且不是 null (排除 typeof null === 'object' 的情況)
+    if (typeof val === 'object' && val !== null) {
+        try {
+            return JSON.stringify(val);
+        } catch (e) {
+            console.error("JSON stringify 失敗:", e);
+            return val;
+        }
+    }
+    // 如果是字串或其他基本型別，直接回傳
+    return val;
+};
+
+
+/**
+ * 將兩個參數（字串或物件）解析並合併為一個 JSON 物件
+ */
+const mergeToJson = (param1, param2) => {
+    const parse = (val) => {
+        if (!val) return {};
+        if (typeof val === "string") {
+            try {
+                return JSON.parse(val);
+            } catch (e) {
+                console.error("解析 JSON 字串失敗:", val);
+                return {}; // 解析失敗回傳空物件
+            }
+        }
+        if (typeof val === "object" && val !== null) {
+            return val;
+        }
+        return {};
+    };
+
+    // 解析兩者並合併，後者 (param2) 的屬性會覆蓋前者 (param1)
+    return { ...parse(param1), ...parse(param2) };
+};
+
+const _on = (instance, hookEnum, handler) => {
+    const state = privateState.get(instance);
+    if (!state) return; // 安全檢查
+
+    // 這裡要用 state.handlers，因為 state 是從 WeakMap 取出的物件
+    if (!state.handlers[hookEnum]) {
+        state.handlers[hookEnum] = [];
+    }
+    state.handlers[hookEnum].push(handler);
+};
+
+
+
+
+const _runHandlers = async (instance, hookEnum, payload = {}, options = {}) => {
+    const state = privateState.get(instance);
+    let result = true;
+    const ctx = {
+        ...payload,
+        step: instance.currentStep,
+        direction: options.direction || null,
+        wizard: instance,
+        setResult: (val) => result = val
+    };
+
+    // 1️⃣ step-local hooks
+    const stepLocal = instance.stepHooks[instance.currentStep]?.[hookEnum] || [];
+    for (const fn of stepLocal) {
+        const res = await fn(ctx);
+        if (res === false) return false; // 阻止繼續
+    }
+
+    // 2️⃣ plugins 原有 hook
+    for (const plugin of instance.plugins) {
+        if (plugin[hookEnum]) {
+            const res = await plugin[hookEnum](ctx);
+            if (res === false) result = false;
+        }
+    }
+
+    // 3️⃣ 全域 handlers
+    const handlers = state.handlers[hookEnum] || [];
+    for (const fn of handlers) {
+        const res = await fn(ctx);
+        if (res === false) result = false;
+    }
+    return result;
+};
+const updateUI = (instance) => {
+    // 實作原本 updateUI 的邏輯 
+    //$(this.prevBtnId).prop("disabled", this.currentStep === 0);
+    $(instance.prevBtnId).css("visibility", instance.currentStep === 1 ? "hidden" : "visible");
+    $(instance.nextBtnId).text(instance.currentStep === instance.totalSteps ? "完成" : "下一步");
+
+    $(`${instance.stepsId} li`).removeClass("active");
+    $(`${instance.stepsId} li[data-step=${instance.currentStep}]`).addClass("active");
+
+    let progress = (instance.currentStep / instance.totalSteps) * 100;
+    $(instance.progressBarId).css("width", progress + "%");
+};
+const isSameValue = (a, b) => {
+    // ⭐ 完全相等（string / number / boolean）
+    if (a === b) return true;
+
+    // ⭐ array 比較
+    if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return false;
+        return a.every((v, i) => v === b[i]);
+    }
+
+    // ⭐ File 比較（只比 name + size + lastModified）
+    if (a instanceof File && b instanceof File) {
+        return a.name === b.name &&
+            a.size === b.size &&
+            a.lastModified === b.lastModified;
+    }
+
+    return false;
+};
+const cleanupVMFields = (instance, stepKey) => {
+    const vmData = window.vm?.get(stepKey);
+    if (!vmData) return;
+    const prevRedirect = instance.stepRedirect[instance.currentStep - 1] || {};
+    // ⭐ 取得目前畫面所有欄位
+    const currentFields = new Set();
+
+    $(`${instance.containerId} [vmodel]`).each(function () {
+        const name = $(this).attr("id") || $(this).attr("name");
+        if (name) currentFields.add(name);
+    });
+    // ⭐ 沒有 pageredirect → 完全略過（保留 VM）
+
+    // ⭐ 刪除不存在的欄位
+    Object.keys(vmData).forEach(key => {
+
+        if (!currentFields.has(key)) {
+            //delete vmData[key];
+            window.vm?.delete(stepKey, key);
+            // window.vm?.get(stepKey);
+        }
+        const redirectVal = prevRedirect[key];
+        if (redirectVal === undefined || redirectVal === null || redirectVal === "") {
+            return;
+        }
+        const currentVal = vmData[key];
+        if (isSameValue(currentVal, redirectVal)) {
+            return;
+        }
+        else {
+            window.vm?.set(stepKey, key, redirectVal);
+        }
+
+    });
+};
+const restorePageVMWithRedirect = (instance, stepKey) => {
+    const vmData = window.vm?.get(stepKey);
+    if (!vmData) return;
+
+    const prevRedirect = instance.stepRedirect[instance.currentStep - 1] || {};
+
+    // 取得當前畫面所有欄位
+    const currentFields = {};
+
+    $(`${instance.containerId} [vmodel]`).each(function () {
+        const $el = $(this);
+        const name = $el.attr("id") || $el.attr("name");
+
+        if (name) {
+            currentFields[name] = $el;
+        }
+    });
+
+    // 遍歷 pageVM
+    Object.keys(vmData).forEach(key => {
+
+        // 保留 pageredirect
+        //if (key === "pageredirect") return;
+
+        // ❌ 不在畫面上 → 刪掉
+        if (!(key in currentFields)) {
+            //delete vmData[key];
+            window.vm?.delete(stepKey, key);
+            return;
+        }
+
+        // ✅ 在畫面上 → 判斷 pageredirect 是否有值
+        //const $el = $(`${instance.containerId} [name="${key}"]`);
+        //if (!$el.length) return;
+
+        const redirectVal = prevRedirect[key];
+
+        // ⭐ 沒有 pageredirect → 完全略過（保留 VM）
+        if (redirectVal === undefined || redirectVal === null || redirectVal === "") {
+            return;
+        }
+        const currentVal = vmData[key];
+        if (isSameValue(currentVal, redirectVal)) {
+            return;
+        }
+
+        //ValueHandler.set(currentFields[key], redirectVal, {
+        //    silent: true,     // 避免 trigger input（避免 loop）
+        //    vm: window.vm,
+        //    tabKey: stepKey,
+        //    field: key,
+        //    inline: true      // ⭐ file 顯示用
+        //});
+        //if ($el.is(":checkbox")) {
+        //    $el.prop("checked", Array.isArray(redirectVal) && redirectVal.includes($el.val()));
+        //} else if ($el.is(":radio")) {
+        //    $el.prop("checked", $el.val() === redirectVal);
+        //} else if ($el.is("[type='file']")) {
+        //    // ⭐ File input 特別處理
+        //    const vmFile = vmData[key]; // VM 已有 File 物件或檔名
+        //    if (vmFile) {
+        //        // 這裡只能顯示檔名，File 物件無法直接設定到 input
+        //        const $fileLabel = $el.siblings(".file-label"); // 假設有 label 顯示
+        //        if ($fileLabel.length) $fileLabel.text(vmFile.name || vmFile);
+        //    }
+        //} else {
+        //    $el.val(redirectVal);
+        //}
+
+        // ⭐ 同步回 VM
+        //vmData[key] = redirectVal;
+    });
+};
+const updateStepBadge = (instance, stepIndex) => {
+    const $badge = $(`${instance.stepsId} li[data-step= ${stepIndex}] .step-badge`);
+    const stepKey = "Step" + stepIndex;
+    const vmData = window.vm?.get(stepKey);
+
+    if (!vmData) {
+        $badge.removeClass("done partial").addClass("empty").text(stepIndex);
+        return;
+    }
+
+    let total = 0;
+    let filled = 0;
+
+    Object.keys(vmData).forEach(key => {
+        if (key === "pageredirect") return;
+
+        total++;
+        const val = vmData[key];
+
+        if (val !== null && val !== undefined && val !== "" &&
+            !(Array.isArray(val) && val.length === 0)) {
+            filled++;
+        }
+    });
+
+    if (filled === 0) {
+        // 🔴 未填
+        $badge.removeClass("done partial").addClass("empty").text();
+    } else if (filled < total) {
+        // 🟡 部分完成
+        $badge.removeClass("done empty").addClass("partial").text();
+    } else {
+        // 🟢 完成 ✔
+        $badge.removeClass("partial empty").addClass("done").html("✔");
+    }
+
+    $badge.show();
+};
+// 檢查 Redirect Data 是否一致
+const isSameRedirectData = (a, b) => {
+    return JSON.stringify(a) === JSON.stringify(b);
+};
+
+// 執行守衛邏輯 (例如驗證)
+const runGuards = async (instance, type) => {
+    // 這裡可以實作自定義的驗證邏輯
+    if (type === "next") {
+        if (await _runHandlers(instance, WizardHook.BEFORE_NEXT) === false) return false;
+        if (await _runHandlers(instance, WizardHook.ON_LEAVE, {}, { direction: "forward" }) === false) return false;
+    }
+    if (type === "prev") {
+        if (await _runHandlers(instance, WizardHook.BEFORE_PREV) === false) return false;
+        if (await _runHandlers(instance, WizardHook.ON_LEAVE, {}, { direction: "backward" }) === false) return false;
+    }
+    return true;
+};
+
+// 執行 Hook (取代原本的 this.runHook)
+const runHook = async (instance, hookEnum, payload = {}, options = {}) => {
+    // 內部呼叫原本定義好的私有 _runHandlers
+    return await _runHandlers(instance, hookEnum, payload, options);
+};
+
+
+// 靜態綁定邏輯私有化 (原本的 static bindHook)
+const bindHook = (containerSelector, hookEnum, handler) => {
+    const $container = $(containerSelector);
+    if (!$container.length) {
+        console.warn("bindWizardHook: container not found", containerSelector);
+        return;
+    }
+    const eventName = `wizard:${hookEnum}`;
+    $container.off(eventName).on(eventName, async function (e, ctx) {
+        try {
+            const res = await handler(ctx);
+            // 如果 handler 明確回傳 false，則阻止事件傳遞
+            if (res === false) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        } catch (err) {
+            console.error(`Error in wizard hook [${hookEnum}]:`, err);
+        }
+    });
+};
+
+// ⭐ 私有化 getRedirectData
+const getRedirectData = (instance) => {
+    const result = {};
+
+    instance.redirectFields.each(function () {
+        const $el = $(this);
+        const name = $el.attr("id") || $el.attr("name");
+        if (!name) return;
+
+        let val;
+
+        if ($el.is(":checkbox")) {
+            if (!result[name]) result[name] = [];
+            if ($el.prop("checked")) {
+                result[name].push($el.val());
+            }
+            return;
+        }
+
+        if ($el.is(":radio")) {
+            if ($el.prop("checked")) {
+                result[name] = $el.val();
+            }
+            return;
+        }
+
+        val = $el.val();
+
+        if ($el.is("select[multiple]")) {
+            result[name] = val || [];
+        } else {
+            result[name] = val;
+        }
+    });
+
+    return result;
+};
+
+
+const loadStep = async (instance, stepIndex, type, shouldClearData = true, extraData = null, callback = null) => {
+    const stepKey = "Step" + stepIndex;
+    // ⭐ 使用 ensureJsonString 確保傳給 loadStep 的是字串 
+    $(instance.nextBtnId).prop("disabled", true);
+    const query = new URLSearchParams({ stepIndex, Type: ensureJsonString(type) || '' });
+    if (extraData) {
+        query.append("SendData", JSON.stringify(extraData));
+    }
+    try {
+        const resp = await fetch(`${instance.baseUrl}/Step?${query.toString()}`);
+        const html = await resp.text();
+        $(instance.containerId).html(html);
+
+        instance.redirectFields = $(instance.containerId).find('.pageredirect[name]');
+
+        updateUI(instance);
+        instance.bindTestButtons();
+        await runHook(instance, WizardHook.AFTER_LOAD);
+
+        // 刪除不存在的欄位
+        if (shouldClearData) {
+            cleanupVMFields(instance, stepKey);
+            //restorePageVMWithRedirect(instance, stepKey);    // restore pageVM 並以 pageredirect 為主
+        }
+
+    } catch (err) {
+        console.error("Load step error:", err);
+    } finally {
+        for (let i = 1; i <= instance.totalSteps; i++) {
+            updateStepBadge(instance, i);
+        }
+        $(instance.nextBtnId).prop("disabled", false);
+        instance.isBack = false;
+        if (typeof callback === "function") await callback();
+    }
+};
+
+class FormWizard {
+    constructor(options) {
+        // 配置參數
+        this.containerId = options.containerId || "#wizard-content";
+        this.stepsId = options.stepsId || "#wizard-steps";
+        this.nextBtnId = options.nextBtnId || "#nextBtn";
+        this.prevBtnId = options.prevBtnId || "#prevBtn";
+        this.progressBarId = options.progressBarId || "#wizard-progress-bar";
+        this.baseUrl = options.baseUrl || "/Wizard";
+        this.stepRedirect = {}; // ⭐ 新增：記錄每一步 pageredirect
+        this.isBack = false;    // ⭐ 新增：是否為 backward
+        // 狀態變數 (封裝在執行個體內)
+        this.currentStep = 1;
+        this.totalSteps = $(`${this.stepsId} li`).length;
+        this.stepTypes = {};
+        this.stepHooks = {}; // { stepIndex: { beforeNext: [], afterLoad: [], ... } }
+        this.plugins = [];
+
+        // ⭐ 初始化私有事件表
+        privateState.set(this, {
+            handlers: {}
+        });
+        this.init();
+    }
+
+    useStep(stepIndex, hooks) {
+        if (!this.stepHooks[stepIndex]) this.stepHooks[stepIndex] = {};
+        Object.keys(hooks).forEach(hookName => {
+            if (!this.stepHooks[stepIndex][hookName]) this.stepHooks[stepIndex][hookName] = [];
+            this.stepHooks[stepIndex][hookName].push(hooks[hookName]);
+        });
+    }
+
+    // 外部簡化調用
+    beforeNext(fn) { _on(this, WizardHook.BEFORE_NEXT, fn); }
+    beforePrev(fn) { _on(this, WizardHook.BEFORE_PREV, fn); }
+    afterLoad(fn) { _on(this, WizardHook.AFTER_LOAD, fn); }
+    onLeave(fn) { _on(this, WizardHook.ON_LEAVE, fn); }
+
+
+
+
+    init() {
+        // 載入第一步
+        loadStep(this, this.currentStep, false);
+
+        // 綁定「下一步」
+        $(this.nextBtnId).off("click").on("click", () => {
+            this.next();
+        });
+
+        // 綁定「上一步」
+        $(this.prevBtnId).off("click").on("click", () => {
+            this.prev();
+        });
+
+        // 綁定步驟點擊 
+
+        $(`${this.stepsId} li`).off("click").on("click", (e) => {
+            // 注意：用了箭頭函數，要取得點擊的元素請用 e.currentTarget
+            const $el = $(e.currentTarget);
+            const index = $el.data("step");
+
+            if (index === undefined || index === this.currentStep) return;
+
+            this.isBack = index < this.currentStep;
+            this.currentStep = index;
+            const type = this.isBack ? "" : this.stepTypes[this.currentStep - 1] || "";
+
+            // 呼叫私有函數 loadStep
+            loadStep(this, this.currentStep, type, this.isBack == true ? false : true);
+        });
+
+        $(`${this.stepsId} .step-badge`).hide();
+
+    }
+
+    async next(extraData = null, callback = null) {
+        if (!await runGuards("next")) return;
+        const val = getRedirectData(this); // ⭐ 改這裡
+        const oldVal = this.stepRedirect[this.currentStep]; //找舊的
+        // ⭐ 比對整包條件
+        const oldcompareJObject = mergeToJson(oldVal)
+        const compareJObject = mergeToJson(val, extraData)
+
+        let shouldClearData = false;
+        if (!this.isBack && oldVal && !isSameRedirectData(oldcompareJObject, compareJObject)) {
+            const ok = confirm("條件已改變，是否繼續？");
+            if (!ok) {
+                return;
+            }
+            else {
+                shouldClearData = true;
+            }
+        }
+
+        // ⭐ 記錄條件
+        this.stepRedirect[this.currentStep] = JSON.parse(JSON.stringify(compareJObject));
+        this.stepTypes[this.currentStep] = val;
+        updateStepBadge(this.currentStep);
+
+
+        if (this.currentStep < this.totalSteps) {
+            this.isBack = false;
+            this.currentStep++;
+            // ⭐ 傳整包 JSON 給後端
+            loadStep(this, this.currentStep, JSON.stringify(val), shouldClearData, extraData, callback);
+        } else {
+            alert("流程完成!");
+        }
+    }
+
+    async prev() {
+        if (!await runGuards("prev")) return;
+
+        if (this.currentStep > 1) {
+            this.currentStep--;
+            this.isBack = true; // ⭐ backward 不比對 pageredirect
+            // ⭐ backward 不帶條件
+            loadStep(this, this.currentStep, this.isBack == true ? false : true);
+        }
+    }
+
+
+    getStepValue(stepIndex, fieldName) {
+        const stepData = window.vm?.get("Step" + stepIndex)
+        return stepData?.[fieldName] ?? null;
+    }
+
+    bindTestButtons() {
+        const self = this;
+
+        $("#testBtn1").off("click").on("click", function () {
+
+            // ⭐ 設定條件1
+            $(`${self.containerId} [name="customerId"]`).val("1001");
+            $(`${self.containerId} [name="type"]`).val("A");
+
+            // ⭐ 觸發 change（避免 select2 / validation 問題）
+            $(`${self.containerId} [name="type"]`).trigger("change");
+
+            // ⭐ 模擬下一步
+            self.next();
+        });
+
+        $("#testBtn2").off("click").on("click", function () {
+
+            // ⭐ 設定條件2
+            $(`${self.containerId} [name="customerId"]`).val("2002");
+            $(`${self.containerId} [name="type"]`).val("B");
+
+            $(`${self.containerId} [name="type"]`).trigger("change");
+
+            self.next();
+        });
+    }
+
+}
