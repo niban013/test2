@@ -1,0 +1,1242 @@
+  // ================== 私有欄位 WeakMap ==================
+    const _scopedData = new WeakMap();
+    const _watchers = new WeakMap();
+    const _computed = new WeakMap();
+    const _computedCache = new WeakMap();
+    const _dirty = new WeakMap();
+    const _validators = new WeakMap();
+    const _customData = new WeakMap();
+    const _utils = new WeakMap();
+    const _pageMetadata = new WeakMap();
+	const _proxyCache = new WeakMap();
+     
+    class PageVM {
+        constructor() {
+		    this._watchQueue = new Map(); // ⭐ 改這裡
+            this._flushing = false;         // ⭐ flush 狀態
+            this.forms = [];
+            // 將路徑存入私有 WeakMap
+            _pageMetadata.set(this, {
+                path: typeof window !== 'undefined' ? window.location.pathname : ''
+            });
+ 
+
+this._flushQueue = () => {
+     if (this._flushing) return;
+
+    this._flushing = true;
+
+    Promise.resolve().then(() => {
+       for (const job of this._watchQueue.values()) {
+    job.fn(job.val, job.old);
+}
+
+this._watchQueue.clear();
+		
+		
+        this._flushing = false;
+    });
+};
+this._matchPath = (changed, watch) => {
+    if (changed === watch) return true;
+
+    // ✅ deep watch: user 會抓 user.xxx
+    if (changed.startsWith(watch + ".")) return true;
+
+    // ✅ wildcard: user.*
+    if (watch.endsWith(".*")) {
+        const base = watch.slice(0, -2);
+        return changed.startsWith(base + ".");
+    }
+
+    return false;
+};
+            // 初始化 WeakMap 儲存空物件
+            const maps = [_scopedData, _watchers, _computed, _computedCache, _dirty, _validators, _customData,_proxyCache];
+            maps.forEach(m => m.set(this, {}));
+            const utils = {
+				getNested: (obj, path) => {
+					if (!obj || !path) return undefined;
+
+					return path.split(".").reduce((t, k) => {
+						return (t && typeof t === "object") ? t[k] : undefined;
+					}, obj);
+				},
+
+				setNested: (obj, path, value) => {
+					if (!obj) return;
+
+					const keys = path.split(".");
+					let t = obj;
+
+					keys.forEach((k, i) => {
+						if (i === keys.length - 1) {
+							t[k] = value;
+						} else {
+							if (!t[k] || typeof t[k] !== "object") {
+								t[k] = {};
+							}
+							t = t[k];
+						}
+					});
+				},
+
+				flatten: (obj, prefix = "", res = {}) => {
+					const entries = Object.entries(obj || {});
+
+					if (entries.length === 0 && prefix) {
+						res[prefix] = obj;
+						return res;
+					}
+
+					entries.forEach(([k, v]) => {
+						const path = prefix ? `${prefix}.${k}` : k;
+
+						const isObj =
+							v !== null &&
+							typeof v === "object" &&
+							!(v instanceof File) &&
+							!Array.isArray(v);
+
+						if (isObj) {
+							utils.flatten(v, path, res); // ✔ recursion OK
+						} else {
+							res[path] = v;
+						}
+					});
+
+					return res;
+				}
+			};
+            // ================== 用 WeakMap 實作工具函數 ==================
+            _utils.set(this, utils);
+        }
+
+        // ================= API =================
+        get(tabKey, fieldPath) {
+            const data = this.ensureScope(tabKey);
+            const { getNested } = _utils.get(this);
+            return fieldPath ? getNested(data, fieldPath) : data;
+        }
+       set(tabKey, fieldPath, value) {
+    const proxy = this[tabKey];
+    if (!proxy) return;
+
+    const keys = fieldPath.split(".");
+    let target = proxy;
+
+  // ⭐ 一層一層走 Proxy（關鍵）
+    for (let i = 0; i < keys.length - 1; i++) {
+
+        const k = keys[i];
+
+        // ✅ ⭐ 新增：自動補中間層
+        if (!target[k] || typeof target[k] !== "object") {
+            target[k] = {}; // 👉 會觸發 Proxy（重點）
+        }
+
+        target = target[k];
+    }
+
+    const lastKey = keys[keys.length - 1];
+
+    console.log("🟡 SET (proxy path)");
+    console.log("  target:", target);
+    console.log("  key:", lastKey);
+    console.log("  value:", value);
+
+    target[lastKey] = value; // ⭐ 這行才會觸發 Proxy
+}
+        dump(tabKey) {
+            const data = this.get(tabKey);
+            return data ? _utils.get(this).flatten(data) : {};
+        }
+        getPagePath() {
+            return _pageMetadata.get(this)?.path || '';
+        }
+        getFlattenData(tabKey) {
+            return this.dump(tabKey);
+        }
+
+        addValidator(tabKey, fieldPath, fn) {
+            const val = _validators.get(this);
+            if (!val[tabKey]) val[tabKey] = {};
+            if (!val[tabKey][fieldPath]) val[tabKey][fieldPath] = [];
+            val[tabKey][fieldPath].push(fn);
+        }
+
+        getValidators(tabKey, fieldPath) {
+            const { getNested } = _utils.get(this);
+            return getNested(_validators.get(this)[tabKey], fieldPath) || [];
+        }
+
+
+
+        ensureScope(tabKey) {
+            if (!tabKey) return null;
+            const maps = [_scopedData, _dirty, _watchers, _computed, _computedCache, _validators, _customData,_proxyCache];
+            maps.forEach(s => {
+                const map = s.get(this);
+                if (!map[tabKey]) map[tabKey] = (s === _dirty) ? new Set() : {};
+            });
+            return _scopedData.get(this)[tabKey];
+        }
+
+        // ================= register =================
+        register(form) {
+            this.forms = this.forms.filter(f => f.key !== form.key);
+            this.forms.push(form);
+
+            const key = form.key;
+			
+			  this._currentForm = form;
+			   form._unwatchList = [];
+            this.ensureScope(key);
+            const { getNested, setNested } = _utils.get(this);
+   
+            const makeReactive = (obj, path = []) => {
+                if (typeof obj !== "object" || obj === null || obj instanceof File) return obj;
+                if (_proxyCache.has(obj)) return _proxyCache.get(obj);
+
+                const proxy = new Proxy(obj, {
+                    set: (target, prop, value) => {
+    const oldValue = target[prop];
+  if (oldValue === value) return true;
+    const fullPath = [...path, prop].join(".");
+
+    console.log("🔴 PROXY TRIGGER");
+    console.log("  fullPath:", fullPath);
+    console.log("  old:", oldValue, "new:", value);
+
+    target[prop] =
+        (typeof value === "object" && value !== null && !(value instanceof File))
+            ? makeReactive(value, [...path, prop])
+            : value;
+
+    _dirty.get(this)[key].add(fullPath);
+ 
+_computedCache.get(this)[key] = {};
+
+
+// ⭐ watcher 取得（新版 Map）
+    // =========================
+	
+	
+    const bucket = _watchers.get(this)?.[key]?.[fullPath];
+
+    console.log("  matched watchers:", bucket);
+
+    if (!bucket || !bucket.fns) return true;
+
+    // =========================
+    // ⭐ batch queue（核心）
+    // =========================
+    if (!this._watchQueue) this._watchQueue = new Set();
+
+   const queue = this._watchQueue;
+
+for (const [fn, { handler }] of bucket.fns) {
+    queue.set(fn, {
+        fn: handler,
+        val: target[prop],
+        old: oldValue
+    });
+}
+
+    this._flushQueue();
+
+
+    return true;
+},
+                    get: (target, prop) => {
+                        // computed 懶計算
+                        if (path.length === 0 && _computed.get(this)[key][prop]) {
+                            const cache = _computedCache.get(this)[key];
+                            if (cache[prop] === undefined) {
+                                cache[prop] = _computed.get(this)[key][prop].call(proxy);
+                            }
+                            return cache[prop];
+                        }
+                        const val = target[prop];
+                        return makeReactive(val, [...path, prop]);
+                    },
+                    deleteProperty: (target, prop) => {
+                        const fullPath = [...path, prop].join(".");
+                        if (prop in target) {
+                            delete target[prop];
+                            _dirty.get(this)[key].add(fullPath);
+                            _computedCache.get(this)[key] = {};
+                        }
+                        return true;
+                    }
+                });
+
+                _proxyCache.set(obj, proxy);
+                return proxy;
+            };
+
+            Object.entries(form.fieldCache || {}).forEach(([p, v]) => setNested(_scopedData.get(this)[key], p, v));
+
+            const rootProxy = makeReactive(_scopedData.get(this)[key]);
+            form.proxy = rootProxy;
+            this[key] = rootProxy;
+			  form.destroy = () => {
+        console.log("💥 FORM DESTROY", form.key);
+
+        // 清掉所有 watcher
+        (form._unwatchList || []).forEach(fn => fn());
+        form._unwatchList = [];
+
+        // 清掉 vm proxy（可選）
+        delete this[form.key];
+		this.forms = this.forms.filter(f => f !== form); // ⭐ 防記憶體殘留
+    };
+			    this._currentForm = null;
+
+			console.log("🔵 REGISTER DONE");
+console.log("  tabKey:", key);
+console.log("  proxy:", this[key]);
+console.log("  raw data:", _scopedData.get(this)[key]);
+        }
+
+        // ================= watch/computed =================
+$watch(tabKey, path, fn, options = {}) {
+    this.ensureScope(tabKey);
+
+    const store = _watchers.get(this);
+    if (!store[tabKey]) store[tabKey] = {};
+    if (!store[tabKey][path]) {
+        store[tabKey][path] = {
+            fns: new Map(),
+            dirty: false
+        };
+    }
+
+    const bucket = store[tabKey][path];
+
+    // =========================
+    // ❌ 1. duplicate handler 去重
+    // =========================
+    if (bucket.fns.has(fn)) {
+        return bucket.fns.get(fn).unwatch;
+    }
+
+    let oldVal = this.get(tabKey, path);
+
+    let unwatch;
+
+    const handler = (val, oldVal) => {
+        fn(val, oldVal);
+
+        if (options.once) {
+            unwatch();
+        }
+    };
+
+    // =========================
+    // ✅ register
+    // =========================
+    bucket.fns.set(fn, { handler });
+
+    // =========================
+    // cleanup function
+    // =========================
+    unwatch = () => {
+        bucket.fns.delete(fn);
+
+        if (bucket.fns.size === 0) {
+            delete store[tabKey][path];
+        }
+
+        console.log("🧹 UNWATCH", tabKey, path);
+    };
+
+    // =========================
+    // form auto cleanup
+    // =========================
+    const form = this._currentForm;
+    if (form) {
+        if (!form._unwatchList) form._unwatchList = [];
+        form._unwatchList.push(unwatch);
+    }
+
+    bucket.fns.set(fn, { handler, unwatch });
+
+    return unwatch;
+}
+
+ 
+
+        $computed(tabKey, name, fn) {
+            this.ensureScope(tabKey);
+            _computed.get(this)[tabKey][name] = fn;
+        }
+
+        $dirty(tabKey) {
+            return Array.from((_dirty.get(this)[tabKey] || []));
+        }
+
+        $resetDirty(tabKey) {
+            if (_dirty.get(this)[tabKey]) _dirty.get(this)[tabKey].clear();
+        }
+
+        setCustom(tabKey, key, value) {
+            this.ensureScope(tabKey);
+            _customData.get(this)[tabKey][key] = value;
+        }
+
+        getCustom(tabKey, key) {
+            return _customData.get(this)?.[tabKey]?.[key];
+        }
+
+        $validator(tabKey, path, fn) {
+            this.ensureScope(tabKey);
+            const { getNested, setNested } = _utils.get(this);
+            const valStore = _validators.get(this)[tabKey];
+            let handlers = getNested(valStore, path) || [];
+            if (!Array.isArray(handlers)) handlers = [];
+            handlers.push(fn);
+            setNested(valStore, path, handlers);
+        }
+
+        // ================= File =================
+        setFile(tabKey, path, file) {
+            const { getNested, setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            let existing = getNested(target, path);
+            if (!Array.isArray(existing)) {
+                setNested(target, path, []);
+                existing = getNested(target, path);
+            }
+            existing.push(file);
+        }
+
+        removeFile(tabKey, path, identifier) {
+            const { getNested, setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            let files = getNested(target, path);
+            if (!Array.isArray(files)) return;
+
+            if (typeof identifier === "number") {
+                files.splice(identifier, 1);
+            } else {
+                const filtered = files.filter(f => (f.name || f.filename) !== identifier);
+                setNested(target, path, filtered);
+            }
+
+            files = getNested(target, path);
+            if (!files || files.length === 0) setNested(target, path, []);
+        }
+
+        clearFiles(tabKey, path) {
+            const { setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            setNested(target, path, []);
+        }
+
+        async getFilesByField(tabKey, fieldPath) {
+            const { getNested, setNested } = _utils.get(this);
+            const target = this[tabKey] || this.ensureScope(tabKey);
+            let files = getNested(target, fieldPath);
+            if (!files) files = [];
+            if (!Array.isArray(files)) files = [files];
+
+            const hasRealFile = files.some(f => f instanceof File || (f?.file instanceof File));
+            if (hasRealFile) return files.map(f => f instanceof File ? f : f.file).filter(Boolean);
+
+            const fetchBackendFile = async (tabKey, path) => {
+                const safePath = encodeURIComponent(path);
+                const res = await fetch(`/api/file/${tabKey}/${safePath}`);
+                if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+                const blob = await res.blob();
+                const fileName = path.split("/").pop() || path.split(".").pop();
+                return { name: fileName, type: blob.type, blob };
+            };
+
+            try {
+                const backendData = await fetchBackendFile(tabKey, fieldPath);
+                const newFile = new File([backendData.blob], backendData.name, { type: backendData.type });
+                setNested(target, fieldPath, [newFile]);
+                return [newFile];
+            } catch (err) {
+                let fallback = getNested(target, fieldPath);
+                if (!fallback) return [];
+                if (!Array.isArray(fallback)) fallback = [fallback];
+                return fallback;
+            }
+        }
+
+        getFilename(tabKey, path) {
+            const { getNested } = _utils.get(this);
+            const files = getNested(this.ensureScope(tabKey), path);
+            if (!files) return "";
+            if (Array.isArray(files)) return files.map(f => f?.name || f?.filename).filter(Boolean).join(", ");
+            return files?.name || files?.filename || "";
+        }
+
+        async previewFile(tabKey, file, fieldPath) {
+            if (typeof file === "string") file = { name: file, lazy: true };
+            if (!file) return;
+
+            // lazy load
+            if (file.lazy && fieldPath) {
+                const realFile = await this.getFilesByField(tabKey, fieldPath);
+                if (!realFile.length) { alert("檔案載入失敗"); return; }
+                file = realFile[0];
+            }
+
+            const win = window.open("", "_blank", "width=1000,height=700");
+            if (!win) { alert("請允許彈出視窗"); return; }
+            const url = URL.createObjectURL(file);
+
+            const _initPreviewInteraction = (type, targetId, sliderId, options = {}) => {
+                const el = win.document.getElementById(targetId);
+                const slider = win.document.getElementById(sliderId);
+                if (!el || !slider) return;
+
+                let scale = 1, tx = 0, ty = 0, dragging = false, startX, startY;
+                const min = options.minScale || 0.5, max = options.maxScale || 5, step = options.step || 0.01;
+
+                const apply = () => {
+                    el.style.transform = type === "image"
+                        ? `scale(${scale}) translate(${tx}px,${ty}px)`
+                        : `scale(${scale})`;
+                    if (type === "pdf") el.style.transformOrigin = "top left";
+                };
+
+                slider.min = min; slider.max = max; slider.step = step; slider.value = scale;
+                slider.oninput = e => { scale = parseFloat(e.target.value); apply(); };
+
+                if (type === "image") {
+                    el.style.cursor = "grab";
+                    el.onwheel = e => { e.preventDefault(); scale += e.deltaY * -0.001; scale = Math.min(Math.max(min, scale), max); apply(); slider.value = scale; };
+                    el.onmousedown = e => { dragging = true; startX = e.clientX - tx; startY = e.clientY - ty; el.style.cursor = "grabbing"; };
+                    win.document.onmouseup = () => { dragging = false; el.style.cursor = "grab"; };
+                    win.document.onmousemove = e => { if (!dragging) return; tx = e.clientX - startX; ty = e.clientY - startY; apply(); };
+                }
+                if (type === "pdf" && options.zoomInId && options.zoomOutId) {
+                    const zin = win.document.getElementById(options.zoomInId);
+                    const zout = win.document.getElementById(options.zoomOutId);
+                    if (zin) zin.onclick = () => { scale = Math.min(scale + 0.1, max); apply(); slider.value = scale; };
+                    if (zout) zout.onclick = () => { scale = Math.max(scale - 0.1, min); apply(); slider.value = scale; };
+                }
+            };
+
+            let content = "";
+            if (file.type.startsWith("image/")) content = `
+            <div style="display:flex; flex-direction:column; align-items:center; width:100%; height:100%;">
+                <img id="previewImg" src="${url}" style="max-width:100%; max-height:80%; cursor:grab; transform:scale(1);" />
+                <input type="range" id="imgZoom" min="0.5" max="5" step="0.01" value="1" style="width:80%; margin-top:5px;">
+            </div>`;
+            else if (file.type === "application/pdf") content = `
+            <div style="display:flex; flex-direction:column; height:100%; width:100%;">
+                <div style="display:flex; gap:5px; padding:5px; align-items:center;">
+                    <button id="pdfZoomIn">+</button>
+                    <button id="pdfZoomOut">-</button>
+                    <input type="range" id="pdfZoomSlider" min="0.5" max="3" step="0.01" value="1" style="flex:1;">
+                </div>
+                <iframe id="pdfFrame" src="${url}" style="width:100%; flex:1; border:none;"></iframe>
+            </div>`;
+            else { const a = document.createElement("a"); a.href = url; a.download = file.name; a.click(); URL.revokeObjectURL(url); return; }
+
+            win.document.body.style.margin = "0";
+            win.document.body.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column;">
+                <div style="padding:5px; background:#f1f1f1;">${file.name}</div>
+                <div id="content" style="flex:1; display:flex; justify-content:center; align-items:center;">
+                    ${content}
+                </div>
+            </div>`;
+
+            if (file.type.startsWith("image/")) _initPreviewInteraction("image", "previewImg", "imgZoom");
+            else if (file.type === "application/pdf") _initPreviewInteraction("pdf", "pdfFrame", "pdfZoomSlider", { minScale: 0.5, maxScale: 3, step: 0.01, zoomInId: "pdfZoomIn", zoomOutId: "pdfZoomOut" });
+
+            win.addEventListener("beforeunload", () => URL.revokeObjectURL(url));
+        }
+
+        async handleFileInput(tabKey, fieldPath, file, options) {
+            if (!file?.lazy) this.setFile(tabKey, fieldPath, file);
+
+            if (options.inline) {
+                const $group = options.$group;
+                const $previewBtn = $group.find(".preview-btn");
+                const $deleteBtn = $group.find(".delete-btn");
+                const $filenameLabel = $group.find(".filename-label");
+                const $input = options.$input;
+
+                $filenameLabel.text(file.name);
+                $previewBtn.show();
+                $deleteBtn.show();
+
+                $deleteBtn.off("click").on("click", () => {
+                    $input.val(null);
+                    $filenameLabel.text("未選檔案");
+                    $previewBtn.hide();
+                    $deleteBtn.hide();
+                    this.removeFile(tabKey, fieldPath, file.name);
+                });
+
+                $previewBtn.off("click").on("click", async () => {
+                    await this.previewFile(tabKey, file, fieldPath);
+                });
+            }
+            else if (options.modal) {
+                const $fileList = options.$fileList;
+                const $li = $(`
+                <li class="list-group-item d-flex justify-content-between align-items-center flex-column align-items-start">
+                    <div class="d-flex justify-content-between w-100 align-items-center">
+                        <span>${file.name} (${Math.round(file.size / 1024)} KB)</span>
+                        <button type="button" class="btn btn-sm btn-danger btn-delete">刪除</button>
+                    </div>
+                    <div class="file-preview mt-2"></div>
+                </li>
+            `);
+                $fileList.append($li);
+                $li.find(".btn-delete").click(() => { $li.remove(); this.removeFile(tabKey, fieldPath); });
+            }
+        }
+
+
+    }
+    ====================
+
+    
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>PageVM Stress Test</title>
+</head>
+<body>
+
+<h2>🔥 PageVM Stress Test</h2>
+<button onclick="runAllTests()">Run Stress Tests</button>
+
+<pre id="log" style="background:#000;color:#0f0;padding:10px;height:600px;overflow:auto;"></pre>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="./pagevm.js"></script>
+<script>
+//////////////////////////////////////////////////////
+// ⭐ 貼上你的 PageVM 在這裡
+//////////////////////////////////////////////////////
+
+
+function createVM() {
+    const vm = new PageVM();
+
+    vm.register({
+        key: "tab1",
+        fieldCache: {
+            "user.name": "John",
+            "user.age": 20
+        }
+    });
+vm.register({
+    key: "tab2",
+    fieldCache: {
+        "user.age": 20,
+        "user.name": "John"
+    }
+});
+    return vm;
+}
+ 
+
+function log(msg) {
+    console.log(msg);
+    document.getElementById("log").textContent += msg + "\n";
+}
+
+//////////////////////////////////////////////////////
+// 🔥 1. Deep Dynamic Creation
+//////////////////////////////////////////////////////
+function test_dynamic_nested_creation() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== dynamic nested creation ===");
+//vm.set("tab1", "x.y.z.k", 1);
+
+//console.log(vm.tab1.x.y.z.k);       // 👉 應該 1
+//console.log(vm.get("tab1", "x.y.z.k")); // 👉 應該 1
+  vm.set("tab1", "x.y.z.k", 1);
+
+log(vm.get("tab1", "x.y.z.k") === 1 ? "✅ PASS" : "❌ FAIL1"); 
+}
+
+//////////////////////////////////////////////////////
+// 🔥 2. Computed Chain
+//////////////////////////////////////////////////////
+function test_computed_chain() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== computed chain ===");
+
+    let c1 = 0, c2 = 0;
+
+    vm.$computed("tab1", "c1", function () {
+        c1++;
+        return this.user.name;
+    });
+
+    vm.$computed("tab1", "c2", function () {
+        c2++;
+        return this.c1 + "!";
+    });
+
+    vm.tab1.c2;
+    vm.tab1.c2;
+
+    log(c1 === 1 && c2 === 1 ? "✅ cache OK" : "❌ FAIL2");
+
+    vm.set("tab1", "user.name", "AAA");
+    vm.tab1.c2;
+
+    log(c1 === 2 && c2 === 2 ? "✅ chain OK" : "❌ FAIL3");
+}
+
+//////////////////////////////////////////////////////
+// 🔥 3. Circular Dependency（應該避免 crash）
+//////////////////////////////////////////////////////
+function test_computed_circular() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== computed circular ===");
+
+    try {
+        vm.$computed("tab1", "a", function () {
+            return this.b;
+        });
+
+        vm.$computed("tab1", "b", function () {
+            return this.a;
+        });
+
+        vm.tab1.a;
+
+        log("⚠️ 無防護（應避免）");
+    } catch {
+        log("✅ PASS（有防護）");
+    }
+}
+
+//////////////////////////////////////////////////////
+// 🔥 4. Massive Data (1000 fields)
+//////////////////////////////////////////////////////
+function test_massive_data() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== massive data ===");
+
+    for (let i = 0; i < 1000; i++) {
+        vm.set("tab1", "mass.f" + i, i);
+    }
+
+    const flat = vm.getFlattenData("tab1");
+
+    log(Object.keys(flat).length > 900 ? "✅ PASS" : "❌ FAIL4");
+}
+
+//////////////////////////////////////////////////////
+// 🔥 5. Watcher Storm
+//////////////////////////////////////////////////////
+function test_watcher_storm() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== watcher storm ===");
+
+    let count = 0;
+
+    for (let i = 0; i < 50; i++) {
+        vm.$watch("tab1", "user.name", () => count++);
+    }
+
+    vm.set("tab1", "user.name", "storm");
+
+    setTimeout(() => {
+        log(count === 50 ? "✅ PASS" : "❌ FAIL5");
+    }, 0);
+}
+
+async function once(){
+ const vm = createVM(); // ⭐ 重建
+    log("=== watcher once ===");
+
+   let count = 0;
+
+vm.$watch("tab1", "user.age", () => count++, { once: true });
+
+vm.set("tab1", "user.age", 1);
+vm.set("tab1", "user.age", 2);
+
+await Promise.resolve();
+
+console.log("once:", count);
+}
+async function same_value_skip(){ 
+    log("=== watcher same_value_skip ===");
+
+    let count = 0;
+
+vm.$watch("tab1", "user.age", () => count++);
+
+vm.set("tab1", "user.age", 20); // same value
+
+await Promise.resolve();
+
+console.log("same:", count);
+}
+async function formautocleanup() {
+
+    const vm = createVM();
+    log("=== watcher formautocleanup ===");
+
+    let count = 0;
+
+    const form = { key: "tab1", _unwatchList: [] };
+    vm._currentForm = form;
+
+    // ⭐ 1. 註冊 watcher
+    vm.$watch("tab1", "user.age", () => count++);
+
+    // ⭐ 檢查 watcher 是否被註冊進 form
+    if (form._unwatchList.length !== 1) {
+        log("❌ FAIL: watcher 沒綁到 form");
+        return;
+    }
+
+    // ⭐ 2. destroy
+    form._unwatchList.forEach(fn => fn());
+
+    // ⭐ destroy 後應該清空
+    if (form._unwatchList.length !== 1) {
+        // 注意：這裡通常不會變（因為你沒清 array）
+        // 所以這裡只是提示，不當作 fail
+        log("⚠️ 注意: unwatchList 未清空（可選優化）");
+    }
+
+    // ⭐ 3. trigger
+    vm.set("tab1", "user.age", 123);
+
+    await Promise.resolve();
+
+    // ⭐ 4. 核心驗證
+    if (count === 0) {
+        log("✅ PASS: watcher 已正確清除");
+    } else {
+        log("❌ FAIL: watcher 未清除，count = " + count);
+    }
+}
+
+async function unwatch() {
+    log("=== watcher unwatch ===");
+
+  let count = 0;
+
+const stop = vm.$watch("tab1", "user.age", () => count++);
+
+vm.set("tab1", "user.age", 1);
+await Promise.resolve();
+
+stop();
+
+vm.set("tab1", "user.age", 2);
+await Promise.resolve();
+
+console.log("unwatch:", count);
+}
+
+async function test_dup() {
+    log("=== watcher dup ===");
+
+    let count = 0;
+
+function fn() {
+    count++;
+}
+
+vm.$watch("tab1", "user.age", fn);
+vm.$watch("tab1", "user.age", fn); // duplicate
+
+vm.set("tab1", "user.age", 200);
+
+await Promise.resolve();
+
+console.log("duplicate:", count);
+}
+
+async function test_batch() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== watcher batch ===");
+
+   let calls = [];
+
+vm.$watch("tab1", "user.age", (v, o) => {
+    calls.push([v, o]);
+});
+
+for (let i = 0; i < 5; i++) {
+    vm.set("tab1", "user.age", i);
+}
+
+await Promise.resolve();
+
+console.log("batch:", calls);
+}
+
+async function test_dup() {
+    log("=== watcher dup ===");
+
+    let count = 0;
+
+function fn() {
+    count++;
+}
+
+vm.$watch("tab1", "user.age", fn);
+vm.$watch("tab1", "user.age", fn); // duplicate
+
+vm.set("tab1", "user.age", 200);
+
+await Promise.resolve();
+
+console.log("duplicate:", count);
+}
+
+async function runWatchSpec() {
+ const vm = createVM(); // ⭐ 重建
+    console.log("=== 🧪 WATCH SPEC TEST START ===");
+
+    const wait = () => Promise.resolve();
+    const results = [];
+
+    function assert(name, actual, expected) {
+        const pass = JSON.stringify(actual) === JSON.stringify(expected);
+        results.push({ name, pass, actual, expected });
+
+        console.log(
+            pass ? `✅ PASS: ${name}` : `❌ FAIL: ${name}`,
+            { actual, expected }
+        );
+    }
+ 
+    // =========================
+    // 1️⃣ 基本觸發
+    // =========================
+    let log1 = [];
+    vm.$watch("tab1", "user.age", (v, o) => log1.push([v, o]));
+
+    vm.set("tab1", "user.age", 30);
+    await wait();
+
+    assert("basic trigger", log1, [[30, 20]]);
+
+    // =========================
+    // 2️⃣ 去重（同 fn）
+    // =========================
+    let log2 = [];
+    function fn(v, o) { log2.push([v, o]); }
+
+    vm.$watch("tab1", "user.age", fn);
+    vm.$watch("tab1", "user.age", fn); // duplicate
+
+    vm.set("tab1", "user.age", 40);
+    await wait();
+
+    // 👉 只應該觸發一次
+    assert("dedupe", log2.length, 1);
+
+    // =========================
+    // 3️⃣ same value 不觸發
+    // =========================
+    let log3 = [];
+    vm.$watch("tab1", "user.age", (v,o)=>log3.push([v,o]));
+
+    vm.set("tab1", "user.age", 40); // same
+    await wait();
+
+    assert("same value skip", log3.length, 0);
+
+    // =========================
+    // 4️⃣ once
+    // =========================
+    let log4 = [];
+    vm.$watch("tab1", "user.age", (v,o)=>log4.push([v,o]), { once: true });
+
+    vm.set("tab1", "user.age", 50);
+    vm.set("tab1", "user.age", 60);
+    await wait();
+
+    assert("once", log4.length, 1);
+
+    // =========================
+    // 5️⃣ unwatch
+    // =========================
+    let log5 = [];
+    const stop = vm.$watch("tab1", "user.age", (v,o)=>log5.push([v,o]));
+
+    vm.set("tab1", "user.age", 70);
+    await wait();
+
+    stop(); // 🔥 remove
+
+    vm.set("tab1", "user.age", 80);
+    await wait();
+
+    assert("unwatch", log5.length, 1);
+
+    // =========================
+    // 6️⃣ batch（多次 set）
+    // =========================
+    let log6 = [];
+    vm.$watch("tab1", "user.age", (v,o)=>log6.push([v,o]));
+
+    for (let i = 0; i < 5; i++) {
+        vm.set("tab1", "user.age", i);
+    }
+
+    await wait();
+
+    // 👉 有 queue：應該只 1 次，值 = 4
+    // 👉 沒 queue：會是 5 次
+    assert("batch final value", log6.at(-1), [4, 3]);
+
+    // =========================
+    // 結果總結
+    // =========================
+    console.log("=== 📊 RESULT SUMMARY ===");
+
+    const passCount = results.filter(r => r.pass).length;
+    const total = results.length;
+
+    console.table(results);
+    console.log(`🎯 ${passCount}/${total} PASS`);
+
+    if (passCount !== total) {
+        console.warn("⚠️ 有測試沒過，請看 FAIL 項目");
+    } else {
+        console.log("🚀 ALL PASS");
+    }
+}
+//////////////////////////////////////////////////////
+// 🔥 6. Array Extreme Ops
+//////////////////////////////////////////////////////
+function test_array_extreme() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== array extreme ===");
+
+    vm.set("tab1", "arr", []);
+
+    vm.tab1.arr.push(1);
+    vm.tab1.arr.push(2);
+    vm.tab1.arr.unshift(0);
+    vm.tab1.arr.splice(1,1);
+    vm.tab1.arr.pop();
+
+    log(Array.isArray(vm.tab1.arr) ? "✅ PASS" : "❌ FAIL6");
+}
+
+//////////////////////////////////////////////////////
+// 🔥 7. Delete + Recreate Object
+//////////////////////////////////////////////////////
+function test_delete_recreate() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== delete + recreate ===");
+
+    vm.set("tab1", "obj.a", 1);
+
+    delete vm.tab1.obj;
+
+    vm.set("tab1", "obj.b", 2);
+
+    log(vm.get("tab1", "obj.b") === 2 ? "✅ PASS" : "❌ FAIL7");
+}
+
+//////////////////////////////////////////////////////
+// 🔥 8. Async Interleaving
+//////////////////////////////////////////////////////
+function test_async_mix() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== async mix ===");
+
+    let ok = false;
+
+    vm.$watch("tab1", "user.age", () => ok = true);
+
+    setTimeout(() => {
+        vm.set("tab1", "user.age", 99);
+    }, 10);
+
+    setTimeout(() => {
+        log(ok ? "✅ PASS" : "❌ FAIL8");
+    }, 130);
+}
+
+//////////////////////////////////////////////////////
+// 🔥 9. Flatten Stress
+//////////////////////////////////////////////////////
+function test_flatten_stress() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== flatten stress ===");
+
+    for (let i = 0; i < 200; i++) {
+        vm.set("tab1", `deep${i}.a.b.c`, i);
+    }
+
+    const flat = vm.getFlattenData("tab1");
+
+    log(Object.keys(flat).length > 150 ? "✅ PASS" : "❌ FAIL9");
+}
+
+//////////////////////////////////////////////////////
+// 🔥 10. Symbol + defineProperty
+//////////////////////////////////////////////////////
+function test_symbol_define() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== symbol + defineProperty ===");
+
+    try {
+        const sym = Symbol("s");
+        Object.defineProperty(vm.tab1, sym, {
+            value: 123,
+            configurable: true
+        });
+
+        log("✅ PASS");
+    } catch {
+        log("❌ FAIL10");
+    }
+}
+
+//////////////////////////////////////////////////////
+// 🔥 11. Mixed File + Data
+//////////////////////////////////////////////////////
+function test_file_mix() {
+ const vm = createVM(); // ⭐ 重建
+    log("=== file mix ===");
+
+    const file = new File(["abc"], "a.txt");
+
+    vm.setFile("tab1", "upload.files", file);
+    vm.set("tab1", "upload.desc", "test");
+
+    const flat = vm.getFlattenData("tab1");
+
+    log(flat["upload.desc"] ? "✅ PASS" : "❌ FAIL11");
+}
+
+async function test_deep_watch_duplicate() {
+
+    const vm = createVM();
+const results = [];
+	 function assert(name, actual, expected) {
+        const pass = JSON.stringify(actual) === JSON.stringify(expected);
+        results.push({ name, pass, actual, expected });
+
+        console.log(
+            pass ? `✅ PASS: ${name}` : `❌ FAIL: ${name}`,
+            { actual, expected }
+        );
+    }
+  const wait = () => Promise.resolve();
+    let count = 0;
+
+    vm.$watch("tab1", "user.*", () => {
+        count++;
+    });
+
+    vm.set("tab1", "user.name", "A");
+
+    await wait();
+
+    assert("deep once", count, 1);
+}
+async function test_once_race() {
+
+    const vm = createVM();
+	const results = [];
+	 function assert(name, actual, expected) {
+        const pass = JSON.stringify(actual) === JSON.stringify(expected);
+        results.push({ name, pass, actual, expected });
+
+        console.log(
+            pass ? `✅ PASS: ${name}` : `❌ FAIL: ${name}`,
+            { actual, expected }
+        );
+    }
+  const wait = () => Promise.resolve();
+    let log = [];
+
+    vm.$watch("tab1", "user.age", (v) => {
+        log.push(v);
+    }, { once: true });
+
+    vm.set("tab1", "user.age", 10);
+    vm.set("tab1", "user.age", 20);
+
+    await wait();
+
+    assert("once length", log.length, 1);
+    assert("once value", log[0], 20);
+}
+async function test_computed_watch_conflict() {
+
+    const vm = createVM(); 
+	const results = [];
+	 function assert(name, actual, expected) {
+        const pass = JSON.stringify(actual) === JSON.stringify(expected);
+        results.push({ name, pass, actual, expected });
+
+        console.log(
+            pass ? `✅ PASS: ${name}` : `❌ FAIL: ${name}`,
+            { actual, expected }
+        );
+    }
+  const wait = () => Promise.resolve();
+    let log = [];
+
+    vm.$computed("tab1", "full", function () {
+        log.push("computed");
+        return this.user.name;
+    });
+
+    vm.$watch("tab1", "full", (v) => {
+        log.push("watch:" + v);
+    });
+
+    vm.set("tab1", "user.name", "A");
+
+    await wait();
+
+    assert("order", log.join(","), "computed,watch:A");
+}
+
+//////////////////////////////////////////////////////
+// 🚀 RUN
+//////////////////////////////////////////////////////
+function runAllTests() {
+
+    document.getElementById("log").textContent = "";
+  //test_computed_chain();
+   //test_dynamic_nested_creation();
+   
+  // test_computed_circular();
+  //  test_massive_data();
+   // test_watcher_storm();
+   // test_array_extreme();
+   // test_delete_recreate();
+   //  test_async_mix();
+   //  test_flatten_stress();
+   //  test_symbol_define();
+  //   test_file_mix();
+	
+		//  formautocleanup().then(() => {
+    // console.log("全部測試完成");
+  //});//
+	// runWatchSpec().then(() => {
+   // console.log("全部測試完成");
+ //});
+  test_computed_watch_conflict().then(() => {
+   console.log("全部測試完成");
+ });
+  
+}
+</script>
+
+</body>
+</html>
