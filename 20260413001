@@ -1,0 +1,535 @@
+@model List<auomvc.Models.Wizard.WizardStepOption>
+
+<div id="app">
+    <div class="wizard-container">
+        <!-- 步驟條主體 -->
+        <div class="wizard-ribbon" :style="{ '--step': currentStep, '--total': steps.length }">
+            <div v-for="step in steps"
+                 :key="step.StepIndex"
+                 class="ribbon-step"
+                 :class="getStepClass(step)" @@click ="goToStep(step.StepIndex)"
+                 style="cursor: pointer;">
+
+                <span class="ribbon-text">{{ step.Title }}</span>
+
+                <!-- ✔ 打勾圓圈 -->
+                <span class="ribbon-check" v-if="step.StepIndex <= currentStep">✔</span>
+            </div>
+
+            <!-- 底部進度列 -->
+            <div class="ribbon-progress-bg">
+                <div class="ribbon-progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Content -->
+    <div id="step-container" class="mt-4" v-html="html"></div>
+
+    <!-- Buttons -->
+    <div class="mt-3 d-flex justify-content-between">
+
+        <!-- 左邊 -->
+        <div>
+            <button v-if="currentStep > 1"
+                    class="btn btn-secondary"
+                    v-on:click="prev">
+                上一步
+            </button>
+        </div>
+
+        <!-- 右邊 -->
+        <div class="d-flex gap-2">
+            <button class="btn btn-dark"
+                    v-on:click="dumpJson">
+                輸出 JSON
+            </button>
+            <button v-if="currentStep < steps.length"
+                    class="btn btn-primary"
+                    v-on:click="next">
+                下一步
+            </button>
+
+            <button v-if="currentStep === steps.length"
+                    class="btn btn-success"
+                    v-on:click="finish">
+                完成
+            </button>
+
+        </div>
+
+    </div>
+</div>
+
+
+<style>
+    :root {
+        --active-color: #005bb7; /* 強調藍 */
+        --inactive-color: #9e9e9e; /* 未選中灰 */
+        --progress-bg: #e0e0e0; /* 進度條底色 */
+    }
+
+    .wizard-container {
+        padding: 0;
+        margin-bottom: 20px;
+    }
+
+    .wizard-ribbon {
+        --step: 1; /* 預設第一步 */
+        --total: 3; /* 預設總數，會被 JS 覆蓋 */
+        position: relative;
+        display: flex;
+        width: 100%;
+        gap: 2px;
+        padding-bottom: 8px;
+    }
+
+    .ribbon-step {
+        position: relative;
+        flex: 1;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--inactive-color);
+        color: white;
+        font-weight: 500;
+        /* 箭頭切割 */
+        clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%, 15px 50%);
+        padding-left: 15px;
+        transition: all 0.3s ease;
+    }
+
+        .ribbon-step:first-child {
+            clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%);
+            padding-left: 0;
+        }
+
+        .ribbon-step:last-child {
+            clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 15px 50%);
+        }
+
+        /* 🔵 當前步驟：變為藍色 */
+        .ribbon-step.active {
+            background: var(--active-color) !important;
+        }
+
+        /* ⚪ 已完成步驟：根據圖片是灰色，但帶有勾勾 */
+        .ribbon-step.done {
+            background: var(--inactive-color);
+        }
+
+    /* ✔ 勾勾樣式 */
+    .ribbon-check {
+        position: absolute;
+        top: 2px;
+        right: 18px;
+        width: 15px;
+        height: 15px;
+        background: white;
+        color: var(--inactive-color);
+        border-radius: 50%;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+    }
+
+    /* 當前步驟的勾勾顏色 */
+    .ribbon-step.active .ribbon-check {
+        color: var(--active-color);
+    }
+
+    /* 底部進度條容器 */
+    .ribbon-progress-bg {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--progress-bg);
+    }
+
+    /* 動態藍色進度條 */
+
+    .ribbon-progress-fill {
+        height: 100%;
+        background: var(--active-color);
+        /* 這裡使用 calc 確保平滑移動 */
+        width: calc((var(--step) / var(--total)) * 100%);
+        transition: width 0.3s ease-in-out;
+    }
+
+    .ribbon-text {
+        font-size: 14px;
+        z-index: 2;
+    }
+</style>
+
+<script src="https://unpkg.com/vue@3"></script>
+<script>
+    const { createApp, ref, reactive, onMounted, nextTick, watch } = Vue;
+
+    createApp({
+        setup() {
+         const dumpJson = () => {
+
+        const data = JSON.parse(JSON.stringify(formData));
+
+        console.log("📦 FINAL JSON:", data);
+
+        alert(JSON.stringify(data, null, 2));
+    };
+            // ⭐ 後端 Steps
+            const steps = ref(@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model)));
+            console.log(steps)
+            // ⭐ Step 控制
+            const currentStep = ref(1);
+            const stepData = ref(null);
+                const fileCache = reactive({
+        steps: {}
+    });
+            // ⭐ Partial HTML
+            const html = ref("");
+
+            // ⭐ 全局資料（跨 Step）
+               const formData = reactive({
+        steps: {}   // ⭐ 所有 step 都放這
+    });
+
+        const onFileChange = (el) => {
+
+        const stepKey = getStepKey();
+        const key = el.dataset.field;
+
+        const file = el.files[0];
+        if (!file) return;
+
+        if (!fileCache.steps[stepKey]) {
+            fileCache.steps[stepKey] = {};
+        }
+
+        fileCache.steps[stepKey][key] = file;
+    };
+        const getStepKey = () => `step${currentStep.value}`;
+
+    const getStepData = () => {
+        const key = getStepKey();
+
+        if (!formData.steps[key]) {
+            formData.steps[key] = {};
+        }
+
+        return formData.steps[key];
+    };
+            // ⭐ 載入 Step（對接你的 Home/Step）
+                const loadStep = async () => {
+
+        const params = new URLSearchParams({
+            stepIndex: currentStep.value,
+            type: null,//JSON.stringify(formData),
+            SendData:null //JSON.stringify(formData)
+        });
+
+        const res = await fetch(`/Home/Step?${params}`);
+        const html = await res.text();
+
+        const container = document.querySelector("#step-container");
+
+        container.innerHTML = html;   // ⭐ MVC PartialView
+
+        nextTick(() => {
+            bindDynamicEvents();
+            restoreData();
+        });
+    };
+
+            const goToStep = (index) => {
+
+        if (!index) {
+            console.warn("step index invalid:", index);
+            return;
+        }
+
+        if (index === currentStep.value) return;
+
+        collectData();
+
+        currentStep.value = Number(index); // 🔥 強制轉數字
+
+        loadStep();
+    };
+        const uploadTempFile = async (file) => {
+
+        const fd = new FormData();
+        fd.append("file", file);
+
+        const res = await fetch("/File/UploadTemp", {
+            method: "POST",
+            body: fd
+        });
+
+        const data = await res.json();
+
+        return data.fileId; // 🔥 回傳唯一ID
+    };
+            // ⭐ 下一步
+            const next = () => {
+                collectData();
+                currentStep.value++;
+                loadStep();
+            };
+
+            // ⭐ 上一步
+            const prev = () => {
+                currentStep.value--;
+                loadStep();
+            };
+
+            // ⭐ 完成
+            const finish = () => {
+                collectData();
+
+                console.log("FINAL DATA", JSON.parse(JSON.stringify(formData)));
+
+                // 你可以接 API
+                // fetch("/Home/Save", { ... })
+            };
+
+            // ⭐ 收集欄位（DynamicField）
+                    const collectData = () => {
+
+        const data = getStepData();
+
+        const els = document.querySelectorAll("#step-container [data-field]");
+
+        els.forEach(el => {
+
+            const key = el.dataset.field;
+
+            if (el.type === "file") return;
+
+            if (el.type === "checkbox") {
+                data[key] = el.checked;
+            }
+            else {
+                data[key] = el.value;
+            }
+        });
+    };
+
+            // ⭐ 回填資料（跨步）
+                   const restoreData = () => {
+
+        const data = getStepData();
+
+        const els = document.querySelectorAll("#step-container [data-field]");
+
+        els.forEach(el => {
+
+            const key = el.dataset.field;
+
+            if (data[key] === undefined) return;
+
+            if (el.type === "checkbox") {
+                el.checked = data[key];
+            }
+            else {
+                el.value = data[key];
+            }
+        });
+    };
+
+            // ⭐ 初始化 DynamicField（你原本的 JS）
+                   const bindDynamicEvents = () => {
+
+        const els = document.querySelectorAll("#step-container [data-field]");
+
+        els.forEach(el => {
+
+            const key = el.dataset.field;
+
+            // 避免重複綁定
+            if (el.dataset.bound === "1") return;
+            el.dataset.bound = "1";
+                el.addEventListener("change", () => {
+        onFileChange(el);
+    });
+            el.addEventListener("input", (e) => {
+
+                if (el.type === "checkbox") {
+                    formData[key] = el.checked;
+                }
+                else if (el.type === "number") {
+                    formData[key] = e.target.value === "" ? null : Number(e.target.value);
+                }
+                else {
+                    formData[key] = e.target.value;
+                }
+            });
+        });
+    };
+                 // 在 setup 內的 return 之前加入/檢查此 function
+            const getStepClass = (step) => {
+        const stepIndex = Number(step.StepIndex);
+
+        return {
+            active: stepIndex === currentStep.value,
+            done: stepIndex < currentStep.value
+        };
+    };
+         
+    // 確保 watch 正常運作以更新 CSS 變數
+    watch(currentStep, (val) => {
+        const el = document.querySelector('.wizard-ribbon');
+        if(el) el.style.setProperty('--step', val);
+
+
+    });
+        watch(
+        formData,
+        (val) => {
+            console.log("🔥 formData updated:", JSON.parse(JSON.stringify(val)));
+        },
+        { deep: true }
+    );
+            onMounted(() => {
+                loadStep();
+                 document.querySelector('.wizard-ribbon')
+        .style.setProperty('--total', steps.value.length);
+            });
+    //             const finish = async () => {
+
+    //     const payload = JSON.parse(JSON.stringify(formData));
+
+    //     const res = await fetch("/Home/Save", {
+    //         method: "POST",
+    //         headers: {
+    //             "Content-Type": "application/json"
+    //         },
+    //         body: JSON.stringify(payload)
+    //     });
+
+    //     console.log("DONE");
+    // };
+            return {goToStep,
+                getStepClass,
+                steps,
+                currentStep,
+                html,
+                next,
+                prev,
+                finish,dumpJson
+            };
+        }
+    }).mount("#app");
+</script>
+
+
+
+
+
+@model auomvc.Models.Wizard.StepViewModel<TableSchema>
+
+<div class="step-page">
+
+    <h4 class="mb-3">@Model.Title</h4>
+
+    @foreach (var section in Model.Data)
+    {
+        <div class="mb-4">
+
+            <h5 class="text-primary">@@section.Key</h5>
+
+            @foreach (var table in section.Value)
+            {
+                <div class="card mb-3">
+
+                    <div class="card-header">
+                        @table.TableId
+                    </div>
+
+                    <div class="card-body">
+
+                        <!-- 🔥 你真正的 Table renderer -->
+                        <table class="table table-bordered dynamic-table"
+                               id="@table.TableId">
+
+                            <thead>
+                                <tr>
+                                    @foreach (var col in table.Columns)
+                                    {
+                                        <th>@col.Field</th>
+                                    }
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                <tr>
+                                    <td colspan="@table.Columns.Count">
+                                        Loading...
+                                    </td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+                    
+                    </div>
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+
+
+
+@using static auomvc.Models.Wizard
+@model StepViewModel<DynamicField>
+
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i>@Model.Title</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <div class="container mt-4">
+            <input type="number" id="age" data-field="age" class="form-control" />
+            <input type="file" id="file2" data-field="file" class="form-control" />
+            <div class="mt-4 p-3 border bg-light">
+                
+               @*  <button id="btnTest">測試</button>
+                <button id="btnCache" class="btn btn-secondary mt-3">Cache All</button>
+                <button id="btnRestore" class="btn btn-warning mt-3">Restore All</button>
+                <button id="btnShowCache" class="btn btn-info mt-3">Show Cache</button>
+                <button id="btnValidateAll" class="btn btn-primary mt-2">驗證整表</button>
+                <button id="btnUpdateField" class="btn btn-primary mt-2">UpdateField</button>
+ *@            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    
+
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
