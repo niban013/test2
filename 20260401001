@@ -1,0 +1,1241 @@
+
+window.FieldStatus = {
+    icons: {
+        success: '<i class="bi bi-check-circle text-success"></i>',
+        error: '<i class="bi bi-x-circle text-danger"></i>',
+        processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+    },
+
+    set(el, state) {
+
+    const group = el.closest(".field-group");
+    if (!group) return;
+
+    let icon = group.querySelector(".field-icon");
+
+    // ⭐ 只建立一次
+    if (!icon) {
+        icon = document.createElement("span");
+        icon.className = "field-icon";
+        group.appendChild(icon);
+    }
+
+    icon.innerHTML = this.icons[state] || "";
+}
+};
+window.ValidationCenter = (function () {
+
+    const rules = {};
+
+    return {
+
+        register(stepKey, fieldKey, ruleList) {
+
+            if (!rules[stepKey]) {
+                rules[stepKey] = {};
+            }
+
+            rules[stepKey][fieldKey] = ruleList;
+        },
+
+        get(stepKey, fieldKey) {
+            return rules?.[stepKey]?.[fieldKey] || null;
+        },
+
+        dump() {
+            return rules;
+        }
+    };
+
+})();
+
+
+using auomvc.Models;
+using Microsoft.AspNetCore.Razor.TagHelpers;
+using System.Text;
+
+namespace auomvc.Helper
+{
+    public static class FieldRenderer
+    {
+        public static string RenderField(DynamicField f, bool hasLabel = true)
+        {
+            if (f.Hidden)
+            {
+                var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+                return $"<input type='hidden' id='{f.Name}' name='{f.Name}' value='{val}' vmodel />";
+            }
+            var renderLabel = "";
+            int colWidth = 3;
+            if (hasLabel)
+            {
+                colWidth = f.Width;
+                renderLabel = RenderLabel(f, hasLabel);
+            }
+            else
+            {
+                colWidth = 12;
+            }
+
+
+            return $@" <div class='row align-items-center mb-1'>
+                            {renderLabel}
+                            <div class='col-{colWidth}'>
+                                {RenderControl(f)}
+                            </div>
+                        </div>";
+        }
+
+        // ========================
+        // Label（左側）
+        // ========================
+        private static string RenderLabel(DynamicField f, bool hasLabel)
+        {
+            int colWidth = 3;
+            if (hasLabel)
+            {
+            }
+            else
+            {
+                colWidth = 12;
+            }
+            return $@"
+                    <label class='col-{colWidth} mb-0 d-flex align-items-center'>
+                        <span class='star'>{(f.Must ? "*" : "")}</span>
+                        <span class='label-text tooltip-auto' data-title='{f.Name}'>{f.Name}</span>
+                    </label>";
+        }
+
+        // ========================
+        // 控制項核心🔥
+        // ========================
+        public static string RenderControl(DynamicField f)
+        {
+            return f.Type switch
+            {
+                FieldType.Label => RenderOnlyLabel(f),
+                FieldType.Textbox => RenderTextbox(f),
+                FieldType.Numeric => RenderNumeric(f),
+                FieldType.Date => RenderDate(f),
+                FieldType.Textarea => RenderTextarea(f),
+                FieldType.Dropdown or FieldType.Select2 => RenderDropdown(f),
+                FieldType.Radio => RenderRadio(f),
+                FieldType.File => RenderFile(f),
+                //FieldType.ShowFile => RenderShowFile(f),
+                FieldType.Hybrid => RenderHybrid(f),
+                _ => $"<span>未知控制項 {f.Type}</span>"
+            };
+        }
+
+        // ========================
+        // Label（右側顯示值）
+        // ========================
+        private static string RenderOnlyLabel(DynamicField f)
+        {
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            return $@"
+                    <label class='mb-0 d-flex align-items-center tooltip-auto'
+                           id='{f.Name}'
+                           name='{f.Name}'
+                           data-title='{f.Name}'
+                           vmodel>
+                        <span class='label-text'
+                              style='display:block; width:100%; padding:0 12px; height:32px; line-height:32px;'>
+                            {val}
+                        </span>
+                    </label>";
+        }
+
+        // ========================
+        // Textbox
+        // ========================
+        // ========================
+        private static string RenderTextbox(DynamicField f)
+        {
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+            var classList = new List<string> { "form-control" };
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+
+            return $@"
+                    <input type='text' class='{classes}'  vmodel
+                           id='{f.Name}'
+                           name='{f.Name}' 
+                           placeholder='{f.Placeholder}'
+                           data-must='{f.Must.ToString().ToLower()}'
+                           data-pattern='{f.Pattern}'
+                           data-default='{f.DefaultValue}'
+                           data-async='{f.AsyncUrl}'
+                           data-target='{f.Target}'
+                           data-key='{f.GroupKey}'
+                           value='{val}'
+                           {(f.Readonly ? "readonly" : "")} />";
+        }
+        private static string RenderHybrid(DynamicField f)
+        {
+            // 取得初始值
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            // 初始 checkbox 狀態
+            var isChecked = val != null && val.ToString() != "" ? "checked" : "";
+            var disabled = string.IsNullOrEmpty(isChecked) ? "disabled" : "";
+
+            return $@"
+        <div class='input-group hybrid-input' data-field='{f.Name}'>
+            <div class='input-group-text'>
+                <input type='checkbox' class='hybrid-checkbox' 
+                  data-hybrid-role='checkbox'
+                  data-hybrid-key='chk{f.Name}'
+                  id='{f.Name}_chk' {isChecked} />
+            </div>
+            <input type='text' class='form-control hybrid-textbox'
+                   data-hybrid-role='textbox'
+                   data-hybrid-key='txt{f.Name}' vmodel
+                   id='{f.Name}_txt'
+                   name='{f.Name}'
+                   placeholder='{f.Placeholder}'
+                   data-must='{f.Must.ToString().ToLower()}'
+                   data-pattern='{f.Pattern}'
+                   data-default='{f.DefaultValue}'
+                   value='{val}'
+                   {disabled}
+                   {(f.Readonly ? "readonly" : "")} />
+        </div> 
+    ";
+        }
+        // ========================
+        // Numeric🔥
+        // ========================
+        private static string RenderNumeric(DynamicField f)
+        {
+            var classList = new List<string> { "form-control" };
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+            var raw = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+            var value = raw;
+
+            if (decimal.TryParse(raw, out var num))
+            {
+                if (decimal.TryParse(f.Min, out var min) && num < min) value = "";
+                if (decimal.TryParse(f.Max, out var max) && num > max) value = "";
+            }
+
+            var oninput = !string.IsNullOrEmpty(f.Max)
+                ? "if(this.max && parseFloat(this.value) > parseFloat(this.max)) this.value = this.max;"
+                : "";
+
+            var onblur = @"
+if(!this.value){ this.value = this.dataset.default || ''; }
+else if(this.min && parseFloat(this.value) < parseFloat(this.min)){ this.value = this.min; }
+else if(this.max && parseFloat(this.value) > parseFloat(this.max)){ this.value = this.max; }";
+
+            return $@"<div class='input-group field-group' data-state=''> 
+                    <input type='number' class='{classes}' vmodel
+                           name='{f.Name}'
+ data-field='{f.Name}'
+                           value='{value}'
+                           id='{f.Name}'
+                           placeholder='{f.Placeholder}'
+                           data-must='{f.Must.ToString().ToLower()}'
+                           data-pattern='{f.Pattern}'
+                           data-default='{f.DefaultValue}'
+                           data-key='{f.GroupKey}'
+                           {(string.IsNullOrEmpty(f.Min) ? "" : $"min='{f.Min}'")}
+                           {(string.IsNullOrEmpty(f.Max) ? "" : $"max='{f.Max}'")}
+                           oninput=""{oninput}""
+                           onblur=""{onblur}""
+                           {(f.Readonly ? "readonly" : "")}/> </div>";
+        }
+
+        // ========================
+        // Date🔥
+        // ========================
+        private static string RenderDate(DynamicField f)
+        {
+            var classList = new List<string> { "form-control", "datepicker" };
+            // if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue)?.Replace("/", "-");
+
+            bool hasMin = DateTime.TryParse(f.Min, out var minDate);
+            bool hasMax = DateTime.TryParse(f.Max, out var maxDate);
+
+            if (DateTime.TryParse(val, out var d))
+            {
+                if ((hasMin && d < minDate) || (hasMax && d > maxDate))
+                    val = "";
+            }
+
+            var onblur = @"
+if(!this.value){ this.value = this.dataset.default || ''; }
+else{
+    if(this.min && this.value < this.min){ this.value = this.min; }
+    if(this.max && this.value > this.max){ this.value = this.max; }
+}";
+
+            return $@"
+<input type='date' class='{classes}' vmodel
+       name='{f.Name}'
+       id='{f.Name}'
+       value='{val}' 
+       placeholder='{f.Placeholder}'
+       data-must='{f.Must.ToString().ToLower()}'
+       data-pattern='{f.Pattern}'
+       data-default='{f.DefaultValue}'
+       data-key='{f.GroupKey}'
+       {(hasMin ? $"min='{minDate:yyyy-MM-dd}'" : "")}
+       {(hasMax ? $"max='{maxDate:yyyy-MM-dd}'" : "")}
+       onblur=""{onblur}""
+       {(f.Readonly ? "readonly" : "")} />";
+        }
+
+        // ========================
+        // Textarea
+        // ========================
+        private static string RenderTextarea(DynamicField f)
+        {
+            var classList = new List<string> { "form-control" };
+            // if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            return $@"
+                    <textarea class='{classes}' vmodel
+                                name='{f.Name}'
+                                id='{f.Name}'
+                                data-key='{f.GroupKey}'
+                                placeholder='{f.Placeholder}'
+                                data-must='{f.Must.ToString().ToLower()}'
+                                data-pattern='{f.Pattern}'
+                                data-default='{f.DefaultValue}'
+                                {(f.Readonly ? "readonly" : "")}>{val}</textarea>";
+        }
+
+        // ========================
+        // Dropdown🔥
+        // ========================
+        private static string RenderDropdown(DynamicField f)
+        {
+            var classList = new List<string> { "form-control" };
+            if (f.Type == FieldType.Select2) classList.AddRange(new List<string>() { "select2-container--default", "select2" });
+            if (f.Type == FieldType.Dropdown) classList.AddRange(new List<string>() { "valueInput", "dropdownColor" });
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+
+
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+
+            var sb = new StringBuilder();
+
+            sb.Append($@"<select class='{classes}' vmodel
+                        id='{f.Name}'
+                        name='{f.Name}'
+                        data-default='{f.DefaultValue}'
+                        data-placeholder='{f.Placeholder}'
+                        data-key='{f.GroupKey}'
+                        data-async='{f.AsyncUrl}'
+                        data-must='{f.Must.ToString().ToLower()}'
+                        {(f.Readonly ? "disabled" : "")}>");
+
+            sb.Append("<option value='' data-color='white' style='background-color:white'>請選擇</option>");
+
+            if (f.Options != null)
+            {
+                foreach (var op in f.Options)
+                {
+                    var selected = op.Value == val ? "selected" : "";
+                    var color = string.IsNullOrEmpty(op.Color) ? "white" : op.Color;
+
+                    sb.Append($@"<option value='{op.Value}' data-color='{color}' style='background-color:{color}' {selected}>{op.Text}</option>");
+                }
+            }
+
+            sb.Append("</select>");
+            return sb.ToString();
+        }
+
+        // ========================
+        // Radio
+        // ========================
+        private static string RenderRadio(DynamicField f)
+        {
+            var classList = new List<string> { };
+            //if (f.IsRedirect) classList.Add("pageredirect");
+            string classes = string.Join(" ", classList);
+
+            var val = ViewHelper.ResolveValue(f.Value, f.DefaultValue);
+            var sb = new StringBuilder();
+
+            sb.Append("<div class='radio-group input-with-status'>");
+
+            foreach (var op in f.Options ?? new())
+            {
+                var isInverse = f.InverseSelect;
+
+                var isChecked = !isInverse
+                    ? (op.Value == val)
+                    : (op.Value != val);
+
+                var isDisabled = isInverse && op.Value == val;
+
+
+                sb.Append($@"
+                    <label class='radio-inline {(isDisabled ? "disabled-option" : "")}'>
+                        <input type='radio' class='{classes}' id='{f.Name}' name='{f.Name}' value='{op.Value}'
+                        {(isChecked ? "checked" : "")} 
+                        {(isDisabled ? "disabled" : "")}
+                        data-must='{f.Must.ToString().ToLower()}'
+                        data-key='{f.GroupKey}'
+                        vmodel />
+                        {op.Text}
+                    </label>");
+            }
+
+            sb.Append("</div>");
+            return sb.ToString();
+        }
+
+        // ========================
+        // File
+        // ========================
+        private static string RenderFile(DynamicField f)
+        {
+            return $@"
+                    <div class='dynamic-file-input dynamic-file'>
+                        <input type='file' id='{f.Name}' name='{f.Name}' class='form-control d-none' vmodel />
+                         <label class='btn btn-outline-primary btn-sm tooltip-auto' for='{f.Name}' style='cursor:pointer;' data-title='上傳檔案'>
+                            <i class='bi bi-upload'></i>
+                        </label>
+
+                        <!-- 中間：文字太長會自動變 ... -->
+                        <span class='filename-label'>
+        
+                        </span>
+
+                        <!-- 右側：永遠靠右 -->
+                        <div class='btn-group'>
+                            <button type='button' class='btn btn-outline-secondary btn-sm preview-btn tooltip-auto' style='display:none;' data-title='預覽'>
+                                <i class='bi bi-eye'></i>
+                            </button>
+                            <button type='button' class='btn btn-outline-danger btn-sm delete-btn tooltip-auto' style='display:none;' data-title='刪除'>
+                                <i class='bi bi-trash'></i>
+                            </button>
+                        </div>
+                    </div>";
+        }
+
+        private static string RenderShowFile(DynamicField f)
+        {
+            return $@" <div class='dynamic-file-show dynamic-file'> 
+                            <!-- 中間：文字太長會自動變 ... -->
+                            <span class='filename-label' id='{f.Name}' name='{f.Name}' vmodel>
+                                 {f.Value}
+                            </span>
+
+                            <!-- 右側：永遠靠右 -->
+                            <div class='btn-group'>
+                                <button type='button' class='btn btn-outline-secondary btn-sm preview-btn tooltip-auto' data-title='預覽'>
+                                    <i class='bi bi-eye'></i>
+                                </button>
+                            </div>
+                        </div>";
+        }
+    }
+    [HtmlTargetElement("df-field")]
+    public class DfFieldTagHelper : TagHelper
+    {
+        public DynamicField Field { get; set; }
+        // 單個屬性方式
+
+        public string Name { get; set; }
+
+        public bool hasLabel { get; set; } = true;
+
+        public string groupKey { get; set; } = "";
+        public FieldType Type { get; set; } = FieldType.Textbox;
+        public bool Must { get; set; } = false;
+        public string Placeholder { get; set; } = "";
+        public string DefaultValue { get; set; } = "";
+        public bool Readonly { get; set; } = false;
+        public int? Min { get; set; }
+        public int? Max { get; set; }
+        public override void Process(TagHelperContext context, TagHelperOutput output)
+        {
+            if ((Type != FieldType.Numeric) && (Min.HasValue || Max.HasValue))
+            {
+                throw new InvalidOperationException("Min/Max 只能用在 Number 類型的欄位上");
+            }
+            DynamicField fieldToRender;
+
+
+
+
+            if (Field != null)
+            {
+                Field.GroupKey = groupKey;
+                // 使用完整 BaseDynamicField
+                fieldToRender = Field;
+            }
+            else
+            {
+                // 使用單個屬性組成 BaseDynamicField
+                fieldToRender = new DynamicField
+                {
+                    Name = Name,
+                    Type = Type,
+                    Must = Must,
+                    Placeholder = Placeholder,
+                    GroupKey = groupKey,
+                    DefaultValue = DefaultValue,
+                    Readonly = Readonly,
+                    Min = Min?.ToString(),
+                    Max = Max?.ToString()
+                };
+            }
+
+            output.TagName = null; // 移除 <df-field> 標籤
+            output.Content.SetHtmlContent(FieldRenderer.RenderField(fieldToRender, hasLabel));
+        }
+    }
+
+    [HtmlTargetElement("df-form")]
+    public class DfFormTagHelper : TagHelper
+    {
+        public List<DynamicField> Fields { get; set; }
+        public string Key { get; set; }
+        public override void Process(TagHelperContext context, TagHelperOutput output)
+        {
+            //output.TagName = "div";
+            //output.Attributes.SetAttribute("class", "dynamicForm");
+            //output.Attributes.SetAttribute("data-df", Key);
+            var sb = new StringBuilder();
+
+            foreach (var f in Fields.OrderBy(x => x.Order))
+            {
+                sb.Append(FieldRenderer.RenderField(f));
+            }
+
+            output.Content.SetHtmlContent(sb.ToString());
+        }
+    }
+}
+
+
+@model List<auomvc.Models.Wizard.WizardStepOption>
+
+<div id="app">
+    <div class="wizard-container">
+        <!-- 步驟條主體 -->
+        <div class="wizard-ribbon" :style="{ '--step': currentStep, '--total': steps.length }">
+            <div v-for="step in steps"
+                 :key="step.StepIndex"
+                 class="ribbon-step"
+                 :class="getStepClass(step)" @@click ="goToStep(step.StepIndex)"
+                 style="cursor: pointer;">
+
+                <span class="ribbon-text">{{ step.Title }}</span>
+
+                <!-- ✔ 打勾圓圈 -->
+                <span class="ribbon-check" v-if="step.StepIndex <= currentStep">✔</span>
+            </div>
+
+            <!-- 底部進度列 -->
+            <div class="ribbon-progress-bg">
+                <div class="ribbon-progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Content -->
+    <div id="step-container" class="mt-4" v-html="html"></div>
+
+    <!-- Buttons -->
+    <div class="mt-3 d-flex justify-content-between">
+
+        <!-- 左邊 -->
+        <div>
+            <button v-if="currentStep > 1"
+                    class="btn btn-secondary"
+                    v-on:click="prev">
+                上一步
+            </button>
+        </div>
+
+        <!-- 右邊 -->
+        <div class="d-flex gap-2">
+            <button class="btn btn-dark"
+                    v-on:click="dumpJson">
+                輸出 JSON
+            </button>
+            <button v-if="currentStep < steps.length"
+                    class="btn btn-primary"
+                    v-on:click="next">
+                下一步
+            </button>
+
+            <button v-if="currentStep === steps.length"
+                    class="btn btn-success"
+                    v-on:click="finish">
+                完成
+            </button>
+
+        </div>
+
+    </div>
+</div>
+
+
+<style>
+    :root {
+        --active-color: #005bb7; /* 強調藍 */
+        --inactive-color: #9e9e9e; /* 未選中灰 */
+        --progress-bg: #e0e0e0; /* 進度條底色 */
+    }
+
+    .wizard-container {
+        padding: 0;
+        margin-bottom: 20px;
+    }
+
+    .wizard-ribbon {
+        --step: 1; /* 預設第一步 */
+        --total: 3; /* 預設總數，會被 JS 覆蓋 */
+        position: relative;
+        display: flex;
+        width: 100%;
+        gap: 2px;
+        padding-bottom: 8px;
+    }
+
+    .ribbon-step {
+        position: relative;
+        flex: 1;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--inactive-color);
+        color: white;
+        font-weight: 500;
+        /* 箭頭切割 */
+        clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%, 15px 50%);
+        padding-left: 15px;
+        transition: all 0.3s ease;
+    }
+
+        .ribbon-step:first-child {
+            clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%);
+            padding-left: 0;
+        }
+
+        .ribbon-step:last-child {
+            clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 15px 50%);
+        }
+
+        /* 🔵 當前步驟：變為藍色 */
+        .ribbon-step.active {
+            background: var(--active-color) !important;
+        }
+
+        /* ⚪ 已完成步驟：根據圖片是灰色，但帶有勾勾 */
+        .ribbon-step.done {
+            background: var(--inactive-color);
+        }
+
+    /* ✔ 勾勾樣式 */
+    .ribbon-check {
+        position: absolute;
+        top: 2px;
+        right: 18px;
+        width: 15px;
+        height: 15px;
+        background: white;
+        color: var(--inactive-color);
+        border-radius: 50%;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+    }
+
+    /* 當前步驟的勾勾顏色 */
+    .ribbon-step.active .ribbon-check {
+        color: var(--active-color);
+    }
+
+    /* 底部進度條容器 */
+    .ribbon-progress-bg {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--progress-bg);
+    }
+
+    /* 動態藍色進度條 */
+
+    .ribbon-progress-fill {
+        height: 100%;
+        background: var(--active-color);
+        /* 這裡使用 calc 確保平滑移動 */
+        width: calc((var(--step) / var(--total)) * 100%);
+        transition: width 0.3s ease-in-out;
+    }
+
+    .ribbon-text {
+        font-size: 14px;
+        z-index: 2;
+    }
+</style>
+@section Scripts {
+<script src="https://unpkg.com/vue@3"></script>
+
+
+<script>
+    const { createApp, ref, reactive, onMounted, nextTick, watch } = Vue;
+
+    createApp({
+    setup() {
+
+        // ================================
+        // 🔥 STATE
+        // ================================
+
+        const steps = ref(@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model)));
+        const currentStep = ref(1);
+
+        const formData = reactive({ steps: {} });
+        const fileCache = reactive({ steps: {} });
+        const dirtyMap = reactive({ steps: {} });
+
+        let currentPage = null;
+
+        const getStepKey = () => `step${currentStep.value}`;
+
+        // ================================
+        // 🔥 COMPUTED (v3)
+        // ================================
+
+        const computedDefs = {
+            "step2.isAdult": {
+                deps: ["age"],
+                get: (data) => data.age >= 18
+            }
+        };
+
+        const runComputed = (stepKey) => {
+
+            const data = formData.steps[stepKey] || {};
+
+            Object.entries(computedDefs).forEach(([fullKey, def]) => {
+
+                if (!fullKey.startsWith(stepKey)) return;
+
+                const field = fullKey.split(".")[1];
+                data[field] = def.get(data);
+            });
+        };
+
+        // ================================
+        // 🔥 VALIDATION (v3)
+        // ================================
+
+        const validators = {
+            "step2.age": [
+                val => val ? null : "必填",
+                val => val >= 0 ? null : "不可小於0"
+            ]
+        };
+
+                const validateField = async (stepKey, key, val, el) => {
+
+            const wrapper = el.closest(".field-wrapper");
+
+                const rules = ValidationCenter.get(stepKey, key);
+                    FieldStatus.set(el, "processing");
+            // if (!rules) return true;
+
+            // for (const r of rules) {
+
+            //     const ok = await r.rule(val);
+
+            //     if (!ok) {
+
+                       el.classList.add("is-invalid");
+            el.classList.remove("is-valid");
+            el.setAttribute("data-error","llll");
+
+            FieldStatus.set(el, "error");
+
+                    return false;
+            //     }
+            // }
+
+            // ✅ success state
+            // wrapper?.classList.remove("is-invalid");
+            // wrapper?.classList.add("is-valid");
+
+            // const errorEl = wrapper?.querySelector(".field-error");
+            // if (errorEl) errorEl.innerText = "";
+
+            // const icon = wrapper?.querySelector(".field-icon");
+            // if (icon) icon.dataset.state = "ok";
+
+            return true;
+        };
+
+        // ================================
+        // 🔥 BRIDGE ENGINE v3
+        // ================================
+
+                const Bridge = {
+
+            init(container) {
+
+                if (!container) {
+                    console.error("❌ Bridge.init: container missing");
+                    return;
+                }
+
+                const stepKey = getStepKey();
+
+                formData.steps[stepKey] ||= {};
+                fileCache.steps[stepKey] ||= {};
+                dirtyMap.steps[stepKey] ||= new Set();
+
+                const data = formData.steps[stepKey];
+
+                const els = container.querySelectorAll("[data-field]");
+
+                els.forEach(el => {
+
+                    if (el.dataset.bound === "1") return;
+                    el.dataset.bound = "1";
+
+                    const key = el.dataset.field;
+
+                    const update = async () => {
+
+                        let val;
+
+                        if (el.type === "file") {
+
+                            const file = el.files?.[0];
+                            if (!file) return;
+
+                            fileCache.steps[stepKey][key] = file;
+
+                            val = file.name; // UI only
+                        }
+                        else if (el.type === "checkbox") {
+                            val = el.checked;
+                        }
+                        else if (el.type === "number") {
+                            val = el.value === "" ? null : Number(el.value);
+                        }
+                        else {
+                            val = el.value;
+                        }
+
+                        data[key] = val;
+
+                        dirtyMap.steps[stepKey].add(key);
+
+                        runComputed(stepKey);
+
+                        await validateField(stepKey, key, val, el);
+                    };
+
+                    el.addEventListener("input", update);
+                    el.addEventListener("change", update);
+                });
+            },
+
+            updateDom(container) {
+
+                const stepKey = getStepKey();
+                const data = formData.steps[stepKey] || {};
+
+                const els = container.querySelectorAll("[data-field]");
+
+                els.forEach(el => {
+
+                    const key = el.dataset.field;
+
+                    if (!(key in data)) return;
+
+                    if (el.type === "file") return;
+
+                    if (el.type === "checkbox") {
+                        el.checked = data[key];
+                    }
+                    else {
+                        el.value = data[key];
+                    }
+                });
+            },
+
+            restore(container) {
+                this.updateDom(container);
+            },
+
+            destroy(container) {
+
+                if (!container) return;
+
+                container.querySelectorAll("[data-field]").forEach(el => {
+                    el.dataset.bound = "";
+                });
+            }
+        };
+                     const getStepModule = (key) => {
+
+            if (!window.StepPages) return null;
+
+            return window.StepPages[key] || null;
+        };
+                const waitForStepModule = async (key) => {
+
+            for (let i = 0; i < 50; i++) {
+
+                if (window.StepPages?.[key]) {
+                    return window.StepPages[key];
+                }
+
+                await new Promise(r => setTimeout(r, 20));
+            }
+
+            return null;
+        };
+        // ================================
+        // 🔥 STEP LOADER
+        // ================================
+                  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        const loadStep = async () => {
+
+            const res = await fetch(`/Home/Step?stepIndex=${currentStep.value}`);
+            const html = await res.text();
+
+            const container = document.getElementById("step-container");
+
+            if (!container) {
+                console.error("❌ step container not found");
+                return;
+            }
+
+            // =========================
+            // 1. destroy old module
+            // =========================
+            const stepKey = getStepKey();
+
+            if (currentPage?.destroy) {
+                currentPage.destroy(container);
+            }
+
+            Bridge.destroy(container);
+
+            // =========================
+            // 2. inject html
+            // =========================
+            container.innerHTML = html;
+
+        // ⭐⭐⭐ 強制執行 partial scripts ⭐⭐⭐
+        const scripts = container.querySelectorAll("script");
+
+        scripts.forEach(oldScript => {
+
+            const newScript = document.createElement("script");
+
+            if (oldScript.src) {
+                newScript.src = oldScript.src;
+                newScript.async = false;
+            } else {
+                newScript.textContent = oldScript.textContent;
+            }
+
+            document.body.appendChild(newScript);
+            oldScript.remove();
+        })
+            // =========================
+            // 3. wait DOM stable (CRITICAL)
+            // =========================
+            await sleep(0);
+            await nextTick();
+
+            // =========================
+            // 4. resolve module safely
+            // =========================
+            // currentPage = window.StepPages?.[stepKey] ?? null;
+                currentPage = await waitForStepModule(stepKey);
+            if (!currentPage) {
+                console.warn(`⚠️ No Step module: ${stepKey}`);
+            }
+
+            // =========================
+            // 5. init module
+            // =========================
+            if (currentPage?.init) {
+                currentPage.init(container, {
+                    formData,
+                    fileCache,
+                    currentStep
+                });
+            }
+
+            // =========================
+            // 6. bind bridge AFTER module
+            // =========================
+            await nextTick();
+
+            Bridge.init(container);
+            Bridge.restore(container);
+        };
+        // ================================
+        // 🔥 ACTIONS
+        // ================================
+
+        const next = async () => {
+            currentStep.value++;
+            await loadStep();
+        };
+
+        const prev = async () => {
+            currentStep.value--;
+            await loadStep();
+        };
+
+        const goToStep = async (i) => {
+            if (i === currentStep.value) return;
+            currentStep.value = Number(i);
+            await loadStep();
+        };
+
+        const getDirtyData = () => {
+
+            const result = {};
+
+            Object.keys(dirtyMap.steps).forEach(stepKey => {
+
+                result[stepKey] = {};
+
+                dirtyMap.steps[stepKey].forEach(key => {
+                    result[stepKey][key] = formData.steps[stepKey][key];
+                });
+            });
+
+            return result;
+        };
+
+        const finish = async () => {
+
+            const payload = getDirtyData();
+
+            console.log("🚀 DIRTY ONLY:", payload);
+
+            await fetch("/Home/Save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+        };
+
+        const dumpJson = () => {
+            alert(JSON.stringify(formData, null, 2));
+        };
+
+        // ================================
+        // 🔥 UI
+        // ================================
+
+        const getStepClass = (step) => {
+            const i = Number(step.StepIndex);
+            return {
+                active: i === currentStep.value,
+                done: i < currentStep.value
+            };
+        };
+
+        watch(currentStep, (val) => {
+            const el = document.querySelector('.wizard-ribbon');
+            if (el) el.style.setProperty('--step', val);
+        });
+
+        onMounted(() => {
+            loadStep();
+            document.querySelector('.wizard-ribbon')
+                .style.setProperty('--total', steps.value.length);
+        });
+
+        return {
+            steps,
+            currentStep,
+            next,
+            prev,
+            goToStep,
+            finish,
+            dumpJson,
+            getStepClass
+        };
+    }
+    }).mount("#app");
+</script>
+
+}
+
+
+
+
+
+
+.field-group[data-state="error"] .form-control {
+    border-color: #dc3545;
+}
+
+.field-group[data-state="success"] .form-control {
+    border-color: #198754;
+}
+
+
+@using static auomvc.Models.Wizard
+@model StepViewModel<TableSchema>
+
+ 
+
+
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i>@Model.Title</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        @foreach (var schema in Model.Data.SelectMany(prop=>prop.Value))
+        {
+            <h2>@schema.TableId</h2>
+            <table id="@schema.TableId" class="table table-striped" style="width:100%"></table>
+        }
+
+       @*  <div class="container mt-4">
+            <input data-field="age" type="number" />
+            <input data-field="file" type="file" />
+            <select class="select2" data-field="vendor"></select>
+        </div> *@
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    (function () {
+
+        window.StepPages = window.StepPages || {};
+
+        window.StepPages.step1 = {
+
+            init(container, ctx) {
+
+                console.log("🔥 STEP1 INIT OK");
+
+                const tables = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Data.SelectMany(p=>p.Value)));
+                debugger;
+                requestAnimationFrame(() => {
+                    DynamicTablePro.renderAll(tables);
+                    DynamicTablePro.events.edit = function(rowId, rowData, tableId) {
+                         rowId = rowId ?? rowData.id;
+                    console.log("Edit clicked", rowId, rowData);
+                    // 這裡可以打開 Modal 編輯
+                    alert("Edit " + rowData.id);
+                   };
+                });
+            },
+
+            destroy(container) {
+                console.log("🧹 STEP1 DESTROY");
+            }
+        };
+
+    })();
+</script>
+
+@using static auomvc.Models.Wizard
+@model StepViewModel<DynamicField>
+
+<div class="step-panel">
+
+    <div class="step-panel-heading">
+        <h2 class="panel-title">
+            <i class="fa fa-edit"></i> @Model.Title
+        </h2>
+    </div>
+
+    <div class="step-panel-body">
+
+        <div class="container mt-4">
+            <df-form fields="Model.Data.Values.SelectMany(x => x).ToList()"></df-form>
+            @* <df-form fields="Model.Value" key="@Model.Key"></df-form> *@
+            @* <input type="number"
+                   data-field="age"
+                   class="form-control"
+                   placeholder="請輸入年齡" />
+
+            <div class="mt-3">
+                <input type="file"
+                       data-field="file"
+                       class="form-control" />
+            </div>
+
+            <div class="mt-3 text-muted">
+                File 會由 Bridge v3 管理（不需要 JS）
+            </div> *@
+
+        </div>
+
+    </div>
+</div>
+
+<script>
+    (function () {
+
+        window.StepPages = window.StepPages || {};
+
+        window.StepPages.step2 = {
+
+            init(container, ctx) {
+
+                console.log("🔥 STEP2 INIT OK");
+
+                const data = ctx.formData.steps.step2 || {};
+
+                // ⭐ optional: step init log
+                console.log("Step2 data:", data);
+
+                // ❗ 注意：不用手動綁 input
+                // Bridge 已經處理 v3 binding
+
+            },
+
+            destroy(container) {
+                console.log("🧹 STEP2 DESTROY");
+            }
+        };
+
+    ValidationCenter.register("step2", "age", [
+        {
+            rule: (val) => val !== null && val !== "",
+            msg: "必填"
+        },
+        {
+            rule: (val) => Number(val) >= 0,
+            msg: "不可小於0"
+        },
+        {
+            rule: (val) => Number(val) >= 18,
+            msg: "需滿18歲"
+        }
+    ]);
+    })();
+</script>
+
