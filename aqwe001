@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Vue2 Computed Only</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+</head>
+<body>
+
+<div id="app">
+  <h3>Radio（純 computed 寫法）</h3>
+
+  <!-- Radio -->
+  <label v-for="item in options" :key="item" style="display:block;">
+    <input type="radio"
+           :value="item"
+           v-model="selected">
+    {{ item }}
+  </label>
+
+  <hr>
+
+  <!-- 原始值 -->
+  <p><b>selected:</b> {{ selected }}</p>
+
+  <!-- computed 顯示 -->
+  <p><b>顯示結果:</b> {{ displayValue }}</p>
+
+  <!-- computed 控制 UI -->
+  <p v-if="isValid" style="color:green;">✔ 合法</p>
+  <p v-else style="color:red;">✘ 不合法</p>
+
+</div>
+
+<script>
+new Vue({
+  el: "#app",
+
+  data: {
+    options: ["A","B"],   // 改成 ["A","B"] 可測試
+    selected: null
+  },
+
+  mounted() {
+    // ⭐ 自動選（唯一一個時）
+    if (this.options.length === 1) {
+      this.selected = this.options[0];
+    }
+  },
+
+  computed: {
+    // ⭐ 純計算（取代 onChange）
+    isValid() {
+      return this.options.includes(this.selected);
+    },
+
+    // ⭐ 顯示用
+    displayValue() {
+      if (!this.selected) return "尚未選擇";
+      return this.isValid
+        ? "合法值：" + this.selected
+        : "不合法";
+    }
+  }
+});
+</script>
+
+</body>
+</html>
