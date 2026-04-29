@@ -1,0 +1,227 @@
+ @* @model Dictionary<string, List<TableSchema>> *@
+ @model StepViewModel<TableSchema>
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i>@ViewBag.Title</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <!-- Modal 容器 (AJAX 內容會塞進這裡) -->
+        <div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl" style="max-width: 95%;">
+                <!-- 使用 modal-xl 以符合你圖片中寬廣的表單 -->
+                <div class="modal-content" id="modalContainer">
+                    <!-- Partial View (_SupplierFormPartial) 會被載入到這裡 -->
+                </div>
+            </div>
+        </div>
+
+        <div id="supplier-step-metadata" style="display:none;"
+             data-tables='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Data.Values.SelectMany(x => x)))'>
+        </div>
+        <div class="card-body">
+            <div class="tab-content" id="supplierTabContent"> 
+                <div> 
+                    <!-- 新增的查詢 ROW -->
+                    <!-- Step 1 區塊 -->
+                    <div data-df="@Model.StepKey">
+                        <div class="row align-items-end">
+                            <div class="col-12">
+                                <h5>Step1 : Please Query Supplier</h5>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <label class="input-group-text fw-bold text-white" for="suppliername"
+                                           style="background-color: #004070; border-color: #004070; min-width: 130px; justify-content: center;">
+                                        Supplier Name
+                                    </label>
+                                    <df-field name="suppliername" type="TextBox"
+                                              must=true has-label=false placeholder="(Fuzzy Search)" class="form-control"
+                                              step-key="step1" />
+                                    @* <input type="text" id="suppliername" name="suppliername" data-field="suppliername" class="form-control" placeholder="(Fuzzy Search)" /> *@
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="input-group">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 區塊 -->
+                        <div class="row align-items-end border-bottom">
+                            <div class="col-12">
+                                <h5>Step2 : Select Apply Type</h5>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- 確保 input-group 本身沒有額外的 mb (margin-bottom) -->
+                                <div class="input-group">
+                                    <label class="input-group-text fw-bold text-white" for="suppliertype"
+                                           style="background-color: #004070; border-color: #004070; min-width: 130px; justify-content: center;">
+                                        Supplier Type
+                                    </label>
+                                    <select id="suppliertype" name="suppliertype" data-field="suppliertype" class="form-control valueInput dropdownColor tooltip-auto pageredirect">@*  onchange="toggleButtons()"> *@
+                                        <option value="" selected>請選擇代碼...</option>
+                                        <option value="Maker">Maker</option>
+                                        <option value="Vendor">Vendor</option>
+                                        <option value="MakerVendor">Maker + Vendor</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- 修正：移除 flex-column 避免高度計算干擾，直接讓 align-items-end 發揮作用 -->
+                            <div class="col-md-3">
+                                <div class="input-group">
+                                    <button type="button" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center"
+                                            onclick="searchSupplier()"
+                                            style="height: 38px; border-width: 1px; padding: 0;">
+                                        <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+                                        </svg>
+                                        Query
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vendor基本資料區：封裝進 Panel (Card) -->
+                    <div id="divVendor" style="display:none;" class="card bg-light border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="mb-0 text-secondary d-flex justify-content-between align-items-center w-100">
+                                <!-- 左側：圖示 + 文字 -->
+                                <div class="d-flex align-items-center">
+                                    <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                        <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3zm2 .5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H3zM3 7a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3zm0 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3z" />
+                                    </svg>
+                                    <span>Vendor</span>
+                                </div>
+
+                                <!-- 右側：按鈕 -->
+                                <button id="btnNewSupplier" type="button" class="btn btn-sm btn-primary" style="display:none;">
+                                    New Supplier
+                                </button>
+                            </h6>
+                        </div>
+                        <div class="card-body bg-white p-4">
+                            @foreach (var entry in Model.Data.Where(x => x.Key == "vendor")) 
+                            {
+                                @foreach (var schema in entry.Value)
+                                {
+                                    <table id="@schema.TableId" class="display" style="width:100%"></table>
+                                } 
+                            } 
+                        </div>
+                    </div>
+
+
+                    <!-- 原有的基本資料填寫區：封裝進 Panel (Card) -->
+                    <div id="divMaker" style="display:none;" class="card bg-light border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="mb-0 text-secondary d-flex justify-content-between align-items-center w-100">
+                                <!-- 左側：圖示 + 文字 -->
+                                <div class="d-flex align-items-center">
+                                    <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                        <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3zm2 .5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H3zM3 7a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3zm0 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3z" "" ) />>
+                                    </svg>
+                                    <span>Maker</span>
+                                </div>
+
+                                <!-- 右側：按鈕 -->
+                                <button id="btnNewSupplier2" type="button" class="btn btn-sm btn-primary" style="display:none;">
+                                    New Supplier
+                                </button>
+                            </h6>
+                        </div>
+                        <div class="card-body bg-white p-4"> 
+                            @foreach (var entry in Model.Data.Where(x => x.Key == "maker"))
+                            { 
+                                @foreach (var schema in entry.Value)
+                                {
+                                    @if (schema.Message != "")
+                                    {
+                                        <span style="color:red;">@schema.Message </span>
+                                    }
+                                    <table id="@schema.TableId" class="display" style="width:100%;"></table>
+                                    <br />
+                                }
+                            }
+                        </div>
+                    </div> 
+                </div>
+
+           
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function () {
+
+        window.StepPages = window.StepPages || {};
+
+        window.StepPages.step1 = {
+
+            // =========================
+            // INIT
+            // =========================
+            init(container, ctx) {
+
+                console.log("🔥 STEP1 INIT OK");
+
+                const tables = @Html.Raw(
+                      System.Text.Json.JsonSerializer.Serialize(
+                              Model.Data.SelectMany(p => p.Value)
+                      )
+              );
+
+                // =========================
+                // 🔥 改成 local handler（關鍵）
+                // =========================
+                const handler = {
+                    edit: (rowId, rowData, tableId) => {
+
+                        // ⚠️ 保險處理 rowId
+                        const id = rowId ?? rowData?.id;
+
+                        console.log("Edit clicked", id, rowData, tableId);
+
+                        // 👉 你可以直接用 Vue ctx
+                        console.log("Current step data:", ctx.formData);
+
+                        alert(`Edit ${id}`);
+                    }
+                };
+
+                requestAnimationFrame(() => {
+
+    @*  DynamicTablePro.renderAll(tables, handler); *@
+                       DynamicTablePro.renderAll(tables, {
+                            edit: (id, row, tableId) => {
+                                    console.log("DEBUG ROW:", row);
+    console.log("DEBUG ID ATTR:", $(this).attr("data-id"));
+                                console.log("edit:", tableId,id, row);
+                            },
+                            delete: (id, row) => {
+                                console.log("delete:", id);
+                            }
+                        });
+                });
+            },
+
+            // =========================
+            // DESTROY
+            // =========================
+            destroy(container) {
+
+                console.log("🧹 STEP1 DESTROY");
+
+                // 👉 如果 table library 有 destroy 要在這裡清
+                if (window.DynamicTablePro?.destroyAll) {
+                    DynamicTablePro.destroyAll();
+                }
+            }
+        };
+
+    })();
+</script>
