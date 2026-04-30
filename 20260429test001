@@ -1,3 +1,472 @@
+ @* @model Dictionary<string, List<TableSchema>> *@
+ @model StepViewModel<TableSchema>
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i>@ViewBag.Title</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <!-- Modal 容器 (AJAX 內容會塞進這裡) -->
+        <div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl" style="max-width: 95%;">
+                <!-- 使用 modal-xl 以符合你圖片中寬廣的表單 -->
+                <div class="modal-content" id="modalContainer">
+                    <!-- Partial View (_SupplierFormPartial) 會被載入到這裡 -->
+                </div>
+            </div>
+        </div>
+
+        <div id="supplier-step-metadata" style="display:none;"
+             data-tables='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Data.Values.SelectMany(x => x)))'>
+        </div>
+        <div class="card-body">
+            <div class="tab-content" id="supplierTabContent"> 
+                <div> 
+                    <!-- 新增的查詢 ROW -->
+                    <!-- Step 1 區塊 -->
+                    <div data-df="@Model.StepKey">
+                        <div class="row align-items-end">
+                            <div class="col-12">
+                                <h5>Step1 : Please Query Supplier</h5>
+                            </div>
+                             
+                            <div class="col-md-12">
+                                <div class="row g-0 align-items-stretch">
+
+                                    <label class="col-md-2 input-group-text fw-bold text-white" for="suppliername"
+                                           style="background-color: #004070; border-color: #004070; min-width: 130px; justify-content: center;">
+                                        Supplier Name
+                                    </label>
+                                    <div class="col-md-8">
+                                        <df-field name="suppliername" enum-type="Textbox"
+                                                  is-must=true has-label=false placeholder="(Fuzzy Search)"
+                                                  step-key="step1" />
+                                        @* <input type="text" id="suppliername" name="suppliername" data-field="suppliername" class="form-control" placeholder="(Fuzzy Search)" /> *@
+                                    </div>
+                                </div>
+                           </div>
+
+                        <!-- Step 2 區塊 -->
+                        <div class="row align-items-end border-bottom">
+                            <div class="col-12">
+                                <h5>Step2 : Select Apply Type</h5>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="row g-0 align-items-stretch">
+
+                                    <label class="col-md-2 input-group-text fw-bold text-white" for="suppliername"
+                                            style="background-color: #004070; border-color: #004070; min-width: 130px; justify-content: center;">
+                                        Supplier Type
+                                    </label>
+                                    <div class="col-md-5">
+                                        <df-field name="suppliertype" enum-type="Dropdown"
+                                                    is-must=true
+                                                      has-label=false placeholder="請選擇" option-str="Vendor,Vendor^Maker,Maker^MakerVendor,MakerVendor"
+                                                    step-key="step1" />
+                                        @* <input type="text" id="suppliername" name="suppliername" data-field="suppliername" class="form-control" placeholder="(Fuzzy Search)" /> *@
+                                    </div>
+                                    <div class="col-md-2">
+                                     </div>
+                                    <!-- 修正：移除 flex-column 避免高度計算干擾，直接讓 align-items-end 發揮作用 -->
+                                    <div class="col-md-3">
+                                        <div class="input-group">
+                                                <button type="button" id="btnSearchSupplier"  class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center"
+                                                    style="height: 38px; border-width: 1px; padding: 0;">
+                                                <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                                    <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+                                                </svg>
+                                                Query
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div> 
+                        </div>
+                    </div>
+
+                    <!-- Vendor基本資料區：封裝進 Panel (Card) -->
+                    <div id="divVendor" style="display:none;" class="card bg-light border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="mb-0 text-secondary d-flex justify-content-between align-items-center w-100">
+                                <!-- 左側：圖示 + 文字 -->
+                                <div class="d-flex align-items-center">
+                                    <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                        <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3zm2 .5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H3zM3 7a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3zm0 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3z" />
+                                    </svg>
+                                    <span>Vendor</span>
+                                </div>
+
+                                <!-- 右側：按鈕 -->
+                                <button id="btnNewSupplier" type="button" class="btn btn-sm btn-primary" style="display:none;">
+                                    New Supplier
+                                </button>
+                            </h6>
+                        </div>
+                        <div class="card-body bg-white p-4">
+                            @foreach (var entry in Model.Data.Where(x => x.Key == "vendor")) 
+                            {
+                                @foreach (var schema in entry.Value)
+                                {
+                                    <table id="@schema.TableId" class="display" style="width:100%"></table>
+                                } 
+                            } 
+                        </div>
+                    </div>
+
+
+                    <!-- 原有的基本資料填寫區：封裝進 Panel (Card) -->
+                    <div id="divMaker" style="display:none;" class="card bg-light border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="mb-0 text-secondary d-flex justify-content-between align-items-center w-100">
+                                <!-- 左側：圖示 + 文字 -->
+                                <div class="d-flex align-items-center">
+                                    <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                        <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3zm2 .5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H3zM3 7a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3zm0 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3z" "" ) />>
+                                    </svg>
+                                    <span>Maker</span>
+                                </div>
+
+                                <!-- 右側：按鈕 -->
+                                <button id="btnNewSupplier2" type="button" class="btn btn-sm btn-primary" style="display:none;">
+                                    New Supplier
+                                </button>
+                            </h6>
+                        </div>
+                        <div class="card-body bg-white p-4"> 
+                            @foreach (var entry in Model.Data.Where(x => x.Key == "maker"))
+                            { 
+                                @foreach (var schema in entry.Value)
+                                {
+                                    @if (schema.Message != "")
+                                    {
+                                        <span style="color:red;">@schema.Message </span>
+                                    }
+                                    <table id="@schema.TableId" class="display" style="width:100%;"></table>
+                                    <br />
+                                }
+                            }
+                        </div>
+                    </div> 
+                </div>
+
+           
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function () {
+
+        window.StepPages = window.StepPages || {};
+
+        window.StepPages.step1 = {
+
+            searchSupplier(ctx) {
+               const stepKey = `step${ctx.currentStep.value}`;
+               const suppliername = ctx.formData.getStep(stepKey).suppliername;
+                       const suppliertype = ctx.formData.getStep(stepKey).suppliertype;
+                 
+              if (!suppliername) {
+                  showAlert('提示', '請輸入Supplier Name', 'warning');
+                  return;
+              }
+
+                  if (!suppliertype) {
+                  showAlert('提示', '請選擇Supplier Type', 'warning');
+                  return;
+              }
+
+
+              // 顯示讀取中
+              Swal.fire({ title: '檢索中...', didOpen: () => { Swal.showLoading(); } });
+
+
+
+              if(suppliertype =="Vendor")
+              {
+
+                  DynamicTablePro.reload("tbVendor", "/Supplier/GetVendorData", { vendorname: suppliername })
+                    .then((res) => {
+                        Swal.close();
+                        // toggleButtons();
+                    })
+                    .catch((err) => {
+                        // debugger;
+                         if (err && err.isHandledByGlobal) return;
+                         showAlert('錯誤',(err && err.responseJSON?.message) ? err.responseJSON?.message : "找不到該供應商資料", 'error');
+                    })
+                    .always(() => {
+                        $('#divVendor, #divMaker').hide();
+                        $('#divVendor').show();
+                        $('#btnNewSupplier').fadeIn(); // 顯示按鈕
+                    });
+              }
+                  if(suppliertype =="Maker"){
+                   DynamicTablePro.reload('tbMaker1,tbMaker2', "/Supplier/GetMakerData", { makername: suppliername, companyid: '2' })
+                    .then((res) => {
+                        Swal.close();
+                        // toggleButtons();
+                    })
+                    .catch((err) => {
+                         if (err && err.isHandledByGlobal) return;
+                         showAlert('錯誤', (err && err.responseJSON?.message) ? err.responseJSON?.message : "找不到該供應商資料", 'error');
+                    })
+                    .always(() => {
+                        $('#divVendor, #divMaker').hide();
+                        $('#divMaker').show();
+                        if(!DynamicTablePro.hasData('tbMaker1') && !DynamicTablePro.hasData('tbMaker2')){
+                            $('#btnNewSupplier2').fadeIn(); // 顯示按鈕
+                        }
+                        else{
+                            $('#btnNewSupplier2').hide();   // 隱藏按鈕
+                        }
+                    });
+              }
+                  if(suppliertype =="MakerVendor"){
+                 //  debugger;
+                    const taskVendor = DynamicTablePro.reload("tbVendor", "/Supplier/GetVendorData", { vendorname: suppliername });
+                    const taskMaker = DynamicTablePro.reload('tbMaker1,tbMaker2', "/Supplier/GetMakerData", { makername: suppliername, companyid: '2' });
+
+                    Promise.allSettled([taskVendor, taskMaker])
+                        .then((results) => {
+                            const errors = results.filter(r => r.status === 'rejected');
+                            if (errors.length > 0) {
+                                showAlert('警告', '部分資料讀取失敗', 'warning');
+                            }
+                            else
+                            {
+                                Swal.close();
+                            }
+                        })
+                        .catch((err) => {
+                            // 只有在 .then 內部的代碼噴錯時才會進到這裡
+                            if (err && err.isHandledByGlobal) return;
+                            console.error("邏輯執行出錯:", err);
+                        })
+                        .finally(() => {
+                            // ⭐ 不論請求結果如何，最後一定執行 (例如關閉 Loading)
+                             // 2. 執行 UI 判斷邏輯
+                            $('#divVendor, #divMaker').show();
+
+                            if (!DynamicTablePro.hasData('tbVendor') && !DynamicTablePro.hasData('tbMaker1') && !DynamicTablePro.hasData('tbMaker2')) {
+                                $('#btnNewSupplier').fadeIn();
+                            } else {
+                                $('#btnNewSupplier2').hide();
+                            }
+                            console.log("全部流程結束");
+                        });
+
+              }
+          },
+
+
+
+
+            // =========================
+            // INIT
+            // =========================
+            init(container, ctx) {
+
+                console.log("🔥 STEP1 INIT OK");
+                const stepKey = `step${ctx.currentStep.value}`;
+                const data = ctx.formData.getStep(stepKey);
+                const tables = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Data.SelectMany(p => p.Value)));
+
+                $(container).find('#btnSearchSupplier').on('click', () => {
+                    this.searchSupplier(ctx);
+                });
+
+
+
+
+
+
+
+
+
+
+
+                $(container).find('#suppliertype').on('change', function () {
+                    const selectedValue = $(this).val();
+               
+                    // 先隱藏所有區塊
+                    $('#divVendor, #divMaker').hide();
+
+                    // 根據選中的值顯示對應區塊
+                    if (selectedValue === "Vendor") {
+                        $('#divVendor').show();
+                        DynamicTablePro.resetTable('tbVendor');
+                    } else if (selectedValue === "Maker") {
+                        $('#divMaker').show();
+                        DynamicTablePro.resetTable('tbMaker1');
+                        DynamicTablePro.resetTable('tbMaker2');
+                    } else if (selectedValue === "MakerVendor") {
+                        $('#divVendor, #divMaker').show();
+                        DynamicTablePro.resetTable('tbVendor');
+                        DynamicTablePro.resetTable('tbMaker1');
+                        DynamicTablePro.resetTable('tbMaker2');
+                    }
+
+                    $('#btnNewSupplier, #btnNewSupplier2').hide(); // 隱藏按鈕
+                });
+
+                // 2. 主動觸發一次初始狀態
+                $(container).find('#suppliertype').trigger('change');
+
+
+                console.log("Step1 data:", data);
+                // =========================
+                // 🔥 改成 local handler（關鍵）
+                // =========================
+                const handler = {
+                    edit: (rowId, rowData, tableId) => {
+
+                        // ⚠️ 保險處理 rowId
+                        const id = rowId ?? rowData?.id;
+
+                        console.log("Edit clicked", id, rowData, tableId);
+
+                        // 👉 你可以直接用 Vue ctx
+                        console.log("Current step data:", ctx.formData);
+
+                        alert(`Edit ${id}`);
+                    }
+                };
+
+                requestAnimationFrame(() => { 
+                    debugger;
+                       DynamicTablePro.renderAll(tables, {
+                            edit: (id, row, tableId) => {
+                               console.log("DEBUG ROW:", row);
+                            console.log("DEBUG ID ATTR:", $(this).attr("data-id"));
+                                console.log("edit:", tableId,id, row);
+                            },
+                            delete: (id, row) => {
+                                console.log("delete:", id);
+                            }
+                        });
+                });
+            },
+
+            // =========================
+            // DESTROY
+            // =========================
+            destroy(container) {
+
+                console.log("🧹 STEP1 DESTROY");
+
+                // 👉 如果 table library 有 destroy 要在這裡清
+                if (window.DynamicTablePro?.destroyAll) {
+                    DynamicTablePro.destroyAll();
+                }
+            }
+        };
+
+    })();
+</script>
+
+
+
+
+
+
+
+
+$(document).on("mouseenter", ".tooltip-auto", function () {
+
+    let instance = bootstrap.Tooltip.getInstance(this);
+
+    if (!instance) {
+        instance = new bootstrap.Tooltip(this, {
+            title: this.dataset.title || "",
+            placement: "top",
+            trigger: "manual",   // ⭐ 改 manual
+            container: "body"
+        });
+    }
+
+    instance.show(); // ⭐ 直接顯示
+});
+
+$(document).on("mouseleave", ".tooltip-auto", function () {
+    const instance = bootstrap.Tooltip.getInstance(this);
+    if (instance) instance.hide();
+});
+
+
+window.showAlert = (title, text, icon = 'success') => {
+    Swal.fire({
+        title: title,
+        text: text,
+        icon: icon,
+        confirmButtonColor: '#004070', // 使用您的友達藍
+        confirmButtonText: '確定'
+    });
+};
+
+window.showConfirm = (title, text, callback) => {
+    Swal.fire({
+        title: title,
+        text: text,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#004070',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '確定',
+        cancelButtonText: '取消'
+    }).then((result) => {
+        if (result.isConfirmed && callback) {
+            callback();
+        }
+    });
+};
+
+
+$.ajaxSetup({
+    beforeSend: function (xhr) {
+        // 💡 從 Layout 產生的那個隱藏 input 取值
+        var token = $('input[name="__RequestVerificationToken"]').val();
+        if (token) {
+            xhr.setRequestHeader("RequestVerificationToken", token);
+        }
+    },
+    // 💡 當任何 AJAX 發生錯誤時觸發
+    error: function (xhr, status, error) {
+        const data = xhr.responseJSON;
+        if (!data) return;
+
+        // 1. 取得後端 Filter 傳來的資訊
+        const msg = (data && data.message) ? data.message : "系統連線異常";
+        const reqId = (data && data.requestId) ? data.requestId : "N/A";
+        const isFatal = data && data.isFatal === true;
+        const targetUrl = (data && data.redirectUrl) ? data.redirectUrl : "/Error/Index";
+        if (data && data.isFatal) {
+            xhr.isHandledByGlobal = true;
+
+            Swal.fire({
+                title: data.isFatal ? '系統異常' : '提醒',
+                html: `${data.message}<br/><br/><small class="text-muted">錯誤編號：${data.requestId}</small>`,
+                icon: data.isFatal ? 'error' : 'warning',
+                confirmButtonColor: '#004070',
+                confirmButtonText: data.isFatal ? '查看詳細資訊' : '確定',
+                allowOutsideClick: !data.isFatal
+            }).then((result) => {
+                if (data.isFatal && result.isConfirmed) {
+                    window.location.href = data.redirectUrl;
+                }
+            }); 
+        } 
+    }
+});
+
+
+
+
+
+
+
 GetVendorInfo
 [{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"VRD 27.1 SRL","Vendor_Name_alt":" ","Vendor_id":"1600002049","Vendor_Code":"1600002049","Vendor_Site_Code":"OA45D_25th_0_DDP","Vendor_Site_Id":"EUR001","Vat_Registration_Num":"000000","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":" ","ORG":"1000","Group_Name":"TEST","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"Test20251226","Vendor_Name_alt":"Test20251226","Vendor_id":"1600004140","Vendor_Code":"1600004140","Vendor_Site_Code":"SSR Desc","Vendor_Site_Id":"TWD001","Vat_Registration_Num":"12345879","Inactive":"X","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"0429029陳一誠","Vendor_Name_alt":" ","Vendor_id":"1600001905","Vendor_Code":"1600001905","Vendor_Site_Code":"TT_0_DDP","Vendor_Site_Id":"TWD001","Vat_Registration_Num":"000000","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"25 HOURS LLC","Vendor_Name_alt":" ","Vendor_id":"1600001661","Vendor_Code":"1600001661","Vendor_Site_Code":"OA120D_25th_0_DDP","Vendor_Site_Id":"USD001","Vat_Registration_Num":"83-1945572 (EIN)","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"臺灣銀行新竹分行友達420億元聯貸專戶","Vendor_Name_alt":" ","Vendor_id":"1600000242","Vendor_Code":"1600000242","Vendor_Site_Code":"TT_0_DDP","Vendor_Site_Id":"TWD001","Vat_Registration_Num":"000000","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1300","Group_Name":"NONE GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"Leave Life 21 Co., Ltd","Vendor_Name_alt":" ","Vendor_id":"1600003411","Vendor_Code":"1600003411","Vendor_Site_Code":"OA7D_25th_0_DDP","Vendor_Site_Id":"JPY001","Vat_Registration_Num":"1020001016439","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NONE GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"0207169 張庭瑞","Vendor_Name_alt":" ","Vendor_id":"1600002602","Vendor_Code":"1600002602","Vendor_Site_Code":"TT_0_DDP","Vendor_Site_Id":"TWD001","Vat_Registration_Num":" ","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null}]
 
