@@ -1,0 +1,4160 @@
+GetVendorInfo
+[{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"VRD 27.1 SRL","Vendor_Name_alt":" ","Vendor_id":"1600002049","Vendor_Code":"1600002049","Vendor_Site_Code":"OA45D_25th_0_DDP","Vendor_Site_Id":"EUR001","Vat_Registration_Num":"000000","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":" ","ORG":"1000","Group_Name":"TEST","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"Test20251226","Vendor_Name_alt":"Test20251226","Vendor_id":"1600004140","Vendor_Code":"1600004140","Vendor_Site_Code":"SSR Desc","Vendor_Site_Id":"TWD001","Vat_Registration_Num":"12345879","Inactive":"X","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"0429029陳一誠","Vendor_Name_alt":" ","Vendor_id":"1600001905","Vendor_Code":"1600001905","Vendor_Site_Code":"TT_0_DDP","Vendor_Site_Id":"TWD001","Vat_Registration_Num":"000000","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"25 HOURS LLC","Vendor_Name_alt":" ","Vendor_id":"1600001661","Vendor_Code":"1600001661","Vendor_Site_Code":"OA120D_25th_0_DDP","Vendor_Site_Id":"USD001","Vat_Registration_Num":"83-1945572 (EIN)","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NON GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"臺灣銀行新竹分行友達420億元聯貸專戶","Vendor_Name_alt":" ","Vendor_id":"1600000242","Vendor_Code":"1600000242","Vendor_Site_Code":"TT_0_DDP","Vendor_Site_Id":"TWD001","Vat_Registration_Num":"000000","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1300","Group_Name":"NONE GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"Leave Life 21 Co., Ltd","Vendor_Name_alt":" ","Vendor_id":"1600003411","Vendor_Code":"1600003411","Vendor_Site_Code":"OA7D_25th_0_DDP","Vendor_Site_Id":"JPY001","Vat_Registration_Num":"1020001016439","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null},{"Supplier_Type":"VC5","ORG":"1000","Group_Name":"NONE GROUP","Group_Code":null,"vender_subsidiary":null,"Vendor_Name":"0207169 張庭瑞","Vendor_Name_alt":" ","Vendor_id":"1600002602","Vendor_Code":"1600002602","Vendor_Site_Code":"TT_0_DDP","Vendor_Site_Id":"TWD001","Vat_Registration_Num":" ","Inactive":" ","created_by":null,"dept":null,"VENDOR_SITE_CODE_ALT":null,"blacklist_date":null}]
+
+GetMakerDataFromGroup
+
+[{"MakerSn":9098,"maker_code":"M00058","maker_local_name":"台灣三井化學股份有限公司","maker_english_name":"TAIWAN MITSUI CHEMICALS, INC.","country":"","city":"","facility_address":"","companyid":1,"companyname":"AUO","maker_short_name":"Taiwan Mitsui Chemicals","maker_type":"Normal","maker_group_code":"D0048"},{"MakerSn":9247,"maker_code":"M00235","maker_local_name":"台灣特格股份有限公司MEM","maker_english_name":"MITSUI ELECTRONIC MATERIALS CO., LTD.","country":"","city":"","facility_address":"","companyid":1,"companyname":"AUO","maker_short_name":"MEM","maker_type":"Normal","maker_group_code":"D0293"},{"MakerSn":5674,"maker_code":"M01129","maker_local_name":"三井化學株式會社","maker_english_name":"Mitsui Chemicals Tohcello Inc.","country":"JAPAN","city":"東京都(Tokyo)","facility_address":"Ichigayabuilding 2-6, Kudan-kita 4-Choume, Chiyoda-Ku","companyid":1,"companyname":"AUO","maker_short_name":"Mitsui","maker_type":"Normal","maker_group_code":"D0470"},{"MakerSn":4893,"maker_code":"M01311","maker_local_name":"三井物?","maker_english_name":"MITSUI & CO., LTD. ","country":"JAPAN","city":"東京都(Tokyo)","facility_address":"日本東京都 ","companyid":1,"companyname":"AUO","maker_short_name":"三井物?","maker_type":"Normal","maker_group_code":null},{"MakerSn":9651,"maker_code":"M01680","maker_local_name":"MITSUBISHI MATERIAL CORPORATION","maker_english_name":"mitsuibishi material","country":"JAPAN","city":"東京都(Tokyo)","facility_address":"KFC Bldg. 8F, 1-6-1, YOKOAMI SUMIDA-KU, TOKYO 130-0015, JAPAN","companyid":1,"companyname":"AUO","maker_short_name":"mitsuibishi material","maker_type":"Normal","maker_group_code":""},{"MakerSn":6100,"maker_code":"M01708","maker_local_name":"MC Tohcello (Malaysia) SDN BHD","maker_english_name":"MC Tohcello (Malaysia) SDN BHD","country":"MALAYSIA","city":"","facility_address":"A-07-06 , Empire Tower , Empire Subang ,Jalan SS16/1 , 47500,Subang Jaya, Selangor","companyid":1,"companyname":"AUO","maker_short_name":"Mitsui","maker_type":"Normal","maker_group_code":"D0470"}]
+
+GetMakerDataInternal
+
+[{"MakerSn":9098,"maker_code":"M00058","maker_local_name":"台灣三井化學股份有限公司","maker_english_name":"TAIWAN MITSUI CHEMICALS, INC.","maker_short_name":"Taiwan Mitsui Chemicals","country":"","city":"","maker_short_name1":"Taiwan Mitsui Chemicals","companyid":2,"facility_address":"","maker_status":"active","maker_type":"Normal"},{"MakerSn":9247,"maker_code":"M00235","maker_local_name":"台灣特格股份有限公司MEM","maker_english_name":"MITSUI ELECTRONIC MATERIALS CO., LTD.","maker_short_name":"MEM","country":"","city":"","maker_short_name1":"MEM","companyid":2,"facility_address":"","maker_status":"active","maker_type":"Normal"}]
+
+
+using System.Configuration;
+using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using OneSupplierPlatform.Helper.Extensions;
+using OneSupplierPlatform.Models;
+using OneSupplierPlatform.Models.Infra;
+using OneSupplierPlatform.Service;
+using OneSupplierPlatform.Services;
+using OneSupplierFLM;
+
+
+namespace OneSupplierPlatform.Controllers
+{
+    public class SupplierController : BaseController
+    {
+        private static readonly List<WizardStepOption> Steps = new()
+        {
+            new WizardStepOption { StepIndex = 1, Title = "Apply New Supplier", PartialView = "Supplier/_StepApplyNewSupplier", Locked = false },
+            new WizardStepOption { StepIndex = 2, Title = "Supplier Information", PartialView = "Supplier/_StepSupplierInformation" },
+            new WizardStepOption { StepIndex = 3, Title = "File List", PartialView = "Supplier/_StepFileList" }
+        };
+
+        private readonly ISupplierService _supplierService;
+        private readonly DynamicFieldService _dynamicFieldService;
+        private readonly IMapper _mapper;
+        private readonly OneSupplierFLMService _oneSupplierFLMService; 
+        public SupplierController(OneSupplierFLMService oneSupplierFLMService,IMapper mapper, ISupplierService supplierService, DynamicFieldService dynamicFieldService)
+        {
+            _supplierService = supplierService;
+            _dynamicFieldService = dynamicFieldService;
+            _mapper = mapper;
+            _oneSupplierFLMService = oneSupplierFLMService;
+        }
+
+
+        public async Task<IActionResult> Index()
+        {
+            // byte[] fileBytes = System.IO.File.ReadAllBytes(@"D:\Web\flowerstatus.png");
+            //  var d = await _oneSupplierFLMService.UploadFileToFLM(fileBytes, "aaa.pdf", "onesupplier001", "Echo.Lee");
+            //var d= await _oneSupplierFLMService.GetFileAsync("283b009b-1ed6-47b7-ad61-0fbaea74f0ce", "aaa.pdf", "Echo.Lee");
+
+            //var d = await _oneSupplierFLMService.CheckFileIDByFileId("283b009b-1ed6-47b7-ad61-0fbaea74f0ce");
+
+            return View(Steps);
+        }
+        [HttpGet]
+        public async Task<IActionResult> Step(int stepIndex,string type, string SendData)
+        {
+            if (stepIndex < 1 || stepIndex > Steps.Count)
+                return BadRequest("Invalid step index");
+
+            var step = Steps[stepIndex - 1];
+
+            object model = stepIndex switch
+            {
+                1 => await GenerateStep(stepIndex),
+                2 => await GenerateStep(stepIndex, type, 
+                             string.IsNullOrEmpty(SendData)?null : JsonConvert.DeserializeObject<Dictionary<string, string>>(SendData) 
+                ),
+                3 => await GenerateStep(stepIndex, type),
+                _ => null
+            };
+            ViewBag.Title = step.Title;
+            return PartialView(step.PartialView, model);
+        }
+
+        async Task<IStepViewModel> GenerateStep(int stepIndex,string type="",Dictionary<string,string>? SendData =null ) 
+        {
+
+            IStepViewModel? model =null;
+            Dictionary<string, object>? redirectData = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(type))
+            {
+                redirectData = JsonConvert.DeserializeObject<Dictionary<string, object>>(type);
+            }
+            switch (stepIndex)
+            {
+                case 1:
+                    Dictionary<string, List<TableSchema>> dic = new Dictionary<string, List<TableSchema>>();
+                    var maker = new List<TableSchema>
+                    {
+                         new()
+                        {
+                            TableId = "tbMaker1",
+                            AjaxUrl = "/Supplier/GetMakerData",
+                            FetchMode = FetchMode.All,
+                            Message="* Existed in the company",
+                            //AjaxParams  = new
+                            //{
+                            //    makername = "MITSUI",
+                            //    companyid = "2"
+                            //},
+                    
+                            Features = new TableFeatures
+                            {
+                                Checkbox = false,
+                                Export = true,
+                                RowButtons = true,
+                                ColumnToggle = true,
+                                RowSelect = true,
+                                SelectAll = true,
+                                VirtualScroll = true,
+                                ColumnFilter = false,   // 可選，每欄都有 filter
+                                StickyHeader = true    // 可選，表頭固定
+                            },
+
+                            Config = new TableConfig
+                            {
+                                PageLength = 2,
+                                VirtualScrollHeight = "500px",
+                                Searching = false,
+                                Ordering = false,
+                                Paging = true,
+                                LengthChange = false,
+                                StateSave = true
+                            },
+
+                            //ToolbarButtons =
+                            //{
+                            //    new("Add", "add"),
+                            //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                            //    new("Reload", "reload", "btn btn-secondary")
+                            //},
+
+                            Columns =  TableSchema.Create<vmMakerDetail>(new()
+                            {
+                                x => x.MakerCode,       // 自動轉為 "maker_code"
+                                x => x.MakerLocalName,  // 自動轉為 "maker_local_name"
+                                x => x.MakerEngName,
+                                x => x.MakerShortName,
+                                x => x.MakerEngName, 
+                                "Country",              // 自動轉為 "country"
+                                "City",                 // 自動轉為 "city"
+                                x => x.FacilityAddress,
+                            }).Columns,
+                            
+
+                            RowButtons =
+                            {
+                                new(){ Title="Add Another Maker Type", Event="addMakerType", Icon="bi-pencil"},
+                                new(){ Title="Add New Site", Event="addNewSite", Icon="bi-pencil"}
+                            }
+                        }
+                        ,new()
+                        {
+                            TableId = "tbMaker2",
+                            AjaxUrl = "",
+                            FetchMode = FetchMode.All,
+                            Message="* Existed in the group companyd(excluding itself)",
+                            Features = new TableFeatures
+                            {
+                                Checkbox = false,
+                                Export = true,
+                                RowButtons = true,
+                                ColumnToggle = true,
+                                RowSelect = true,
+                                SelectAll = true,
+                                VirtualScroll = true,
+                                ColumnFilter = false,   // 可選，每欄都有 filter
+                                StickyHeader = true    // 可選，表頭固定
+                            },
+
+                            Config = new TableConfig
+                            {
+                                PageLength = 20,
+                                VirtualScrollHeight = "500px",
+                                Searching = false,
+                                Ordering = false,
+                                Paging = false,
+                                LengthChange = false,
+                                StateSave = true
+                            },
+
+                            //ToolbarButtons =
+                            //{
+                            //    new("Add", "add"),
+                            //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                            //    new("Reload", "reload", "btn btn-secondary")
+                            //},
+                            Columns =  TableSchema.Create<vmMakerDetail>(new()
+                            {
+                                x => x.MakerCode,       // 自動轉為 "maker_code"
+                                x => x.MakerLocalName,  // 自動轉為 "maker_local_name"
+                                x => x.MakerEngName,
+                                x => x.MakerShortName,
+                                x => x.MakerEngName,
+                                "Country",              // 自動轉為 "country"
+                                 "City",                 // 自動轉為 "city"
+                                x => x.FacilityAddress,
+                                x => x.MakerStatus,
+                            }).Columns,
+                            //Columns =
+                            //{ 
+                            //    new("MakerCode"),
+                            //    new("MakerLocalName"),
+                            //    new("MakerEngName"),
+                            //    new("MakerShortName"),
+                            //    new("Country"),
+                            //    new("City"),
+                            //    new("FacilityAddress"),
+                            //    new("MakerStatus"),
+                            //    //new("MakerType",visible:true)
+                            //},
+
+                            RowButtons =
+                            {
+                                new(){ Title="Copy Maker", Event="cpMaker", Icon="bi-pencil"},
+                                //new(){ Title="Copy Maker", Event="cpMaker", Icon="bi-pencil"}
+                            }
+                        }
+                    }; 
+                    var vendor = new List<TableSchema>
+                    {
+                        new()
+                        {
+                              TableId = "tbVendor",
+                              AjaxUrl = "/Supplier/GetVendorData",
+                              FetchMode = FetchMode.All,
+
+                              Features = new TableFeatures
+                              {
+                                  Checkbox = false,
+                                  Export = true,
+                                  RowButtons = true,
+                                  ColumnToggle = true,
+                                  RowSelect = true,
+                                  SelectAll = true,
+                                  VirtualScroll = true,
+                                  ColumnFilter = false,   // 可選，每欄都有 filter
+                                  StickyHeader = true    // 可選，表頭固定
+                              },
+
+                              Config = new TableConfig
+                              {
+                                  PageLength = 20,
+                                  VirtualScrollHeight = "500px",
+                                  Searching = false,
+                                  Ordering = false,
+                                  Paging = false,
+                                  LengthChange = false,
+                                  StateSave = true
+                              },
+
+                              //ToolbarButtons =
+                              //{
+                              //    new("Add", "add"),
+                              //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                              //    new("Reload", "reload", "btn btn-secondary")
+                              //},
+                              Columns =  TableSchema.Create<vmVendorDetail>(new()
+                              {
+                                    x => x.OUSite,       
+                                    x => x.Inactive,   
+                                    x => x.GroupName,
+                                    x => x.GroupCode,
+                                    x => x.VendorName,
+                                    "VandorNameAlt",               
+                                        "VandorCode",                 
+                                    x => x.SSRName,
+                                    x => x.TaxRegistration,
+                                    x => x.SupplierType,
+                              }).Columns,
+                              //Columns =
+                              //{
+                              //      new("OUSite"),
+                              //      new("Inactive"),
+                              //      new("GroupName"),
+                              //      new("GroupCode"),
+                              //      new("VendorName"),
+                              //      new("VandorNameAlt"),
+                              //      new("VandorCode"),
+                              //      new("SSRName"),
+                              //      new("TaxRegistration"),
+                              //      new("SupplierType"),
+                              //  }, 
+                                //RowButtons =
+                                //{
+                                //    new(){ Title="Edit", Event="edit", Icon="bi-pencil"},
+                                //    new(){ Title="Delete", Event="delete", Icon="bi-trash", CssClass="btn btn-sm btn-danger"}
+                                //}
+                        }
+                    }; 
+                    dic["maker"] = maker;
+                    dic["vendor"] = vendor;
+                    model = new StepViewModel<TableSchema>
+                    {
+                        StepIndex = stepIndex,
+                        Title = "第一頁",
+                        Data = dic
+                    };
+                     
+                    break;
+                case 2:  
+                    //先找CONFIG
+                    //Dictionary<string, List<BaseDynamicField>> dic2 = new Dictionary<string, List<BaseDynamicField>>();
+                    //string[] sections = ["Supplier Information", "Vendor Subrange", "Company Profile"];
+                    ////string[] sections = ["Supplier Information"];
+                    //foreach (var item in sections)
+                    //{
+                    //    dic2[item.Replace(" ","")] = await _supplierService.GetConfigFieldAsync(item, redirectData);
+                    //} 
+                    //var userFromDb = new UserProfile { CompanyCode = "Johnny", MakerType = "Normal", RequestReason = "test@me.com" };
+
+                    //_dynamicFieldService.FillSchemaWithModel(dic2, userFromDb);
+
+                    //model = new StepViewModel<BaseDynamicField>
+                    //{
+                    //    StepIndex = stepIndex,
+                    //    Title = "第二頁",
+                    //    Data = SendData == null ? dic2 : await _supplierService.MappingSendData(dic2, SendData)
+                    //};
+                    break;
+                case 3:
+                    //Dictionary<string, List<DynamicSupplierFileField>> dic3 = new Dictionary<string, List<DynamicSupplierFileField>>(); 
+                    //dic3["SupplierVC"] = await _supplierService.GetConfigFileListAsync(redirectData);
+                    //model = new StepViewModel<DynamicSupplierFileField>
+                    //{
+                    //    StepIndex = stepIndex,
+                    //    Title = "第三頁",
+                    //    Data = dic3
+                    //};
+                    break;
+            }
+            return model;
+        }
+
+        [HttpPost]
+        public IActionResult Save([FromBody] Dictionary<string, string> finalPayload)
+        {
+            // 檢查是否有資料
+            if (finalPayload == null || !finalPayload.Any())
+            {
+                return BadRequest("未收到有效的 JSON 資料");
+            }
+
+            // 1. 這裡可以直接看到您的資料結構，例如：
+            // var userName = finalPayload["BasicSection"]["UserName"];
+
+            // 2. 接著執行您之前設定好的 AutoMapper 轉換
+            // var userProfile = _mapper.Map<UserProfile>(finalPayload);
+
+            // var userProfile = _mapper.Map<UserProfile>(rawData);
+            //  var dbData = userProfile.ToDbParameters();
+
+            _supplierService.Save(finalPayload);
+            // 3. 執行 DB 儲存邏輯...
+
+            return Ok(new { success = true, message = "已成功接收並轉換" });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMakerData(string makername, string companyid)
+        {
+            if (string.IsNullOrEmpty(makername))
+            {
+                return Json(new
+                {
+                    success = true,
+                    tbMaker1 = new List<vmMakerDetail>(), // 給第一個表的資料
+                    tbMaker2 = new List<vmMakerDetail>()       // 給第二個表的資料
+                });
+            }
+
+
+            var lsvwMaker1 = await _supplierService.GetMakerDataFromGroupAsync(makername, companyid);
+
+            if (lsvwMaker1.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+            var lsvwMaker2 = await _supplierService.GetMakerDataInternalAsync(makername);
+
+            if (lsvwMaker2.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+
+
+
+            return Json(new
+            {
+                success = true,
+                tbMaker1 = lsvwMaker1,  // 這裡的 Key 就是前端 <table id="SupplierGrid">
+                tbMaker2 = lsvwMaker2     // 這裡的 Key 就是前端 <table id="OrderGrid"> 
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetVendorData(string vendorname)
+        {
+            if (string.IsNullOrEmpty(vendorname))
+            {
+                return Json(new
+                {
+                    success = true,
+                    tbVendor = new List<vmVendorDetail>(),
+                });
+            }
+
+            var lsvmVender = await _supplierService.GetVendorInfoAsync(vendorname);
+
+            if (lsvmVender.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+            return Json(new
+            {
+                success = true,
+                tbVendor = lsvmVender,  // 這裡的 Key 就是前端 <table id="SupplierGrid"> 
+            });
+        }
+
+        [HttpGet]
+
+        public async Task<IActionResult> GetSupplierForm()
+        {
+
+            var sectionConfigs = new Dictionary<string, List<BaseDynamicField>>();
+            //var data = await _supplierService.GetConfigFieldAsync("Vendor","");
+            sectionConfigs["Vendor"] = new List<BaseDynamicField>();//data;
+
+            //// 模擬從資料庫查詢回來的結果
+            //var fieldList = new List<DynamicField>
+            //{
+            //    // 第一列
+            //    //new DynamicField {
+            //    //    ColId = "Company", ColName = "Company", Section = "Basic",
+            //    //    EnumType = FieldType.Select2, Must = true, Order = 1,
+            //    //    attribute = "AMSCTW:AMSC Taiwan,AMSCCN:AMSC China"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "Type", ColName = "Type", Section = "Basic",
+            //    //    EnumType = FieldType.Textbox, DefaultValue = "New Vendor", Readonly = true, Order = 2
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "SupplierType", ColName = "Supplier Type", Section = "Basic",
+            //    //    EnumType = FieldType.Dropdown, Must = true, Order = 3,
+            //    //    attribute = "Trade,Manufacturer,Service"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "EffectiveDate", ColName = "Effective Date", Section = "Basic",
+            //    //    EnumType = FieldType.Date, Must = true, Order = 4, DefaultValue = "2026-03-24"
+            //    //},
+
+            //    // 第二列
+            //    //new DynamicField {
+            //    //    ColId = "GroupName", ColName = "Group Name", Section = "GroupInfo",
+            //    //    EnumType = FieldType.Textbox, Must = true, Order = 5, Placeholder = "請輸入群組名稱"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "GroupCode", ColName = "Group Code", Section = "GroupInfo",
+            //    //    EnumType = FieldType.Textbox, Readonly = true, Order = 6
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "VendorType", ColName = "Vendor Type", Section = "GroupInfo",
+            //    //    EnumType =  FieldType.Dropdown, Must = true, Order = 7,
+            //    //    attribute = "Domestic,Overseas"
+            //    //},
+
+            //    // 地址與其他
+            //    //new DynamicField {
+            //    //    ColId = "City", ColName = "City", Section = "Address",
+            //    //   EnumType = FieldType.Textbox, Must = true, Order = 8
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "Address", ColName = "Address", Section = "Address",
+            //    //    EnumType = FieldType.Textarea, Must = true, Order = 9, Width = 6
+            //    //}
+            //};
+
+            //// 將 List 依照 Section 分組，轉成 Dictionary<string, List<DynamicField>>
+            //var viewModel = fieldList
+            //    .OrderBy(f => f.Order)
+            //    .GroupBy(f => f.Section)
+            //    .ToDictionary(g => g.Key, g => g.ToList());
+
+            // 回傳 Partial View 並帶入 Model
+            return PartialView("Supplier/_VendorInfo", sectionConfigs);
+        }
+
+
+     
+    }
+}
+
+
+
+
+``````````````````````````````````````````````````````````````
+
+using System.Reflection;
+using AutoMapper;
+using OneSupplierPlatform.Models.Infra;
+
+namespace OneSupplierPlatform.Helper.AutoMapper
+{
+    [AttributeUsage(AttributeTargets.Class)]
+    public class AutoMapDynamicAttribute : Attribute { }
+
+    [AttributeUsage(AttributeTargets.Property)]
+    public class DynamicFieldAttribute : Attribute
+    {
+        /// <summary>
+        /// 區塊名稱 (Key)
+        /// </summary>
+        public string Section { get; set; } // 區塊名稱 (Key)
+        /// <summary>
+        /// 顯示名稱(欄位補充說明)
+        /// </summary>
+        public string Label { get; set; } = "";
+        /// <summary>
+        /// 對應 DB 的欄位名
+        /// </summary>
+        public string DbColumn { get; set; }
+    }
+
+
+    public class DynamicMappingProfile : Profile
+    {
+        public DynamicMappingProfile()
+        { 
+            var modelTypes = AppDomain.CurrentDomain.GetAssemblies()
+                               .SelectMany(s => s.GetTypes())
+                               .Where(t => t.GetCustomAttribute<AutoMapDynamicAttribute>() != null);
+
+            foreach (var type in modelTypes)
+            {
+                // 規則 A：從 Dictionary<string, List<DynamicField>> 轉向 Model
+                var listConverter = typeof(DynamicToModelConverter<>).MakeGenericType(type);
+                CreateMap(typeof(Dictionary<string, List<BaseDynamicField>>), type)
+                    .ConvertUsing(listConverter);
+
+                // 規則 B：從 Dictionary<string, Dictionary<string, string>> 轉向 Model
+                var nestedConverter = typeof(FlexibleNestedToModelConverter<>).MakeGenericType(type);
+                CreateMap(typeof(Dictionary<string, Dictionary<string, string>>), type)
+                    .ConvertUsing(nestedConverter);
+            } 
+        } 
+    }
+    public class FlexibleNestedToModelConverter<T> : ITypeConverter<Dictionary<string, Dictionary<string, string>>, T> where T : new()
+    {
+        public T Convert(Dictionary<string, Dictionary<string, string>> source, T destination, ResolutionContext context)
+        {
+            var model = new T();
+            var flatData = source.SelectMany(x => x.Value)
+                                 .ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var prop in typeof(T).GetProperties())
+            {
+                var attr = prop.GetCustomAttribute<DynamicFieldAttribute>();
+
+                // 嘗試從字典取值，優先序：1. 屬性名 (Age) 2. DB 欄位名 (USR_AGE)
+                string value = null;
+                if (!flatData.TryGetValue(prop.Name, out value))
+                {
+                    if (attr?.DbColumn != null)
+                        flatData.TryGetValue(attr.DbColumn, out value);
+                }
+
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    try
+                    {
+                        var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                        prop.SetValue(model, System.Convert.ChangeType(value, targetType));
+                    }
+                    catch { /* skip */ }
+                }
+            }
+            return model;
+        }
+    }
+
+    // 針對 List<DynamicField> 的轉換器
+    public class DynamicToModelConverter<T> : ITypeConverter<Dictionary<string, List<BaseDynamicField>>, T> where T : new()
+    {
+        public T Convert(Dictionary<string, List<BaseDynamicField>> source, T destination, ResolutionContext context)
+        {
+            var model = new T();
+            if (source == null) return model; 
+            var allFields = source.SelectMany(x => x.Value)
+                                  .ToDictionary(f => f.ColId, f => f.ColValue, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var prop in typeof(T).GetProperties())
+            {
+                if (allFields.TryGetValue(prop.Name, out var value) && !string.IsNullOrWhiteSpace(value))
+                {
+                    try
+                    {
+                        var targetType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                        prop.SetValue(model, System.Convert.ChangeType(value, targetType));
+                    }
+                    catch { /* 忽略錯誤 */ }
+                }
+            }
+            return model;
+        }
+    }
+}
+
+
+
+
+///////////////////////////////////////////////
+
+
+ 
+using Microsoft.AspNetCore.Razor.TagHelpers;
+using OneSupplierPlatform.Helper.Extensions;
+using OneSupplierPlatform.Models.Infra;
+using System.Text;
+
+namespace auomvc.Helper
+{
+    public static class RuleBuilder
+    {
+        public static string Build(List<ValidationRule> rules)
+        {
+            if (rules == null || rules.Count == 0)
+                return "";
+
+            var parts = new List<string>();
+
+            foreach (var r in rules)
+            {
+                if (string.IsNullOrEmpty(r.Value))
+                {
+                    parts.Add(r.Name);
+                }
+                else
+                {
+                    parts.Add($"{r.Name}:{r.Value}");
+                }
+            }
+
+            return string.Join("|", parts);
+        }
+    }
+    public static class FieldRenderer
+    { // =========================
+      // Validation attributes
+      // =========================
+
+        private static string BuildValidationAttrs(DynamicField f)
+        {
+            var sb = new StringBuilder();
+
+            // ⭐ 改這裡（統一出口）
+            var rules = RuleBuilder.Build(f.ValidationRules);
+
+            if (!string.IsNullOrEmpty(rules))
+                sb.Append($"data-rule='{rules}' ");   // ⭐ 建議改 singular
+
+            // pattern 保留（browser 原生支援）
+            var pattern = f.ValidationRules.FirstOrDefault(x => x.Name == "pattern")?.Value;
+            if (!string.IsNullOrEmpty(pattern))
+                sb.Append($"data-pattern='{pattern}' ");
+
+            return sb.ToString();
+        }
+        // =========================
+        // Common attributes
+        // =========================
+        private static string BuildCommonAttrs(DynamicField f, bool isSelect = false)
+        {
+            var sb = new StringBuilder();
+
+            if (!string.IsNullOrEmpty(f.Placeholder))
+                sb.Append($"placeholder='{f.Placeholder}' ");
+            if (!string.IsNullOrEmpty(f.Col))
+                sb.Append($"data-col='{f.Col}' ");
+
+            // =========================
+            // Behavior Rule: readonly
+            // =========================
+            if (f.HasBehavior("readonly"))
+            {
+                sb.Append(isSelect ? "disabled " : "readonly ");
+            }
+
+            return sb.ToString();
+        }
+
+
+
+        private static string BuildAllAttrs(DynamicField f, bool isSelect = false)
+        {
+            return BuildCommonAttrs(f, isSelect) + BuildValidationAttrs(f);
+        }
+
+        private static string WrapField(string innerHtml)
+        {
+
+            return $@"
+                <div class='field'>
+                    <div class='field-input'> 
+                        {innerHtml} 
+                    </div>
+                  
+                </div>";
+            //<div class='field-meta'>
+            //         <small class='field-msg'></small>
+            //     </div>
+        }
+
+        // =========================
+        // Main render
+        // =========================
+        public static string RenderField(DynamicField f, bool hasLabel = true, string stepKey = "")
+        {
+            // =========================
+            // Behavior Rule: hidden
+            // ========================= 
+            if (f.HasBehavior("hidden"))
+                return RenderHiddenField(f, stepKey);
+
+            var colWidth = hasLabel ? f.Width : 12;
+
+            var label = hasLabel ? RenderOnlyLabel(f) : "";
+
+            return $@"
+                    <div class='row align-items-center mb-1'> 
+                        {label} 
+                        <div class='col-{colWidth}'>
+                            {RenderControl(f, stepKey)}
+                        </div>
+                    </div>";
+        }
+
+        private static string RenderOnlyLabel(DynamicField f)
+        {
+            return $@"
+                    <label class='col-3 mb-0 d-flex align-items-center'>
+                        <span class='star'>{(f.HasValidation("required") ? "*" : "")}</span>
+                        <span class='label-text tooltip-auto' data-title='{f.ColName}'>{f.ColName}</span>
+                    </label>";
+        }
+
+        private static string RenderHiddenField(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            return $@"<div class='input-with-icon'>
+            <input type='hidden'
+                   data-field='{f.ColId}'
+                   data-step='{stepKey}'
+                   value='{val}' /></div>";
+        }
+        // =========================
+        // Controls
+        // =========================
+        private static string RenderControl(DynamicField f, string stepKey)
+        {
+            return f.EnumType switch
+            {
+                FieldType.Hybrid => Renderchktext(f, stepKey),
+                FieldType.Label => RenderLabel(f, stepKey),
+                FieldType.OnlyLabel => RenderOnlyLabel(f),
+                FieldType.Textbox => RenderTextbox(f, stepKey),
+                FieldType.Numeric => RenderNumeric(f, stepKey),
+                FieldType.Date => RenderDate(f, stepKey),
+                FieldType.Textarea => RenderTextarea(f, stepKey),
+                FieldType.Dropdown or FieldType.Select2 => RenderDropdown(f, stepKey),
+                FieldType.Radio => RenderRadio(f, stepKey),
+                FieldType.File => RenderFile(f, stepKey),
+                _ => $"<span>未知 {f.EnumType}</span>"
+            };
+        }
+        private static string RenderLabel(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            return WrapField($@" 
+                        <div class='input-with-icon'>
+                            <div data-field='{f.ColId}'
+                                 data-step='{stepKey}'
+                                 data-type='label'
+                                 class='label-display'>
+                                {val}
+                            </div> 
+                        <span class='field-icon'><i class='bi bi-check-circle text-success'></i></span>
+                    </div>");
+        }
+        private static string Renderchktext(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var attrs = BuildAllAttrs(f);
+
+            return WrapField($@"
+<div class='input-with-icon checkbox-text-wrapper'
+     data-field='{f.ColId}'
+     data-step='{stepKey}'
+     data-type='checkbox-text'>
+
+    <div class='form-check me-2'>
+        <input class='form-check-input'
+               type='checkbox'
+               id='{f.ColId}_chk'
+               data-role='checkbox' />
+    </div>
+
+    <input type='text'
+           class='form-control form-control-sm flex-fill'
+           id='{f.ColId}'
+           data-role='textbox'
+           value='{val}' />
+
+    <span class='field-icon'>
+        <i class='bi bi-check-circle text-success'></i>
+    </span>
+
+</div>");
+        }
+        private static string RenderFile(DynamicField f, string stepKey)
+        {
+            var attrs = BuildAllAttrs(f);
+
+            // ⭐ accept（可用 validation rule 或 behavior）
+            var accept = f.ValidationRules
+                ?.FirstOrDefault(x => x.Name == "accept")?.Value;
+
+            var multiple = f.HasBehavior("multiple") ? "multiple" : "";
+
+            if (!string.IsNullOrEmpty(accept))
+                attrs += $" accept='{accept}' ";
+            return WrapField($@"
+<div class='file-wrapper'>
+
+    <div class='file-control'> 
+
+        <div class='input-with-icon'>
+
+            <input type='file'
+                   id='{f.ColId}'
+                   class='file-input'
+                   data-field='{f.ColId}'
+                   data-step='{stepKey}'
+                   data-type='file'
+                   {multiple}
+                   {attrs} />
+
+            <label for='{f.ColId}' class='file-picker-btn tooltip-auto' data-title='上傳檔案'>
+                <i class='bi bi-upload'></i>
+            </label>
+
+            <!-- ⭐ 改成同一列 -->
+            <div class='file-line tooltip-auto' data-title='{f.ColValue}'>
+
+                <div class='file-name text-truncate text-muted small d-none'></div>
+
+                <span class='field-icon'>
+                    <i class='bi bi-check-circle text-success'></i>
+                </span>
+
+            </div>
+
+        </div>
+
+        <div class='file-actions d-none'>    
+            <button type='button'
+                    class='btn btn-sm btn-outline-primary file-preview-btn tooltip-auto' data-title='預覽'>
+                👁
+            </button>
+
+            <button type='button'
+                    class='btn btn-sm btn-outline-danger file-remove tooltip-auto' data-title='刪除'>
+                🗑
+            </button>
+        </div> 
+
+    </div>
+    
+</div>
+");
+        }
+        private static string RenderTextbox(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var attrs = BuildAllAttrs(f);
+
+            return WrapField($@"
+            <div class='input-with-icon'>
+                <input type='text'
+                       class='form-control'
+                       data-field='{f.ColId}'
+                       data-step='{stepKey}'
+                       data-type='textbox'  value='{val}'
+                       {attrs} />
+                <span class='field-icon'><i class='bi bi-check-circle text-success'></i></span>
+             </div>
+            ");
+        }
+
+        private static string RenderNumeric(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var attrs = BuildAllAttrs(f);
+            //已包在rule, 可以多加，browser控制
+            //var min = f.ValidationRules.FirstOrDefault(x => x.Name == "min")?.Value;
+            //var max = f.ValidationRules.FirstOrDefault(x => x.Name == "max")?.Value;
+
+            //if (!string.IsNullOrEmpty(min))
+            //    attrs += $" min='{min}' ";
+
+            //if (!string.IsNullOrEmpty(max))
+            //    attrs += $" max='{max}' ";
+
+            return WrapField($@"<div class='input-with-icon'>
+                <input type='number'
+                       class='form-control'
+                       data-field='{f.ColId}'
+                       data-step='{stepKey}'
+                       data-type='number'   value='{val}'
+                       {attrs} />
+   <span class='field-icon'><i class='bi bi-check-circle text-success'></i></span>
+ </div>");
+        }
+
+        private static string RenderDate(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var attrs = BuildAllAttrs(f);
+
+            return WrapField($@"<div class='input-with-icon'>
+<input type='date'
+       class='form-control'
+       data-field='{f.ColId}'
+       data-step='{stepKey}'
+       data-type='date'   value='{val}'
+       {attrs} />
+   <span class='field-icon'><i class='bi bi-check-circle text-success'></i></span>
+ </div>");
+        }
+
+        private static string RenderTextarea(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var attrs = BuildAllAttrs(f);
+
+            return WrapField($@" <div class='input-with-icon'>
+<textarea class='form-control'
+          data-field='{f.ColId}'
+          
+          data-step='{stepKey}'
+          data-type='textarea'
+          {attrs}>{val}</textarea>     
+<span class='field-icon'><i class='bi bi-check-circle text-success'></i></span>
+ </div>");
+        }
+        private static string RenderRadio(DynamicField f, string stepKey)
+        {
+            var val = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var attrs = BuildAllAttrs(f);
+
+            var sb = new StringBuilder();
+
+            sb.Append($@" <div class='input-with-icon'>
+<div class='field'
+     data-field='{f.ColId}'
+     data-step='{stepKey}'
+     data-type='radio'
+     {attrs}>
+     
+    <div class='radio-group'>");
+
+            foreach (var op in f.Options ?? new())
+            {
+                var id = $"{f.ColId}_{op.Value}";
+
+                var isChecked =
+                    string.Equals(op.Value?.Trim(),
+                                  val?.ToString()?.Trim(),
+                                  StringComparison.OrdinalIgnoreCase);
+
+                sb.Append($@"
+<label for='{id}'>
+    <input type='radio'
+           id='{id}'
+           name='{f.ColId}'
+           data-field='{f.ColId}'
+           data-step='{stepKey}'
+           value='{op.Value}'
+           {(isChecked ? "checked" : "")}
+           {(f.HasBehavior("readonly") ? "disabled" : "")} />
+    {op.Text}
+</label>");
+            }
+
+            sb.Append(@"<span class='field-icon'><i class='bi bi-check-circle text-success'></i></span>
+    </div>
+</div>
+ </div>");
+
+            return sb.ToString();
+        }
+        private static string RenderDropdown(DynamicField f, string stepKey)
+        {
+            var classList = new List<string> { };
+            if (f.EnumType == FieldType.Select2) classList.AddRange(new List<string>() { "form-control", "select2" });
+            if (f.EnumType == FieldType.Dropdown) classList.AddRange(new List<string>() { "form-control", "valueInput", "dropdownColor" });
+
+            string classes = string.Join(" ", classList);
+
+            var attrs = BuildAllAttrs(f, true);
+            var current = ViewHelper.ResolveValue(f.ColValue, f.DefaultValue);
+            var sb = new StringBuilder();
+
+            sb.Append($@"<div class='input-with-icon'>
+                <select class='{classes}'
+                        data-field='{f.ColId}'
+                        data-step='{stepKey}'
+                        data-type='dropdown'
+                        {attrs}>");
+
+            sb.Append("<option value='' data-color='white' style='background-color:white'>請選擇</option>");
+
+            foreach (var op in f.Options)
+            {
+                var selected = op.Value == current ? "selected" : ""; // ⭐ 在這裡
+
+                sb.Append($@"
+                        <option value='{op.Value}' data-color='{op.Color}' style='background-color:{op.Color}' {selected}>
+                            {op.Text}
+                        </option>");
+            }
+
+            sb.Append("</select>    <span class='field-icon'><i class='bi bi-check-circle text-success'></i></span></div>");
+
+            return WrapField(sb.ToString());
+        }
+    }
+
+    [HtmlTargetElement("df-field")]
+    public class DfFieldTagHelper : TagHelper
+    {
+        public BaseDynamicField Field { get; set; }
+        public string StepKey { get; set; }
+
+        public string Name { get; set; }
+
+        public string Col { get; set; }
+        public string? Value { get; set; }
+        public string Type { get; set; } = "Textbox";
+        // ===== Validation =====
+        public bool? Must { get; set; } = false;
+        public string AsyncUrl { get; set; }
+
+        // numeric only
+        public string? Min { get; set; }
+        public string? Max { get; set; }
+
+        // textbox only
+        public string? MaxLength { get; set; }
+        public string? Pattern { get; set; }
+
+        // ===== UI =====
+        public string? Placeholder { get; set; }
+
+        public string DefaultValue { get; set; }
+        // ===== Behavior =====
+        public bool? Readonly { get; set; }
+        public bool? Hidden { get; set; }
+        public string Target { get; set; }
+        public string? OptionStr { get; set; }
+        public bool HasLabel { get; set; } = true;
+        //public string? GroupKey { get; set; } = "";
+        public int? Width { get; set; }
+        public int? Order { get; set; }
+        public override void Process(TagHelperContext context, TagHelperOutput output)
+        {
+            if (Field != null)
+            {
+                Field.EnumType = Field.EnumType ?? Type;
+                Field.Col = Field.Col ?? Col;
+                //Field.Must = Field.Must ?? Must;
+            }
+            var f =
+                Field != null ?
+                DynamicFieldMapper.ToDomain(Field) :
+            DynamicFieldMapper.ToDomain(new BaseDynamicField
+            {
+                ColName = Name,
+                ColId = Name,
+                ColValue = Value,
+                ObjectType = Type,
+                Col = Col,
+                Must = Must ?? false,
+                AsyncUrl = AsyncUrl,
+                Min = Min,
+                Max = Max,
+                //MaxLength = MaxLength,
+                Pattern = Pattern,
+
+                Placeholder = Placeholder,
+                DefaultValue = DefaultValue,
+
+                Readonly = Readonly ?? false,
+                //Hidden = Hidden,
+                Target = Target,
+
+                Width = Width,   // let mapper default
+                Order = Order,
+                OptionStr = OptionStr,
+            });
+
+            output.TagName = null;
+
+            output.Content.SetHtmlContent(
+                FieldRenderer.RenderField(f, HasLabel, StepKey)
+            );
+        }
+    }
+
+    [HtmlTargetElement("df-form")]
+    public class DfFormTagHelper : TagHelper
+    {
+        public List<DynamicField> Fields { get; set; }
+        public string StepKey { get; set; }
+
+        public bool HasLabel { get; set; } = true;
+
+        public override void Process(TagHelperContext context, TagHelperOutput output)
+        {
+            var sb = new StringBuilder();
+
+            foreach (var f in Fields.OrderBy(x => x.Order))
+            {
+                //f.GroupKey = "";//Key;
+
+                sb.Append(FieldRenderer.RenderField(f, HasLabel, StepKey));
+            }
+
+            output.TagName = null;
+            output.Content.SetHtmlContent(sb.ToString());
+        }
+    }
+}
+
+
+
+
+
+
+
+==============================================
+
+
+
+using System.Collections.Concurrent;
+using System.Data;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Xml.Linq;
+using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using OneSupplierPlatform.Helper.Extensions;
+using OneSupplierPlatform.Models.Infra;
+
+namespace OneSupplierPlatform.Helper.Extensions
+{
+    public class ColumnList<T> : System.Collections.IEnumerable
+    {
+        public List<ColumnSchema> AllColumns = new();
+
+        // 支援 Lambda: 會自動對應到 { x => x.Prop }
+        public void Add(System.Linq.Expressions.Expression<Func<T, object>> expr)
+        {
+            string pName = ExtendTool.GetPropertyName(expr);
+            string jName = ExtendTool.GetJsonName(typeof(T), pName);
+            AllColumns.Add(new ColumnSchema(jName, pName));
+        }
+
+        // 支援字串: 會自動對應到 { "City" }
+        public void Add(string propertyName)
+        {
+            string jName = ExtendTool.GetJsonName(typeof(T), propertyName);
+            AllColumns.Add(new ColumnSchema(jName, propertyName));
+        }
+
+        // 必須實作 IEnumerable 才能使用初始化器語法糖
+        public System.Collections.IEnumerator GetEnumerator() => AllColumns.GetEnumerator();
+    }
+
+    public static class ExtendTool
+    {
+        // 快取緩存：Key 是 "類別全名.屬性名"，Value 是 "Json ID"
+        private static readonly ConcurrentDictionary<string, string> _nameCache = new();
+
+        //public static string GetPropertyName(LambdaExpression expr)
+        //{
+        //    MemberExpression member = expr.Body as MemberExpression;
+        //    if (member == null && expr.Body is UnaryExpression unary)
+        //        member = unary.Operand as MemberExpression;
+
+        //    return member?.Member.Name ?? throw new ArgumentException("無效的表達式");
+        //}
+
+
+        /// <summary>
+        /// 方法 1：將 Lambda 表達式 (x => x.MakerCode) 轉為字串 "MakerCode"
+        /// </summary>
+        public static string GetPropertyName(LambdaExpression propertySelector)
+        {
+            MemberExpression member = propertySelector.Body as MemberExpression;
+
+            // 處理 Boxing 情況 (例如 int 轉 object 會產生 UnaryExpression)
+            if (member == null && propertySelector.Body is UnaryExpression unary)
+            {
+                member = unary.Operand as MemberExpression;
+            }
+
+            if (member == null)
+                throw new ArgumentException($"表達式 {propertySelector} 不是有效的屬性存取。");
+
+            return member.Member.Name;
+        }
+
+        /// <summary>
+        /// 方法 2：取得屬性上的 [JsonProperty] 名稱，若無則回傳原名 (泛型版)
+        /// </summary>
+        public static string GetJsonName<T>(string propertyName)
+        {
+            return GetJsonName(typeof(T), propertyName);
+        }
+
+        /// <summary>
+        /// 方法 2 的實作：支援 Type 物件傳入
+        /// </summary>
+        public static string GetJsonName(Type type, string propertyName)
+        {
+            string cacheKey = $"{type.FullName}.{propertyName}";
+
+            return _nameCache.GetOrAdd(cacheKey, _ =>
+            {
+                PropertyInfo prop = type.GetProperty(propertyName);
+                if (prop == null) return propertyName;
+
+                // 取得 Newtonsoft.Json 的 JsonPropertyAttribute
+                var attr = prop.GetCustomAttribute<JsonPropertyAttribute>();
+
+                // 如果有定義 PropertyName 則回傳，否則回傳 C# 屬性原名
+                return attr?.PropertyName ?? propertyName;
+            });
+        }
+
+
+        public static List<T> ToList<T>(this DataTable dt) where T : new()
+        {
+            var properties = typeof(T).GetProperties();
+            return dt.AsEnumerable().Select(row =>
+            {
+                var obj = new T();
+                foreach (var prop in properties)
+                {
+                    // 比對欄位名稱是否存在且有值
+                    if (dt.Columns.Contains(prop.Name) && row[prop.Name] != DBNull.Value)
+                    {
+                        prop.SetValue(obj, Convert.ChangeType(row[prop.Name], prop.PropertyType));
+                    }
+                }
+                return obj;
+            }).ToList();
+        }
+
+        /// <summary>
+        /// 自動根據目前的 Partial View 檔名產生 data-section 屬性字串
+        /// </summary>
+        public static IHtmlContent GetPartialSection(this IHtmlHelper htmlHelper, object suffix = null)
+        {
+            var viewPath = htmlHelper.ViewContext.ExecutingFilePath;
+            if (string.IsNullOrEmpty(viewPath)) return HtmlString.Empty;
+
+            string fileNameOnly = Path.GetFileNameWithoutExtension(viewPath);
+
+            // 如果有傳入後綴（如 ID 或 Index），就接在檔名後面
+            string finalSectionId = suffix != null
+                ? $"{fileNameOnly}_{suffix}"
+                : fileNameOnly;
+
+            return new HtmlString($"data-section=\"{finalSectionId}\"");
+        }
+
+
+        public static string GetString(this Dictionary<string, object>? dict, string key)
+        {
+            if (dict == null) return "";
+            return dict.ContainsKey(key) ? dict[key]?.ToString() : null;
+        }
+
+        public static List<string> GetList(this Dictionary<string, object> dict, string key)
+        {
+            if (dict == null) return new List<string>();
+
+            if (!dict.ContainsKey(key)) return new List<string>();
+
+            var arr = dict[key] as JArray;
+            return arr?.ToObject<List<string>>();
+        }
+
+        public static T GetObject<T>(this Dictionary<string, object> dict, string key)
+        {
+            if (!dict.ContainsKey(key)) return default;
+
+            var obj = dict[key] as JObject;
+            return obj != null ? obj.ToObject<T>() : default;
+        }
+
+
+        public static T ToModel<T>(this IDictionary<string, string> dict)
+        {
+            return JObject.FromObject(dict).ToObject<T>();
+        }
+    }
+   
+
+}
+
+
+
+
+
+
+===================================
+
+
+using Microsoft.AspNetCore.Html;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Newtonsoft.Json;
+
+//using Newtonsoft.Json;
+using System.Reflection;
+using System.Text.Json;
+namespace OneSupplierPlatform.Helper.Extensions
+{
+    public static class ViewHelper
+    {
+        public static string ResolveValue(string value, string defaultValue)
+        {
+            return !string.IsNullOrEmpty(value) ? value : (defaultValue ?? "");
+        }
+        public static IHtmlContent RenderAppConfig(this IHtmlHelper htmlHelper, string sectionName = "FileUploadConfig")
+        {
+            var config = htmlHelper.ViewContext.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
+
+            // 1. 取得指定的整個區塊 (例如 FrontendConfig)
+            var section = config.GetSection(sectionName);
+
+            // 2. 將該區塊轉換為 Dictionary，方便序列化
+            var settings = section.AsEnumerable()
+                .Where(x => x.Value != null)
+                .ToDictionary(x => x.Key.Replace($"{sectionName}:", ""), x => x.Value);
+
+            // 3. 序列化為 JSON (使用 CamelCase 讓 JS 好讀)
+            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            var json = System.Text.Json.JsonSerializer.Serialize(settings, jsonOptions);
+
+            return new HtmlString($"<script>window.appConfig = {json};</script>");
+        }
+
+        public static Dictionary<string, string> MapKeysToJsonProperty<T>(Dictionary<string, string> rawData)
+        {
+            if (rawData == null) return new Dictionary<string, string>();
+
+            // 1. 取得該類別中所有屬性與 [JsonProperty] 的對照表 (快取機制可優化效能)
+            var mapping = typeof(T)
+                .GetProperties()
+                .Select(p => new
+                {
+                    PropertyName = p.Name, // 例如 "MakerCode"
+                    JsonName = p.GetCustomAttribute<JsonPropertyAttribute>()?.PropertyName // 例如 "maker_code"
+                })
+                // 只抓取有標記 JsonProperty 的屬性
+                .Where(x => !string.IsNullOrEmpty(x.JsonName))
+                .ToDictionary(x => x.PropertyName, x => x.JsonName);
+
+            var result = new Dictionary<string, string>();
+
+            // 2. 遍歷原始資料進行 Key 替換
+            foreach (var item in rawData)
+            {
+                // 如果屬性名有標記 JsonProperty，則換成標記名；否則維持原 Key
+                string finalKey = mapping.TryGetValue(item.Key, out var jsonName) ? jsonName : item.Key;
+                result[finalKey] = item.Value;
+            }
+
+            return result;
+        }
+    }
+}
+
+
+
+=-============================================
+
+using static System.Net.Mime.MediaTypeNames;
+using System.Text.RegularExpressions;
+
+namespace OneSupplierPlatform.Models.Infra
+{
+    public enum FieldType
+    {
+        OnlyLabel,
+        Hidden,
+        Label,
+        Textbox,
+        Dropdown,
+        Select2,
+        Numeric,
+        Date,
+        Textarea,
+        File,
+        Radio,
+        Hybrid
+    }
+
+    public static class Safe
+    {
+        public static bool False(bool? v) => v == true;
+        public static int Value(int? v, int def) => v ?? def;
+    }
+    public static class RuleSchemaRegistry
+    {
+        public static readonly Dictionary<FieldType, HashSet<string>> ValidationRules = new()
+        {
+            [FieldType.Textbox] = new() { "required", "maxlength", "pattern", "async", "map" },
+            [FieldType.Numeric] = new() { "required", "min", "max" },
+            [FieldType.Date] = new() { "required", "min", "max" },
+            [FieldType.Textarea] = new() { "required", "maxlength" },
+            [FieldType.Dropdown] = new() { "required" },
+            [FieldType.Radio] = new() { "required" },
+            [FieldType.File] = new() { "required", "accept", "maxsize", "async", "map" },
+        };
+
+        public static readonly Dictionary<FieldType, HashSet<string>> BehaviorRules = new()
+        {
+            [FieldType.Hidden] = new() { "readonly", "hidden" },
+            [FieldType.Textbox] = new() { "readonly", "hidden" },
+            [FieldType.Numeric] = new() { "readonly", "hidden" },
+            [FieldType.Date] = new() { "readonly", "hidden" },
+            [FieldType.Textarea] = new() { "readonly", "hidden" },
+            [FieldType.Dropdown] = new() { "readonly", "hidden" },
+            [FieldType.Radio] = new() { "readonly", "hidden" },
+            [FieldType.File] = new() { "readonly", "hidden", "multiple" },
+        };
+
+        public static bool AllowValidation(FieldType t, string rule)
+            => ValidationRules.TryGetValue(t, out var set) && set.Contains(rule);
+
+        public static bool AllowBehavior(FieldType t, string rule)
+            => BehaviorRules.TryGetValue(t, out var set) && set.Contains(rule);
+    }
+
+    //public class DynamicSupplierFileField : BaseDynamicField
+    //{
+    //    public string VCType { get; set; }
+    //    public string ExpiredDate { get; set; } = "N";
+
+    //    [System.Text.Json.Serialization.JsonIgnore]
+    //    public bool IsExpired
+    //    {
+    //        get => ExpiredDate?.Trim() == "Y";
+    //        set => ExpiredDate = value ? "Y" : "N";
+    //    }
+    //    public List<string> FileList { get; set; } = new List<string>();
+    //}
+
+
+    // =========================
+    // Domain Model（高階模型）
+    // =========================
+    public class DynamicField
+    {
+        //public string GroupKey { get; set; }
+        public string Col { get; set; }
+        public string ColId { get; set; }
+        public string ColName { get; set; }
+
+        public string? ColValue { get; set; }
+        public FieldType EnumType { get; set; }
+        public string AsyncUrl { get; set; }
+        public string Target { get; set; }
+        public string DefaultValue { get; set; }
+        // UI Meta
+        public string Placeholder { get; set; }
+        public int Width { get; set; }
+        public int Order { get; set; }
+
+        public List<SelectItem> Options { get; set; } = new();
+
+        // Validation rules
+        public List<ValidationRule> ValidationRules { get; set; } = new();
+
+        // Behavior rules
+        public List<BehaviorRule> BehaviorRules { get; set; } = new();
+
+        // Helpers
+        public bool HasValidation(string name)
+            => ValidationRules.Any(x => x.Name == name);
+
+        public bool HasBehavior(string name)
+            => BehaviorRules.Any(x => x.Name == name);
+    }
+
+    // =========================
+    // Validation Rule
+    // =========================
+    public class ValidationRule
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+
+        public ValidationRule() { }
+
+        public ValidationRule(string name, string value = null)
+        {
+            Name = name;
+            Value = value;
+        }
+    }
+
+    // =========================
+    // Behavior Rule
+    // =========================
+    public class BehaviorRule
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+
+        public BehaviorRule() { }
+
+        public BehaviorRule(string name, string value = null)
+        {
+            Name = name;
+            Value = value;
+        }
+    }
+
+    // =========================
+    // Mapper（核心轉換層）
+    // =========================
+    public static class DynamicFieldMapper
+    {
+        public static DynamicField ToDomain(BaseDynamicField e)
+        {
+            var EnumType = Enum.Parse<FieldType>(e.EnumType);
+
+            return new DynamicField
+            {
+                ColId = e.ColId,
+                ColName = e.ColName,
+                Col = e.Col,
+                ColValue = e.ColValue,
+                EnumType = EnumType,
+                Options = OptionParser.Parse(e.OptionStr ?? ""), // ⭐ 這行
+
+                Width = e.Width ?? 3,
+                Order = e.Order ?? 0,
+                Placeholder = e.Placeholder ?? "",
+                DefaultValue = e.DefaultValue ?? "",
+                ValidationRules = MapValidation(e),
+                BehaviorRules = MapBehavior(e)
+            };
+        }
+
+        public static BaseDynamicField ToEntity(DynamicField d)
+        {
+            var e = new BaseDynamicField
+            {
+                ColId = d.ColId,
+                ColName = d.ColName, 
+                EnumType = d.EnumType.ToString(),
+                Placeholder = d.Placeholder,
+                Width = d.Width,
+                Order = d.Order
+            };
+
+            foreach (var r in d.ValidationRules)
+            {
+                switch (r.Name)
+                {
+                    case "required":
+                        e.Must = true;
+                        break;
+
+                    case "min":
+                        e.Min = r.Value;
+                        break;
+
+                    case "max":
+                        e.Max = r.Value;
+                        break;
+
+                    case "pattern":
+                        e.Pattern = r.Value;
+                        break;
+                }
+            }
+
+            foreach (var r in d.BehaviorRules)
+            {
+                switch (r.Name)
+                {
+                    case "readonly":
+                        e.Readonly = true;
+                        break;
+
+                    //case "hidden":
+                    //    e.Hidden = true;
+                    //    break;
+                }
+            }
+
+            return e;
+        }
+
+        // =========================
+        // Validation mapping
+        // =========================
+        private static List<ValidationRule> MapValidation(BaseDynamicField e)
+        {
+            var rules = new List<ValidationRule>();
+            var type = Enum.Parse<FieldType>(e.EnumType.ToString());
+
+            void Add(string name, string value = null)
+            {
+                if (RuleSchemaRegistry.AllowValidation(type, name))
+                    rules.Add(new ValidationRule(name, value));
+            }
+
+            // ✔ Must
+            if (e.Must == true)
+                Add("required");
+
+            // ✔ numeric rules
+            if (type == FieldType.Numeric)
+            {
+                //if (e.Min.HasValue)
+                //    Add("min", e.Min.Value.ToString());
+
+                //if (e.Max.HasValue)
+                //    Add("max", e.Max.Value.ToString());
+            }
+
+            // ✔ textbox rules
+            if (type == FieldType.Textbox)
+            {
+                //if (e.MaxLength.HasValue)
+                //    Add("maxlength", e.MaxLength.Value.ToString());
+
+                if (!string.IsNullOrEmpty(e.AsyncUrl))
+                    Add("async", e.AsyncUrl);
+                // ✔ ⭐ 新增 map
+                if (!string.IsNullOrEmpty(e.Target))
+                    Add("map", e.Target);
+
+                if (!string.IsNullOrEmpty(e.Pattern))
+                    Add("pattern", e.Pattern);
+            }
+            // ✔ file rules
+            if (type == FieldType.File)
+            {
+                if (!string.IsNullOrEmpty(e.AsyncUrl))
+                    Add("async", e.AsyncUrl);
+
+                if (!string.IsNullOrEmpty(e.Target))
+                    Add("map", e.Target);
+
+                // ⭐ accept (用 Pattern 或自訂欄位)
+                if (!string.IsNullOrEmpty(e.Pattern))
+                    Add("accept", e.Pattern);
+
+                // ⭐ maxsize（你可以用 Max 當 MB）
+                //if (e.Max.HasValue)
+                //    Add("maxsize", e.Max.Value.ToString());
+            }
+            return rules;
+        }
+
+        // =========================
+        // Behavior mapping
+        // =========================
+        private static List<BehaviorRule> MapBehavior(BaseDynamicField e)
+        {
+            var rules = new List<BehaviorRule>();
+            var type = Enum.Parse<FieldType>(e.EnumType.ToString());
+
+            void Add(string name)
+            {
+                if (RuleSchemaRegistry.AllowBehavior(type, name))
+                    rules.Add(new BehaviorRule(name));
+            }
+
+            if (e.Readonly == true)
+                Add("readonly");
+
+            if (e.EnumType.ToString() == "Hidden")
+                Add("hidden");
+
+            return rules;
+        }
+    }
+    public class BaseDynamicField
+    {
+        /// <summary>
+        /// 欄位代碼
+        /// </summary>
+        public string ColId { get; set; }
+
+        /// <summary>
+        /// 欄位名稱
+        /// </summary>
+        public string ColName { get; set; }
+
+        public string Col { get; set; }
+
+        public string ColValue { get; set; } = "";
+
+        protected string IsMust { get; set; } = "";
+
+        // 必需輸入
+        public bool Must
+        {
+            get => IsMust.Trim() == "Y";
+            set => IsMust = value ? "Y" : "N";
+        }
+        protected string ObjectType { get; set; } = "";
+        /// <summary>
+        /// 欄位控制項類型
+        /// </summary>
+        //public string EnumType
+        //{
+        //    get => ObjectType.Trim().ToLower() switch
+        //    {
+        //        var s when s.Contains("radio") => FieldType.Radio.ToString(),
+        //        var s when s.Contains("picker") => FieldType.Date.ToString(),
+        //        var s when s.Contains("date") => FieldType.Date.ToString(),
+        //        var s when s.Contains("numeric") => FieldType.Numeric.ToString(),
+        //        var s when s.Contains("deci") => FieldType.Numeric.ToString(),
+        //        //var s when s.Contains("int") => FieldType.Int,
+        //        var s when s.Contains("area") => FieldType.Textarea.ToString(),
+        //        var s when s.Contains("text") => FieldType.Textbox.ToString(),
+        //        var s when s.Contains("textbox") => FieldType.Textbox.ToString(),
+        //        var s when s.Contains("select2") => FieldType.Select2.ToString(),
+        //        var s when s.Contains("drop") => FieldType.Dropdown.ToString(),
+        //        var s when s.Contains("upload") => FieldType.File.ToString(),
+        //        _ => FieldType.Label.ToString() // 預設值
+        //    };
+        //    set
+        //    {
+        //        ObjectType = value switch
+        //        {
+        //            "Radio" => FieldType.Radio.ToString(),
+        //            //FieldType.Int => "Int",
+        //            "Date" => FieldType.Date.ToString(),
+        //            "Numeric" => FieldType.Numeric.ToString(),
+        //            "Textbox" => FieldType.Textbox.ToString(),
+        //            "Select2" => FieldType.Select2.ToString(),
+        //            "Textarea" => FieldType.Textarea.ToString(),
+        //            "Dropdown" => FieldType.Dropdown.ToString(),
+        //            "File" => FieldType.File.ToString(),
+        //            _ => "Label"
+        //        };
+        //    }
+        //}
+        /// <summary>
+        /// 重態欄位產生區塊標識
+        /// </summary>
+        public string Section { get; set; } = "";
+        /// <summary>
+        /// 最小值判斷(數值、日期)
+        /// </summary>
+        public string Min { get; set; } // 使用 string 以相容數字(0)與日期(2024-01-01)
+        /// <summary>
+        ///  /// <summary>
+        /// 最大值判斷(數值、日期)
+        /// </summary>
+        /// </summary>
+        public string Max { get; set; }
+        /// <summary>
+        /// 預設填值
+        /// </summary>
+        public string? DefaultValue { get; set; } = "";
+        /// <summary>
+        /// 檢查正則表示
+        /// </summary>
+        public string Pattern { get; set; } = "";
+        /// <summary>
+        /// 未輸入時佔位值
+        /// </summary>
+        public string? Placeholder { get; set; } = "";
+
+        /// <summary>
+        /// 只讀
+        /// </summary>
+        public bool Readonly { get; set; } = false;
+    
+
+        protected string Display { get; set; } = "Y";
+        /// <summary>
+        /// 是否隱藏
+        /// </summary>
+        public bool Hidden
+        {
+            get => Display == "N";
+        }
+
+        /// <summary>
+        /// 非定位時，欄位寬位
+        /// </summary>
+        public int? Width { get; set; } = 3; // bootstrap col
+        public int? Order { get; set; } = 0;   // 顯示順序
+
+        public string? OptionStr { get; set; }
+
+        /// <summary>
+        /// 下拉選項組合值 AAAA,BBB
+        /// </summary>
+        //public string attribute { get; set; } = ""; //China Car,china_car^Global Car,global_car
+        //public string? OptionStr { get; set; }
+        //public List<SelectItem>? Options
+        //{
+        //    get
+        //    {
+        //        var _attribute = attribute.Trim();
+        //        if (!string.IsNullOrWhiteSpace(DefaultValue.Trim()))
+        //        {
+        //            _attribute = DefaultValue.Trim();
+        //        }
+        //        if (string.IsNullOrWhiteSpace(_attribute)) return new List<SelectItem>();
+
+        //        if (_attribute.Contains('^'))
+        //        {
+        //            return _attribute
+        //               .Split(new[] { '^' }, StringSplitOptions.RemoveEmptyEntries)
+        //               .Select(group =>
+        //               {
+        //                   var parts = group.Split(',');
+        //                   return new SelectItem
+        //                   {
+
+        //                       Text = parts.Length > 0 ? parts[0].Trim() : "",
+        //                       Value = parts.Length > 1 ? parts[1].Trim() : "",
+        //                       Color = parts.Length > 1 ? parts[1].Trim() : ""
+        //                   };
+        //               })
+        //               .ToList();
+        //        }
+        //        if (Regex.IsMatch(_attribute, ",|;|/")) 
+        //        {
+        //            return _attribute.Split(new char[] { ',', ';', '/' }, StringSplitOptions.RemoveEmptyEntries)
+        //               .Select(item => new SelectItem
+        //               {
+        //                   Value = item?.Trim() ?? "",
+        //                   Text = item?.Trim() ?? "",
+        //                   Color = item?.Trim() ?? ""
+        //               })
+        //               .ToList();
+        //        }
+
+        //        return new List<SelectItem>(); 
+        //    }
+        //}
+
+        public string SheetName { get; set; } = "";
+
+        public string SheetColumn { get; set; } = "";
+
+        /// <summary>
+        /// 欄位定位點
+        /// </summary>
+        public string Position { get; set; } = "";
+
+        /// <summary>
+        /// 欄位描述
+        /// </summary>
+        public string ColumnDesc { get; set; } = "";
+
+
+        public bool IsRedirect
+        {
+            get => ColId.Trim() == "vendor_class";
+        }
+        public bool InverseSelect
+        {
+            get => ColId.Trim() == "maker_type";
+        }
+        public string Target { get; set; } = "";
+
+        public string AsyncUrl { get; set; } = "";
+    }
+    public static class OptionParser
+    {
+        public static List<SelectItem> Parse(string optionstr)
+        {
+            var list = new List<SelectItem>();
+
+            if (string.IsNullOrWhiteSpace(optionstr))
+                return list;
+
+            var pairs = optionstr.Split(':');
+
+            foreach (var p in pairs)
+            {
+                var kv = p.Split(',');
+
+                if (kv.Length == 2)
+                {
+                    list.Add(new SelectItem
+                    {
+                        Value = kv[1].Trim(),
+                        Text = kv[0].Trim(),
+                        Color = kv[1].Trim()
+                    });
+                }
+            }
+
+            return list;
+        }
+    }
+
+
+    public class SelectItem
+    {
+        public string Value { get; set; }
+        public string Color { get; set; }  // 新增顏色
+        public string Text { get; set; }
+    }
+}
+
+
+====================================
+
+
+namespace OneSupplierPlatform.Models.Infra
+{
+    public interface IStepViewModel { }
+    public class StepViewModel<T> : IStepViewModel
+    {
+        public int StepIndex { get; set; }
+        public string Title { get; set; }
+
+        public string StepKey 
+        {
+            get => "Step"+ StepIndex.ToString();
+        }
+       
+        public Dictionary<string, List<T>> Data { get; set; } = new Dictionary<string, List<T>>();
+    }
+}
+
+
+=============================================
+
+using System.Linq.Expressions;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using OneSupplierPlatform.Helper.Extensions;
+
+namespace OneSupplierPlatform.Models.Infra
+{
+    // 建立一個中繼類別來存當前的 Type
+    public static class TableSchemaContext
+    {
+        [ThreadStatic] public static Type CurrentType;
+    }
+    /// <summary>
+    /// DataTable 結構定義，用於描述前端 DataTable 的所有設定
+    /// </summary>
+    public class TableSchema
+    {
+        /// <summary>
+        /// Table 的 HTML Id
+        /// </summary>
+        public string TableId { get; set; }
+
+        /// <summary>
+        /// Ajax 資料來源 URL
+        /// </summary>
+        public string AjaxUrl { get; set; }
+
+        /// <summary>
+        /// 資料取得模式
+        /// </summary>
+        public FetchMode FetchMode { get; set; } = FetchMode.All;
+
+        /// <summary>
+        /// DataTable 行為設定
+        /// </summary>
+        public TableConfig Config { get; set; } = new();
+
+        /// <summary>
+        /// DataTable 額外 UI 功能
+        /// </summary>
+        public TableFeatures Features { get; set; } = new();
+
+        /// <summary>
+        /// Table 欄位定義
+        /// </summary>
+        public List<ColumnSchema> Columns { get; set; } = new();
+
+        /// <summary>
+        /// Table 工具列按鈕
+        /// </summary>
+        public List<ToolbarButton> ToolbarButtons { get; set; } = new();
+
+        /// <summary>
+        /// 每列操作按鈕
+        /// </summary>
+        public List<RowAction> RowButtons { get; set; } = new();  // <-- 統一命名
+
+        /// <summary>
+        /// 查詢篩選條件
+        /// </summary>
+        public List<TableFilter> Filters { get; set; } = new();
+
+        /// <summary>
+        /// Ajax 請求額外參數
+        /// </summary>
+        public object AjaxParams { get; set; }
+
+        /// <summary>
+        /// 表頭上的資訊
+        /// </summary>
+        public string Message { get; set; } = "";
+        /// <summary>
+        /// 一開始不要撈資料，由USERN觸發
+        /// </summary>
+        public bool AutoLoad { get; set; } = false;
+
+         
+        public static TableSchema Create<T>(ColumnList<T> list)
+        {
+            return new TableSchema { Columns = list.AllColumns };
+        }
+
+    } 
+    
+    /// <summary>
+    /// DataTable 基本行為設定
+    /// </summary>
+    public class TableConfig
+    {
+        /// <summary>
+        /// 是否顯示搜尋欄
+        /// </summary>
+        public bool Searching { get; set; } = true;
+
+        /// <summary>
+        /// 是否允許欄位排序
+        /// </summary>
+        public bool Ordering { get; set; } = true;
+
+        /// <summary>
+        /// 是否啟用分頁
+        /// </summary>
+        public bool Paging { get; set; } = true;
+
+        /// <summary>
+        /// 是否允許切換每頁顯示筆數
+        /// </summary>
+        public bool LengthChange { get; set; } = true;
+
+        /// <summary>
+        /// 每頁顯示資料筆數
+        /// </summary>
+        public int PageLength { get; set; } = 10;
+
+        /// <summary>
+        /// 是否保存表格狀態（排序、搜尋條件、頁碼）
+        /// </summary>
+        public bool StateSave { get; set; } = true;
+
+        /// <summary>
+        /// 虛擬滾動高度（px）
+        /// </summary>
+        public string? VirtualScrollHeight { get; set; }  // ex: "500px"
+    }
+    /// <summary>
+    /// DataTable 資料取得模式
+    /// </summary>
+    public enum FetchMode
+    {
+        /// <summary>
+        /// 一次取得全部資料（Client-side DataTable）
+        /// </summary>
+        All,
+
+        /// <summary>
+        /// Server-side processing
+        /// </summary>
+        Server
+    }
+    /// <summary>
+    /// DataTable UI 功能設定
+    /// </summary>
+    public class TableFeatures
+    {
+        /// <summary>
+        /// 顯示多選 Checkbox 欄位
+        /// </summary>
+        public bool Checkbox { get; set; }
+
+        /// <summary>
+        /// 啟用整列選取
+        /// </summary>
+        public bool RowSelect { get; set; }
+
+        /// <summary>
+        /// 啟用資料匯出功能（Excel / CSV / PDF）
+        /// </summary>
+        public bool Export { get; set; }
+
+        /// <summary>
+        /// 欄位顯示切換
+        /// </summary>
+        public bool ColumnToggle { get; set; }
+
+        /// <summary>
+        /// 顯示全選 Checkbox
+        /// </summary>
+        public bool SelectAll { get; set; }
+
+        /// <summary>
+        /// 啟用虛擬滾動（大量資料優化）
+        /// </summary>
+        public bool VirtualScroll { get; set; }
+        // <summary>
+        /// 啟用虛擬滾動（大量資料優化）
+        /// </summary>
+        public bool RowButtons { get; set; }      // 每列操作按鈕
+        // <summary>
+        /// 啟用虛擬滾動（大量資料優化）
+        /// </summary>
+        public bool ColumnFilter { get; set; }    // 每欄篩選
+        // <summary>
+        /// 啟用虛擬滾動（大量資料優化）
+        /// </summary>
+        public bool StickyHeader { get; set; }    // 固定表頭
+    }
+    /// <summary>
+    /// DataTable 欄位定義
+    /// </summary>
+    public class ColumnSchema
+    {
+        /// <summary>
+        /// 對應 JSON 欄位名稱
+        /// </summary>
+        public string Field { get; set; }
+
+        /// <summary>
+        /// 欄位顯示標題
+        /// </summary>
+        public string Title { get; set; }
+
+        /// <summary>
+        /// JavaScript Formatter 函式名稱
+        /// </summary>
+        public string Formatter { get; set; }
+
+        /// <summary>
+        /// 是否允許排序
+        /// </summary>
+        public bool Sortable { get; set; } = true;
+
+        /// <summary>
+        /// 是否允許搜尋
+        /// </summary>
+        public bool Searchable { get; set; } = true;
+
+        /// <summary>
+        /// 欄位寬度
+        /// </summary>
+        public string Width { get; set; }
+
+        /// <summary>
+        /// CSS Class
+        /// </summary>
+        public string CssClass { get; set; }
+
+        /// <summary>
+        /// 是否顯示此欄位
+        /// </summary>
+        public bool Visible { get; set; } = true;
+
+        
+        /// <summary>
+        /// 建立欄位（標題預設為欄位名稱）
+        /// </summary>
+        public ColumnSchema(string field, string title)
+        {
+            var type = TableSchemaContext.CurrentType; 
+            // 轉碼：若是從 TableSchema.Create 呼叫，會自動轉為 Json ID
+            Field = type != null ? ExtendTool.GetJsonName(type, field) : field;
+            Title = title;
+        }
+
+        public ColumnSchema(string field)
+        {
+            // 取得當前 TableSchema.Create 指定的類別
+            var type = TableSchemaContext.CurrentType;
+
+            // 轉碼：若是從 TableSchema.Create 呼叫，會自動轉為 Json ID
+            Field = type != null ? ExtendTool.GetJsonName(type, field) : field;
+            Title = field;
+        }
+
+        public struct Selector<T>
+        {
+            public ColumnSchema Column { get; }
+
+            // 隱式轉換 A：處理字串
+            public static implicit operator Selector<T>(string propertyName)
+            {
+                string jName = ExtendTool.GetJsonName(typeof(T), propertyName);
+                return new Selector<T>(new ColumnSchema(jName, propertyName));
+            }
+
+            // 隱式轉換 B：處理 Lambda
+            public static implicit operator Selector<T>(Expression<Func<T, object>> expr)
+            {
+                string pName = ExtendTool.GetPropertyName(expr);
+                string jName = ExtendTool.GetJsonName(typeof(T), pName);
+                return new Selector<T>(new ColumnSchema(jName, pName));
+            }
+
+            // 修改處：將 => 改為傳統的建構子寫法
+            private Selector(ColumnSchema col)
+            {
+                Column = col;
+            }
+        }
+    }
+    /// <summary>
+    /// DataTable 工具列按鈕
+    /// </summary>
+    public class ToolbarButton
+    {
+        /// <summary>
+        /// 按鈕顯示文字
+        /// </summary>
+        public string Title { get; set; }
+
+        /// <summary>
+        /// 前端 JavaScript 事件名稱
+        /// </summary>
+        public string Event { get; set; }
+
+        /// <summary>
+        /// CSS 樣式
+        /// </summary>
+        public string CssClass { get; set; }
+
+        /// <summary>
+        /// 按鈕 Icon
+        /// </summary>
+        public string Icon { get; set; }
+
+        /// <summary>
+        /// 建立工具列按鈕
+        /// </summary>
+        public ToolbarButton(string title, string evt, string css = "btn btn-primary")
+        {
+            Title = title;
+            Event = evt;
+            CssClass = css;
+        }
+    }
+
+    /// <summary>
+    /// 每列資料操作按鈕
+    /// </summary>
+    public class RowAction
+    {
+        /// <summary>
+        /// 按鈕文字
+        /// </summary>
+        public string Title { get; set; }
+
+        /// <summary>
+        /// JavaScript 事件名稱
+        /// </summary>
+        public string Event { get; set; }
+
+        /// <summary>
+        /// Icon
+        /// </summary>
+        public string Icon { get; set; }
+
+        /// <summary>
+        /// CSS 樣式
+        /// </summary>
+        public string CssClass { get; set; } = "btn btn-sm btn-primary";
+    }
+
+    /// <summary>
+    /// DataTable 查詢篩選條件
+    /// </summary>
+    public class TableFilter
+    {
+        /// <summary>
+        /// 欄位名稱
+        /// </summary>
+        public string Field { get; set; }
+
+        /// <summary>
+        /// 顯示標題
+        /// </summary>
+        public string Title { get; set; }
+
+        /// <summary>
+        /// 篩選類型
+        /// </summary>
+        public FilterType Type { get; set; }
+
+        /// <summary>
+        /// Select 選項
+        /// </summary>
+        public List<SelectOption> Options { get; set; }
+    }
+
+    /// <summary>
+    /// 篩選器類型
+    /// </summary>
+    public enum FilterType
+    {
+        /// <summary>
+        /// 文字輸入
+        /// </summary>
+        Text,
+
+        /// <summary>
+        /// 下拉選單
+        /// </summary>
+        Select,
+
+        /// <summary>
+        /// 日期
+        /// </summary>
+        Date,
+
+        /// <summary>
+        /// 數字
+        /// </summary>
+        Number
+    }
+
+    /// <summary>
+    /// Select 選項
+    /// </summary>
+    public class SelectOption
+    {
+        /// <summary>
+        /// 值
+        /// </summary>
+        public string Value { get; set; }
+
+        /// <summary>
+        /// 顯示文字
+        /// </summary>
+        public string Text { get; set; }
+    }
+}
+
+
+
+============================================
+
+namespace OneSupplierPlatform.Models.Infra
+{
+    public class WizardOptions
+    {
+        public List<WizardStepOption> Steps { get; set; } = new();
+        public bool AllowJumpToCompletedStep { get; set; } = true;
+        public bool AutoSave { get; set; } = true;
+    }
+
+    public class WizardStepOption
+    {
+        public string Title { get; set; }
+        public string PartialView { get; set; }
+        public bool Completed { get; set; } = false;
+        public bool Locked { get; set; } = true;
+        public int StepIndex { get; set; }
+        public Dictionary<string, object> Custom { get; set; } = new();
+    }
+}
+
+
+================================
+
+
+using System.Runtime.Intrinsics.X86;
+using System.Xml.Linq;
+using System;
+using System.Diagnostics.Metrics;
+using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using OneSupplierPlatform.Helper.AutoMapper;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace OneSupplierPlatform.Models
+{
+    public class vmSupplier
+    {
+        public string supplierName { get; set; }
+        //public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+    }
+
+    public class vmVendorDetail
+    {
+        [JsonProperty("ORG")]
+        public string OUSite { get; set; }
+        [JsonProperty("Inactive")]
+        public string Inactive { get; set; }
+        [JsonProperty("Group_Name")]
+        public string GroupName { get; set; }
+        [JsonProperty("Group_Code")]
+        public string GroupCode { get; set; }
+        [JsonProperty("Vendor_Name")]
+        public string VendorName { get; set; }
+        [JsonProperty("Vendor_Name_alt")]
+        public string VandorNameAlt { get; set; }
+        [JsonProperty("Vendor_Code")]
+        public string VandorCode { get; set; }
+        [JsonProperty("Vendor_Site_Id")]
+        public string SSRName { get; set; }
+        [JsonProperty("Vat_Registration_Num")]
+        public string TaxRegistration { get; set; }
+        [JsonProperty("Supplier_Type")]
+        public string SupplierType { get; set; }
+    }
+
+
+    public class vmMakerDetail
+    { 
+        public string EventName { get; set; } = "";
+        public string MakerSn { get; set; }
+        [JsonProperty("maker_code")]
+        public string MakerCode { get; set; }
+        [JsonProperty("maker_local_name")]
+        public string MakerLocalName{ get; set; }
+        [JsonProperty("maker_english_name")]
+        public string MakerEngName { get; set; }
+        [JsonProperty("maker_short_name")]
+        public string MakerShortName { get; set; }
+        [JsonProperty("country")]
+        public string Country { get; set; }
+        [JsonProperty("city")]
+        public string City { get; set; }
+
+        public string companyid { get; set; }
+        [JsonProperty("facility_address")]
+        public string FacilityAddress { get; set; }
+
+        public string companyname { get; set; }
+
+        [JsonProperty("maker_status")]
+        public string MakerStatus { get; set; }
+
+        [JsonProperty("maker_type")] 
+        public string MakerType { get; set; }
+
+        [JsonProperty("maker_group_code")]
+        public string MakerGroupCode{ get; set; }
+
+    }
+ 
+
+    [AutoMapDynamic]
+    public class UserProfile
+    {
+        [DynamicField(Section = "Supplier Information", Label = "CompanyCode", DbColumn = "company_code")]
+        public string CompanyCode { get; set; }
+
+        [DynamicField(Section = "Supplier Information", Label = "MakerType", DbColumn = "maker_type")]
+        public string MakerType { get; set; }
+
+        [DynamicField(Section = "Supplier Information", Label = "RequestReason", DbColumn = "request_reason")]
+        public string RequestReason { get; set; }
+    }
+
+
+    [Table("osp_vendor_header_r")]
+    public class VendorHeader
+    {
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+        [JsonProperty("form_status")]
+        public string FormStatus { get; set; }
+        [JsonProperty("comapny_code")]
+        public string CompanyCode { get; set; }
+        [JsonProperty("vendor_code")]
+        public string VendorCode { get; set; }
+        [JsonProperty("maker_code")]
+        public string MakerCode { get; set; }
+        [JsonProperty("maker_type")]
+        public string MakerType { get; set; }
+        [JsonProperty("bussiness_type")]
+        public string BussinessType { get; set; }
+       
+        [JsonProperty("vendor_class")]
+        public string VendorClass { get; set; }
+
+        [JsonProperty("vendor_Group_code")]
+        public string VendorGroupCode { get; set; }
+
+        [JsonProperty("maker_group_code")]
+        public string MakerGroupCode { get; set; }
+
+        [JsonProperty("technology")]
+        public string Technology { get; set; }
+        [JsonProperty("request_reason")]
+        public string RequestReason { get; set; }
+        [JsonProperty("upload_ssaaf")]
+        public string UploadSSAAF { get; set; }
+
+        [JsonProperty("company_engilsh_name")]
+        public string CompanyEnglishName { get; set; }
+
+        [JsonProperty("comapny_local_name")]
+        public string CompanyLocalName { get; set; }
+
+        [JsonProperty("maker_engilsh_name")]
+        public string MakerEngilshName { get; set; }
+  
+        [JsonProperty("maker_local_name")]
+        public string MakerLocalName { get; set; }
+
+        [JsonProperty("company_owner")]
+        public string CompanyOwner { get; set; }
+
+        [JsonProperty("historical_name")]
+        public string HistoricalName { get; set; }
+
+        [JsonProperty("country")]
+        public string Contry { get; set; }
+
+        [JsonProperty("city")]
+        public string City { get; set; }
+
+        [JsonProperty("facility_address")]
+        public string FacilityAddress { get; set; }
+
+        [JsonProperty("latitute")]
+        public string Latitute { get; set; }
+
+        [JsonProperty("longitude")]
+        public string Longitude { get; set; }
+
+        [JsonProperty("postal_code")]
+        public string PostalCode { get; set; }
+
+        [JsonProperty("website_url")]
+        public string WebsiteUrl { get; set; }
+        [JsonProperty("tax_identification")]
+        public string TaxIdentification { get; set; }
+
+        [JsonProperty("vat_number")]
+        public string VatNumber { get; set; }
+
+        [JsonProperty("duns_number")]
+        public string DunsNumber { get; set; }
+
+        [JsonProperty("header_duns_number")]
+        public string headerDunsNumber { get; set; }
+
+        [JsonProperty("register_number")]
+        public string RegisterNumber { get; set; }
+
+        [JsonProperty("contact_person")]
+        public string ContactPerson { get; set; }
+
+        [JsonProperty("position")]
+        public string Position { get; set; }
+
+        [JsonProperty("e_mail")]
+        public string Email { get; set; }
+
+        [JsonProperty("window_phone_number")]
+        public string WindowPhoneNumber { get; set; }
+
+        [JsonProperty("company_office_number")]
+        public string CompanyOfficeNumber { get; set; }
+
+        [JsonProperty("fax_number")]
+        public string FaxNumber { get; set; }
+
+        [JsonProperty("language")]
+        public string Language { get; set; }
+        [JsonProperty("subsidiary")]
+        public string Subsidiary { get; set; }
+
+        [JsonProperty("supplier_relationship")]
+        public string SupplierRelationship { get; set; }
+
+        [JsonProperty("trade_partner_no")]
+        public string TradePartnerNo { get; set; }
+
+        [JsonProperty("edi_connection")]
+        public string EdiConnection { get; set; }
+
+        [JsonProperty("emp_no")]
+        public string EmpNo { get; set; }
+
+        [JsonProperty("emp_name")]
+        public string EmpName { get; set; }
+
+        [JsonProperty("emp_dept")]
+        public string EmpDept { get; set; }
+
+        [JsonProperty("active")]
+        public string Active { get; set; }
+
+        [JsonProperty("create_date")]
+        public string CreateDate { get; set; }
+    }
+
+    [Table("osp_vendor_subrange_r")]
+    public class VendorSubrange
+    {
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+
+        [JsonProperty("line_id")]
+        public string LineId { get; set; }
+
+        [JsonProperty("company_code")]
+        public string CompanyCode { get; set; }
+        [JsonProperty("ssr_id")]
+        public string SSRId { get; set; }
+
+        [JsonProperty("ssr_description")]
+        public string SSRdescription { get; set; }
+        [JsonProperty("currency")]
+        public string Currency { get; set; }
+        [JsonProperty("payment_term")]
+        public string PaymentTerm { get; set; }
+
+        [JsonProperty("payment_term_desc")]
+        public string PaymentTermDesc { get; set; }
+
+        [JsonProperty("incoterm")]
+        public string Incoterm { get; set; }
+        [JsonProperty("incoterm_port")]
+        public string IncotermPort { get; set; }
+
+        [JsonProperty("freight_term")]
+        public string FreightTerm { get; set; }
+
+        [JsonProperty("freight_term_desc")]
+        public string FreightTermDesc { get; set; }
+
+        [JsonProperty("tax_code")]
+        public string TaxCode { get; set; }
+
+        [JsonProperty("contacts")]
+        public string Contacts { get; set; }
+
+        [JsonProperty("contacts_mail")]
+        public string ContactsMail { get; set; }
+
+        [JsonProperty("contacts_phone")]
+        public string ContactsPhone { get; set; }
+
+        [JsonProperty("blocked")]
+        public string Blocked { get; set; }
+    }
+    [Table("osp_vendor_bank_r")]
+    public class VendorBank
+    {
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+
+        [JsonProperty("bank_id")]
+        public string BankId { get; set; }
+        [JsonProperty("bank_ext_id")]
+        public string BankExtId { get; set; }
+
+        [JsonProperty("bank_name")]
+        public string BankName { get; set; }
+        [JsonProperty("bank_branch")]
+        public string BankBranch { get; set; }
+ 
+        [JsonProperty("account_name")]
+        public string AccountName { get; set; }
+
+        [JsonProperty("branch_country")]
+        public string BranchCountry { get; set; }
+        [JsonProperty("branch_province")]
+        public string BranchProvince { get; set; } 
+        [JsonProperty("branch_address")]
+        public string BranchAddress { get; set; }
+        [JsonProperty("branch_address2")]
+        public string BranchAddress2 { get; set; } 
+        [JsonProperty("branch_address3")]
+        public string BranchAddress3 { get; set; }
+        [JsonProperty("bank_key")]
+        public string BankKey { get; set; }
+
+        [JsonProperty("routing_number")]
+        public string RoutingNumber { get; set; }
+        [JsonProperty("swift_code")]
+        public string SwiftCode { get; set; }
+
+        [JsonProperty("iban")]
+        public string Iban { get; set; }
+        [JsonProperty("f_bank_number")]
+        public string FbankNumber { get; set; } 
+        [JsonProperty("f_branch_number")]
+        public string FbranchNumber { get; set; }
+        [JsonProperty("f_bank_name")]
+        public string FbankName { get; set; }
+
+        [JsonProperty("f_branch_name")]
+        public string FbranchName { get; set; }
+        [JsonProperty("f_swift_code")]
+        public string FswiftCode { get; set; }
+
+        [JsonProperty("bank_edit_flag")]
+        public string BankEditFlag { get; set; }
+
+    }
+
+    [Table("osp_vendor_file_r")]
+    public class VendorFile
+    {
+        [JsonProperty("SN")]
+        public string SN { get; set; }
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+
+        [JsonProperty("item_id")]
+        public string ItemId { get; set; }
+        [JsonProperty("item_name")]
+        public string ItemName { get; set; }
+
+        [JsonProperty("FileId")]
+        public string FileId { get; set; }
+        [JsonProperty("FileName")]
+        public string FileName { get; set; }
+
+        [JsonProperty("Active")]
+        public string Active { get; set; }
+
+        [JsonProperty("CUser")]
+        public string CUser { get; set; }
+        [JsonProperty("CDate")]
+        public string FoCDatermNo { get; set; }
+
+    }
+}
+
+
+
+
+ 
+==================================
+
+using System.Data;
+using System.Reflection;
+using OneSupplierPlatform.Helper.AutoMapper;
+using OneSupplierPlatform.Models.Infra;
+
+
+namespace OneSupplierPlatform.Services
+{
+    public class DynamicFieldService
+    {
+        public void FillSchemaWithModel<T>(Dictionary<string, List<BaseDynamicField>> schema, T model)
+        {
+            if (model == null) return;
+
+            // 1. 獲取 Model 的所有屬性資訊，並建立一個快速查找表
+            // Key 是 DbColumn 或屬性名，Value 是該屬性的當前數值
+            var modelValues = typeof(T).GetProperties()
+                .Select(p => new {
+                    Key = p.GetCustomAttribute<DynamicFieldAttribute>()?.DbColumn ?? p.Name,
+                    Value = p.GetValue(model)?.ToString()
+                })
+                .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+
+            // 2. 遍歷 schema，把值塞進對應的欄位
+            foreach (var section in schema.Values)
+            {
+                foreach (var field in section)
+                {
+                    // 假設設定表裡的 field.FieldName 存的是 DB 欄位名 (如 USER_NM)
+                    if (modelValues.TryGetValue(field.ColId, out var val))
+                    {
+                        field.ColValue = val;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+===========================
+
+ @* @model Dictionary<string, List<TableSchema>> *@
+ @model StepViewModel<TableSchema>
+<div class="step-panel">
+    <!-- Panel 標頭 -->
+    <div class="step-panel-heading">
+        <h2 class="panel-title"><i class="fa fa-edit"></i>@ViewBag.Title</h2>
+    </div>
+
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <!-- Modal 容器 (AJAX 內容會塞進這裡) -->
+        <div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl" style="max-width: 95%;">
+                <!-- 使用 modal-xl 以符合你圖片中寬廣的表單 -->
+                <div class="modal-content" id="modalContainer">
+                    <!-- Partial View (_SupplierFormPartial) 會被載入到這裡 -->
+                </div>
+            </div>
+        </div>
+
+        <div id="supplier-step-metadata" style="display:none;"
+             data-tables='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Data.Values.SelectMany(x => x)))'>
+        </div>
+        <div class="card-body">
+            <div class="tab-content" id="supplierTabContent"> 
+                <div> 
+                    <!-- 新增的查詢 ROW -->
+                    <!-- Step 1 區塊 -->
+                    <div data-df="@Model.StepKey">
+                        <div class="row align-items-end">
+                            <div class="col-12">
+                                <h5>Step1 : Please Query Supplier</h5>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <label class="input-group-text fw-bold text-white" for="suppliername"
+                                           style="background-color: #004070; border-color: #004070; min-width: 130px; justify-content: center;">
+                                        Supplier Name
+                                    </label>
+                                    <df-field name="suppliername" type="TextBox"
+                                              must=true  placeholder="(Fuzzy Search)" class="form-control"
+                                              step-key="step1" />
+                                    @* <input type="text" id="suppliername" name="suppliername" data-field="suppliername" class="form-control" placeholder="(Fuzzy Search)" /> *@
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="input-group">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 區塊 -->
+                        <div class="row align-items-end border-bottom">
+                            <div class="col-12">
+                                <h5>Step2 : Select Apply Type</h5>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- 確保 input-group 本身沒有額外的 mb (margin-bottom) -->
+                                <div class="input-group">
+                                    <label class="input-group-text fw-bold text-white" for="suppliertype"
+                                           style="background-color: #004070; border-color: #004070; min-width: 130px; justify-content: center;">
+                                        Supplier Type
+                                    </label>
+                                    <select id="suppliertype" name="suppliertype" data-field="suppliertype" class="form-control valueInput dropdownColor tooltip-auto pageredirect">@*  onchange="toggleButtons()"> *@
+                                        <option value="" selected>請選擇代碼...</option>
+                                        <option value="Maker">Maker</option>
+                                        <option value="Vendor">Vendor</option>
+                                        <option value="MakerVendor">Maker + Vendor</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- 修正：移除 flex-column 避免高度計算干擾，直接讓 align-items-end 發揮作用 -->
+                            <div class="col-md-3">
+                                <div class="input-group">
+                                    <button type="button" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center"
+                                            onclick="searchSupplier()"
+                                            style="height: 38px; border-width: 1px; padding: 0;">
+                                        <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
+                                        </svg>
+                                        Query
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Vendor基本資料區：封裝進 Panel (Card) -->
+                    <div id="divVendor" style="display:none;" class="card bg-light border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="mb-0 text-secondary d-flex justify-content-between align-items-center w-100">
+                                <!-- 左側：圖示 + 文字 -->
+                                <div class="d-flex align-items-center">
+                                    <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                        <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3zm2 .5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H3zM3 7a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3zm0 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3z" />
+                                    </svg>
+                                    <span>Vendor</span>
+                                </div>
+
+                                <!-- 右側：按鈕 -->
+                                <button id="btnNewSupplier" type="button" class="btn btn-sm btn-primary" style="display:none;">
+                                    New Supplier
+                                </button>
+                            </h6>
+                        </div>
+                        <div class="card-body bg-white p-4">
+                            @foreach (var entry in Model.Data.Where(x => x.Key == "vendor")) 
+                            {
+                                @foreach (var schema in entry.Value)
+                                {
+                                    <table id="@schema.TableId" class="display" style="width:100%"></table>
+                                } 
+                            } 
+                        </div>
+                    </div>
+
+
+                    <!-- 原有的基本資料填寫區：封裝進 Panel (Card) -->
+                    <div id="divMaker" style="display:none;" class="card bg-light border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-3">
+                            <h6 class="mb-0 text-secondary d-flex justify-content-between align-items-center w-100">
+                                <!-- 左側：圖示 + 文字 -->
+                                <div class="d-flex align-items-center">
+                                    <svg xmlns="http://www.w3.org" width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
+                                        <path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3zm2 .5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5H3zM3 7a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3zm0 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H3z" "" ) />>
+                                    </svg>
+                                    <span>Maker</span>
+                                </div>
+
+                                <!-- 右側：按鈕 -->
+                                <button id="btnNewSupplier2" type="button" class="btn btn-sm btn-primary" style="display:none;">
+                                    New Supplier
+                                </button>
+                            </h6>
+                        </div>
+                        <div class="card-body bg-white p-4"> 
+                            @foreach (var entry in Model.Data.Where(x => x.Key == "maker"))
+                            { 
+                                @foreach (var schema in entry.Value)
+                                {
+                                    @if (schema.Message != "")
+                                    {
+                                        <span style="color:red;">@schema.Message </span>
+                                    }
+                                    <table id="@schema.TableId" class="display" style="width:100%;"></table>
+                                    <br />
+                                }
+                            }
+                        </div>
+                    </div> 
+                </div>
+
+           
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function () {
+
+        window.StepPages = window.StepPages || {};
+
+        window.StepPages.step1 = {
+
+            // =========================
+            // INIT
+            // =========================
+            init(container, ctx) {
+
+                console.log("🔥 STEP1 INIT OK");
+
+                const tables = @Html.Raw(
+                      System.Text.Json.JsonSerializer.Serialize(
+                              Model.Data.SelectMany(p => p.Value)
+                      )
+              );
+
+                // =========================
+                // 🔥 改成 local handler（關鍵）
+                // =========================
+                const handler = {
+                    edit: (rowId, rowData, tableId) => {
+
+                        // ⚠️ 保險處理 rowId
+                        const id = rowId ?? rowData?.id;
+
+                        console.log("Edit clicked", id, rowData, tableId);
+
+                        // 👉 你可以直接用 Vue ctx
+                        console.log("Current step data:", ctx.formData);
+
+                        alert(`Edit ${id}`);
+                    }
+                };
+
+                requestAnimationFrame(() => {
+
+    @*  DynamicTablePro.renderAll(tables, handler); *@
+                       DynamicTablePro.renderAll(tables, {
+                            edit: (id, row, tableId) => {
+                                    console.log("DEBUG ROW:", row);
+    console.log("DEBUG ID ATTR:", $(this).attr("data-id"));
+                                console.log("edit:", tableId,id, row);
+                            },
+                            delete: (id, row) => {
+                                console.log("delete:", id);
+                            }
+                        });
+                });
+            },
+
+            // =========================
+            // DESTROY
+            // =========================
+            destroy(container) {
+
+                console.log("🧹 STEP1 DESTROY");
+
+                // 👉 如果 table library 有 destroy 要在這裡清
+                if (window.DynamicTablePro?.destroyAll) {
+                    DynamicTablePro.destroyAll();
+                }
+            }
+        };
+
+    })();
+</script>
+
+
+
+=========================
+
+ @model StepViewModel<BaseDynamicField>
+ <div id="app">
+  
+    <div v-for="field in config.Data.SupplierInformation" :key="field.ColId" class="mb-3">
+        <label class="form-label">{{ field.ColId }}</label>
+        {{ field.EnumType }}
+      <!-- 動態判斷 Type -->
+        <template v-if="field.EnumType === 1">
+            <input v-model="formData[field.ColId]"
+                  
+               class="form-control">
+      </template>
+
+        <template v-else-if="field.EnumType === 2">
+            <select v-model="formData[field.ColId]" class="form-select">
+            <option value="">請選擇</option>
+            <option v-for="opt in field.Options" :key="opt" :value="opt">
+                {{ opt }}
+            </option>
+        </select>
+      </template>
+    </div>
+    <hr />
+    <button type="submit" class="btn btn-primary">送出資料</button>
+  
+  
+  <!-- 偵錯用：查看目前的資料狀態 -->
+  <pre>{{ formData }}</pre>
+</div>
+
+<script>
+  const { createApp, ref } = Vue;
+  debugger;
+      createApp({
+      setup() {
+        // 1. 直接讀取後端注入的 JSON (請確認 Model 不為 null)
+        const rawData = @Html.Raw(Json.Serialize(Model));
+
+        // 2. 設定 ref，並給予預設結構防止 template 報錯
+        const config = ref(rawData || { Data: { SupplierInformation: [] } });
+        const formData = ref({});
+
+        // 3. 安全地初始化 formData
+        // 使用可選鏈 (Optional Chaining) ?. 確保不會噴 undefined 錯誤
+        const fields = config.value?.Data?.SupplierInformation;
+
+        if (Array.isArray(fields)) {
+          fields.forEach(f => {
+            // 使用 ColId 作為 Key，ColValue 作為初始值
+            formData.value[f.ColId] = f.ColValue ?? '';
+          });
+        } else {
+          console.warn("找不到 SupplierInformation 陣列，請檢查後端 Model 結構");
+        }
+
+        const handleSubmit = () => {
+          console.log('Submit Data:', formData.value);
+        };
+
+        return { config, formData, handleSubmit };
+      }
+    }).mount('#app');
+</script>
+===================
+
+@* @model Dictionary<string, List<DynamicSupplierFileField>>*@ 
+@model StepViewModel<DynamicField>
+<div class="step-panel">
+    <!-- Panel 標頭 --> 
+    <!-- 內容容器，CSS 會自動顯示捲軸 -->
+    <div class="step-panel-body">
+        <div data-df="@Model.StepKey">
+               <div class="card mb-4" id="section-@Model.StepKey"> 
+                   <div class="card-body">
+                    @foreach (var m in Model.Data) {
+                       <!-- 呼叫你封裝好的 _DynamicForm，傳入該組的 List -->
+                       @await Html.PartialAsync("_DynamicFormWithField",(StepKey: @Model.StepKey, Fields: m.Value))
+                    } 
+                    </div>
+                </div>
+        </div/> 
+        <div class="mt-4 p-3 border bg-light">
+            <button id="btn-save-all" class="btn btn-primary btn-lg">同時驗證並取得所有值</button>
+            <hr />
+            <h5>輸出結果 (JSON):</h5>
+            <pre id="output-json"></pre>
+        </div>
+    </div>
+</div>
+<script>
+    $(function () { 
+         if (window.CurrentPageContext) {
+           window.CurrentPageContext.init();
+         }
+    });
+</script>
+ 
+ 
+ =========================
+@{
+    bool isDebug = false;
+#if DEBUG
+    isDebug = true;
+#endif
+}
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - One Supplier Platform</title> 
+    <!-- 引入 Google Material Icons -->
+    <link href="https://fonts.googleapis.com" rel="stylesheet">
+     
+    @if (isDebug)
+    {
+        <!-- 這會自動把 css/home 資料夾下的所有 .css 檔展開成獨立標籤 -->
+        @* <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" /> *@
+        <link rel="stylesheet" asp-href-include="~/css/bootstrap/**/*.css" />
+        <link rel="stylesheet" asp-href-include="~/css/dts/**/*.css" />
+        <link rel="stylesheet" asp-href-include="~/css/select2/**/*.css" />
+        <link rel="stylesheet" asp-href-include="~/css/sweetalert2/**/*.css" />
+        <link rel="stylesheet" asp-href-include="~/css/auo/**/*.css" />
+    }
+    else
+    {
+        <!-- Release 模式：引用打包檔 -->
+        <link rel="stylesheet" href="~/dist/bootstrap-bundle.css" asp-append-version="true" />
+        <link rel="stylesheet" href="~/dist/dts-bundle.css" asp-append-version="true" />
+        <link rel="stylesheet" href="~/dist/select2-bundle.css" asp-append-version="true" />
+        <link rel="stylesheet" href="~/dist/sweetalert2-bundle.css" asp-append-version="true" />
+        <link rel="stylesheet" href="~/dist/auo-bundle.css" asp-append-version="true" />
+    }
+     
+      
+   @*  <!-- Bootstrap 5 核心 CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" />
+
+    <!-- Select2 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+    <!-- RTL support 可選 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.rtl.min.css" />
+
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.3.7/css/dataTables.bootstrap5.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.0.2/css/buttons.bootstrap5.min.css">
+
+    <!-- DataTables Buttons -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.0.2/css/buttons.dataTables.min.css"> 
+
+    <!-- SweetAlert2 CSS (選填，通常 JS 會自動處理) -->
+    <link rel="stylesheet" href="~/css/sweetalert2.min.css"> 
+    <link rel="stylesheet" href="~/css/site.css" /> 
+    <link rel="stylesheet" href="~/css/wizard-pro.css" /> *@
+    
+     
+    <style>
+        
+    </style>
+</head>
+<body>
+    @Html.AntiForgeryToken()
+    <header>
+    @*     <h1 data-i18n="Hello">@Localizer.Hello</h1> 
+        <button data-i18n="Submit">@Localizer.Submit</button>
+        <button onclick="I18nUtils.switchCulture('zh-TW')">中文</button>
+        <button onclick="I18nUtils.switchCulture('en-US')">English</button>  *@
+        @await Component.InvokeAsync("Menu")
+    </header>
+
+    <div class="container-fluid p-4">
+        @RenderBody()
+    </div>
+
+
+    @if (isDebug)
+    {
+        <!-- 這會自動把 css/home 資料夾下的所有 .css 檔展開成獨立標籤 -->
+        <script asp-src-include="~/lib/jquery/dist/jquery.min.js"></script>
+        <script asp-src-include="~/js/bootstrap/**/*.js"></script>
+        <script src="~/js/dts/dataTables.min.js"></script>
+        <script src="~/js/dts/dataTables.buttons.min.js"></script>
+        <script src="~/js/dts/dataTables.bootstrap5.js"></script>
+        <script src="~/js/dts/dataTables.responsive.min.js"></script>
+        <script src="~/js/dts/responsive.bootstrap5.min.js"></script>
+        <script src="~/js/dts/dataTables.colReorder.min.js"></script>
+        @* <script src="~/js/dts/dataTables.scroller.min.js"></script> *@
+        <script asp-src-include="~/js/select2/**/*.js"></script>
+        <script asp-src-include="~/js/sweetalert2/**/*.js"></script> 
+       @*  <script asp-src-include="~/js/auo/**/*.js"></script> *@
+        <script asp-src-include="~/js/vue.global.js"></script>
+        <script asp-src-include="~/js/auo/StepLoader.js"></script>
+         
+        <script asp-src-include="~/js/auo/ValidationCenter.js"></script>
+        <script asp-src-include="~/js/auo/upload.js"></script>
+        <script asp-src-include="~/js/auo/AppController.js"></script>
+        <script asp-src-include="~/js/auo/AppBootstrap.js"></script> 
+        <script asp-src-include="~/js/auo/DynamicTablePro.js"></script>
+        @* <script asp-src-include="~/js/auo/supplier-step.js"></script> *@
+      
+    }
+    else
+    {
+        <!-- Release 模式：引用打包檔 -->
+        <script src="~/dist/jquery-bundle.js" asp-append-version="true"></script>
+        <script src="~/dist/bootstrap-bundle.js" asp-append-version="true"></script>
+        <script src="~/dist/dts-bundle.js" asp-append-version="true"></script>
+        <script src="~/dist/select2-bundle.js" asp-append-version="true"></script> 
+        <script src="~/dist/sweetalert2-bundle.js" asp-append-version="true"></script>
+        <script src="~/dist/auo-bundle.js" asp-append-version="true"></script>
+        <script asp-src-include="~/js/vue.global.js"></script>
+    }
+     
+
+    @* <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <!-- Bootstrap 5 Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script> 
+    <!-- DataTables 2.3.7 核心 + Bootstrap5 -->
+    <script src="https://cdn.datatables.net/2.3.7/js/dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/2.3.7/js/dataTables.bootstrap5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script> 
+    <!-- DataTables Buttons -->
+    <script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/3.0.2/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/3.0.2/js/responsive.bootstrap5.min.js"></script> 
+    <script src="https://cdn.datatables.net/colreorder/2.0.3/js/dataTables.colReorder.min.js"></script> 
+    <script src="https://cdn.datatables.net/scroller/2.3.1/js/dataTables.scroller.min.js"></script> 
+    <!-- SweetAlert2 JS -->
+    <script src="~/js/select2/sweetalert2.all.min.js"></script>
+    <script src="~/js/auo/site.js" asp-append-version="true"></script>
+    <script src="~/js/auo/wizard-pro.js"></script>
+    <script src="~/js/auo/dynamic-form.js"></script>
+    <script src="~/js/auo/DynamicTablePro.js"></script> *@
+
+    <!-- 全域自定義封裝 (方便統一 UI 風格) -->
+    <script>
+
+         $(document).ready(function () {
+            // 取得目前的完整路徑 (例如 /Supplier/Index)
+            var currentPath = window.location.pathname;
+
+            // 清除所有 active
+            $('.nav-item-custom').removeClass('active');
+
+            // 遍歷所有選單連結
+            $('.nav-links a').each(function () {
+                var href = $(this).attr('href');
+
+                // 判斷邏輯：
+                // 1. 如果路徑是根目錄且 href 是 "/"
+                // 2. 或者目前的路徑包含該 href (處理子分頁情況)
+                if ((currentPath === "/" && href === "/") ||
+                    (href !== "/" && currentPath.toLowerCase().indexOf(href.toLowerCase()) !== -1)) {
+
+                    $(this).addClass('active');
+
+                    // 如果是在下拉選單內的項目被選中，讓父層按鈕也變 active
+                    $(this).closest('.dropdown').find('.dropdown-toggle').addClass('active');
+                }
+            });
+
+            // 點擊即時切換 (適用於單頁 Demo 或 SPA 環境)
+            $('.nav-item-custom').on('click', function() {
+                if(!$(this).hasClass('dropdown-toggle')) {
+                    $('.nav-item-custom').removeClass('active');
+                    $(this).addClass('active');
+                }
+            });
+
+            // const autoPageKey = window.location.pathname.replace(/\//g, '_');
+
+          
+
+            // console.log("已自動針對頁面初始化暫存器: " + autoPageKey);
+        });  
+    </script>
+
+    @await Html.PartialAsync("_UploadModal")
+    <i18n-scripts></i18n-scripts>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+===========================
+
+@model List<WizardStepOption>
+
+<div id="app">
+    <!-- STEP RIBBON -->
+    <div class="wizard-container">
+        <div class="wizard-ribbon"
+             :style="{ '--step': currentStep, '--total': steps.length }">
+
+            <div v-for="step in steps"
+                 :key="step.StepIndex"
+                 class="ribbon-step"
+                 :class="getStepClass(step)"
+                 @@click="goToStep(step.StepIndex)"
+                 style="cursor:pointer">
+
+                <span class="ribbon-text">{{ step.Title }}</span>
+
+                <span class="ribbon-check"
+                      v-if="step.StepIndex <= currentStep">✔</span>
+            </div>
+
+            <div class="ribbon-progress-bg">
+                <div class="ribbon-progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP CONTENT -->
+    <div id="step-container" class="mt-4"></div>
+
+    <!-- ACTION BUTTONS -->
+    <div class="mt-3 d-flex justify-content-between">
+
+        <div>
+            <button v-if="currentStep > 1"
+                    class="btn btn-secondary"
+                    @@click="prev">
+                上一步
+            </button>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-dark" @@click="dumpJson">
+                輸出 JSON
+            </button>
+
+            <button v-if="currentStep < steps.length"
+                    class="btn btn-primary"
+                    @@click="next">
+                下一步
+            </button>
+
+            <button v-if="currentStep === steps.length"
+                    class="btn btn-success"
+                    @@click="finish">
+                完成
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<style>
+    :root {
+        --active-color: #005bb7; /* 強調藍 */
+        --inactive-color: #9e9e9e; /* 未選中灰 */
+        --progress-bg: #e0e0e0; /* 進度條底色 */
+    }
+
+    .wizard-container {
+        padding: 0;
+        margin-bottom: 20px;
+    }
+
+    .wizard-ribbon {
+        --step: 1; /* 預設第一步 */
+        --total: 3; /* 預設總數，會被 JS 覆蓋 */
+        position: relative;
+        display: flex;
+        width: 100%;
+        gap: 2px;
+        padding-bottom: 8px;
+    }
+
+    .ribbon-step {
+        position: relative;
+        flex: 1;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--inactive-color);
+        color: white;
+        font-weight: 500;
+        /* 箭頭切割 */
+        clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%, 15px 50%);
+        padding-left: 15px;
+        transition: all 0.3s ease;
+    }
+
+        .ribbon-step:first-child {
+            clip-path: polygon(0% 0%, calc(100% - 15px) 0%, 100% 50%, calc(100% - 15px) 100%, 0% 100%);
+            padding-left: 0;
+        }
+
+        .ribbon-step:last-child {
+            clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 15px 50%);
+        }
+
+        /* 🔵 當前步驟：變為藍色 */
+        .ribbon-step.active {
+            background: var(--active-color) !important;
+        }
+
+        /* ⚪ 已完成步驟：根據圖片是灰色，但帶有勾勾 */
+        .ribbon-step.done {
+            background: var(--inactive-color);
+        }
+
+    /* ✔ 勾勾樣式 */
+    .ribbon-check {
+        position: absolute;
+        top: 2px;
+        right: 18px;
+        width: 15px;
+        height: 15px;
+        background: white;
+        color: var(--inactive-color);
+        border-radius: 50%;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+    }
+
+    /* 當前步驟的勾勾顏色 */
+    .ribbon-step.active .ribbon-check {
+        color: var(--active-color);
+    }
+
+    /* 底部進度條容器 */
+    .ribbon-progress-bg {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--progress-bg);
+    }
+
+    /* 動態藍色進度條 */
+
+    .ribbon-progress-fill {
+        height: 100%;
+        background: var(--active-color);
+        /* 這裡使用 calc 確保平滑移動 */
+        width: calc((var(--step) / var(--total)) * 100%);
+        transition: width 0.3s ease-in-out;
+    }
+
+    .ribbon-text {
+        font-size: 14px;
+        z-index: 2;
+    }
+</style>
+@section Scripts {
+    <script>
+            const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+
+        setup() {
+
+            /* =========================
+               STATE (UI ONLY - SINGLE SOURCE OF TRUTH)
+            ========================= */
+            const steps = ref(
+        @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model))
+            );
+
+            const currentStep = ref(1);
+
+            /* =========================
+               CONTROLLER BOOT
+            ========================= */
+            onMounted(() => {
+
+                if (!window.AppController) {
+                    console.error("AppController not found");
+                    return;
+                }
+
+                AppController.init({
+                    steps,
+                    currentStep,
+
+                    // ⭐ KEY FIX: give controller setter access
+                    setStep: (v) => currentStep.value = v
+                });
+            });
+
+            /* =========================
+               UI ACTION WRAPPERS
+            ========================= */
+            const next = () => AppController.next();
+            const prev = () => AppController.prev();
+            const goToStep = (i) => AppController.goTo(i);
+            const finish = () => AppController.finish();
+
+            /* =========================
+               UI CLASS
+            ========================= */
+            const getStepClass = (step) => ({
+                active: step.StepIndex === currentStep.value,
+                done: step.StepIndex < currentStep.value
+            });
+
+            /* =========================
+               DEBUG
+            ========================= */
+            const dumpJson = () => {
+
+                const result = {};
+                const store = AppBootstrap.get("FormStore");
+                // steps.value.forEach(s => {
+                //     result[`step${s.StepIndex}`] = store.getStep(`step${s.StepIndex}`);
+                // });
+                        store.markStepSubmitted("step2");
+
+                alert(JSON.stringify(result, null, 2));
+            };
+
+            /* =========================
+               EXPOSE
+            ========================= */
+            return {
+                steps,
+                currentStep,
+
+                next,
+                prev,
+                goToStep,
+                finish,
+
+                dumpJson,
+                getStepClass
+            };
+        }
+
+        }).mount("#app");
+    </script>
+}=========================================
+
+
+
+using System;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.ServiceModel;
+using Microsoft.AspNetCore.Localization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using NLog;
+using NLog.Web;
+using OneSupplierPlatform.Filter;
+using OneSupplierPlatform.Helper.Localizer;
+using OneSupplierPlatform.i18n;
+using OneSupplierPlatform.Infrastructure;
+using OneSupplierPlatform.Service;
+using OneSupplierPlatform.Services;
+
+using OneSupplierPlatform_Service.Helpers;
+using OneSupplierService;
+
+
+var logger = LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
+logger.Debug("init main");
+
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddAutoMapper(config => { }, typeof(Program).Assembly);
+    builder.Logging.ClearProviders();
+    builder.Host.UseNLog();
+    builder.Services.AddWebOptimizer(pipeline =>
+    {
+#if DEBUG
+        // DEBUG 模式：僅壓縮個別檔案，不合併成一包 (方便你在 F12 看到獨立檔案)
+        //pipeline.MinifyJsFiles("lib/jquery/dist/jquery.min.js");
+        //pipeline.MinifyJsFiles("js/**/*.js");
+        //pipeline.MinifyCssFiles("css/**/*.css");
+#else
+         // RELEASE 模式：執行打包與合併
+            // --- JS 部分 ---
+            pipeline.AddJavaScriptBundle("/dist/jquery-bundle.js", "lib/jquery/dist/jquery.min.js").MinifyJavaScript();
+
+            // 2. Bootstrap (排除目錄下的 .min.js，讓 WebOptimizer 幫你壓)
+            pipeline.AddJavaScriptBundle("/dist/bootstrap-bundle.js", "js/bootstrap/**/*.js").MinifyJavaScript();
+
+            // 3. DataTables (嚴格順序)
+            pipeline.AddJavaScriptBundle("/dist/dts-bundle.js",
+                "js/dts/dataTables.min.js",                 // 這是原始檔，WebOptimizer 會幫你壓
+                "js/dts/dataTables.bootstrap5.min.js",   // 以下皆為 .min，WebOptimizer 會直接合併不重複壓
+                "js/dts/dataTables.buttons.min.js",
+                "js/dts/dataTables.responsive.min.js",
+                "js/dts/responsive.bootstrap5.min.js",
+                "js/dts/dataTables.colReorder.min.js"
+            ).MinifyJavaScript(); // 確保這行有加，它會處理混合檔案的壓縮邏輯
+
+            // 4. 其他
+            pipeline.AddJavaScriptBundle("/dist/select2-bundle.js", "js/select2/**/*.js").MinifyJavaScript();
+            pipeline.AddJavaScriptBundle("/dist/sweetalert2-bundle.js", "js/sweetalert2/**/*.js").MinifyJavaScript();
+
+            pipeline.AddJavaScriptBundle("/dist/auo-bundle.js", "js/auo/**/*.js").MinifyJavaScript();
+            //pipeline.AddJavaScriptBundle("/dist/auo-bundle.js", "js/vue.global.js").MinifyJavaScript();
+            //// --- CSS 部分 ---
+            //// 依樣畫葫蘆，按目錄拆分 CSS 
+            pipeline.AddCssBundle("/dist/bootstrap-bundle.css", "css/bootstrap/**/*.css").MinifyCss();
+            pipeline.AddCssBundle("/dist/dts-bundle.css", "css/dts/**/*.css").MinifyCss();
+            pipeline.AddCssBundle("/dist/select2-bundle.css", "css/select2/**/*.css").MinifyCss();
+            pipeline.AddCssBundle("/dist/sweetalert2-bundle.css", "css/sweetalert2/**/*.css").MinifyCss();
+            pipeline.AddCssBundle("/dist/auo-bundle.css", "css/auo/**/*.css").MinifyCss();
+#endif
+    });
+
+
+
+    var langCache = new ConcurrentDictionary<string, string>();
+    var langPath = Path.Combine(Directory.GetCurrentDirectory(), "i18n", "Lang");
+    foreach (var file in Directory.GetFiles(langPath, "*.json"))
+    {
+        var culture = Path.GetFileNameWithoutExtension(file); // zh-TW / en-US
+        var content = File.ReadAllText(file);
+        langCache[culture] = content;
+    }
+
+    // DI
+    builder.Services.AddSingleton(langCache);
+
+    builder.Services.AddLocalization(); 
+    builder.Services.AddScoped<LocalizedKeys>();
+
+
+    builder.Services.AddControllersWithViews(options =>
+    {
+        // ⭐ 將全域過濾器加入集合
+        options.Filters.Add<GlobalExceptionFilter>();
+        options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+    }).AddNewtonsoftJson(options =>
+    {
+        // 這行很關鍵：確保 JSON 輸出名稱與 [JsonProperty] 定義完全一致
+        // 而不會被自動轉成小駝峰 (CamelCase)
+        options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.DefaultContractResolver();
+    });
+
+
+    builder.Services.AddHttpContextAccessor();
+
+    // 1. 從設定檔取得連線字串
+    var connectionString = builder.Configuration.GetConnectionString("AMSC-SQLDB");
+
+
+    builder.Services.AddScoped<SQLDBHelper>();
+    // 啟用 Session
+    builder.Services.AddDistributedMemoryCache();
+    builder.Services.AddSession(options =>
+    {
+        options.IdleTimeout = TimeSpan.FromMinutes(30); // Session 30 分鐘沒動作就過期
+        options.Cookie.HttpOnly = true;
+        options.Cookie.IsEssential = true;
+    });
+
+    // 註冊 WCF Client
+    builder.Services.AddScoped<OneSupplierFLM.FLMService>(sp =>
+    {
+        // 取得設定檔介面
+        var config = sp.GetRequiredService<IConfiguration>();
+        var flmSection = config.GetSection("FLMConfig");
+
+        // 1. 讀取 Binding 數值 (從 appsettings.json)
+        var timeout = TimeSpan.FromMinutes(flmSection.GetValue<int>("TimeoutMinutes", 10));
+        var maxBuffer = flmSection.GetValue<long>("MaxBufferSize", 2147483647);
+
+        var binding = new WS2007HttpBinding(SecurityMode.TransportWithMessageCredential)
+        {
+            OpenTimeout = timeout,
+            CloseTimeout = timeout,
+            ReceiveTimeout = timeout,
+            SendTimeout = timeout,
+            MaxReceivedMessageSize = maxBuffer,
+            MaxBufferPoolSize = maxBuffer,
+            UseDefaultWebProxy = true
+        };
+
+        binding.Security.Transport.ClientCredentialType = HttpClientCredentialType.None;
+        binding.Security.Message.ClientCredentialType = MessageCredentialType.UserName;
+
+        // 2. 建立 Client (URL 從設定檔讀取)
+        var endpoint = new EndpointAddress(flmSection["Url"]);
+        var client = new OneSupplierFLM.FLMServiceClient(binding, endpoint);
+
+        // 3. 注入帳號密碼 (會自動從環境變數或 JSON 覆蓋)
+        // 注意：階層式讀取建議使用 config["FLMConfig:Security:Password"]
+        client.ClientCredentials.UserName.UserName = config["FLMConfig:Security:UserName"];
+        client.ClientCredentials.UserName.Password = config["FLMConfig:Security:Password"];
+
+        return client;
+    });
+
+
+
+    builder.Services.AddScoped<OneSupplierPlatformServiceSoapClient>(sp => {
+        var config = sp.GetRequiredService<IConfiguration>();
+        var url = config["ExternalServices:AsmxUrl"];
+
+        var client = new OneSupplierPlatformServiceSoapClient(
+            OneSupplierPlatformServiceSoapClient.EndpointConfiguration.OneSupplierPlatformServiceSoap,
+            new EndpointAddress(url)
+        );
+
+        // 如果是 HTTPS，有時需要忽略憑證錯誤（測試環境用）
+        // client.ClientCredentials.ServiceCertificate.SslCertificateAuthentication = ...
+
+        return client;
+    });
+
+    // 3. 註冊你的 SupplierService 介面與實作
+    builder.Services.AddScoped<ISupplierService, SupplierService>();
+    builder.Services.Scan(scan => scan
+    .FromAssemblyOf<Program>()
+    .AddClasses(classes => classes.Where(type => type.Name.EndsWith("Service") && !type.IsAbstract))
+    .AsImplementedInterfaces() // 有介面的幫我對應介面
+    .AsSelf()                  // 沒介面（或需要直接用類別）的也幫我註冊一份
+    .WithScopedLifetime());
+
+
+
+    var app = builder.Build();
+    app.UsePathBase("/OneSupplierPlatform");
+    #if DEBUG
+        app.UseDeveloperExceptionPage(); // 💡 讓開發時直接看到詳細報錯
+#else
+        app.UseExceptionHandler("/Error/Index"); // 正式環境導向錯誤頁
+#endif
+    //if (app.Environment.IsDevelopment())
+    //{
+    //    app.UseDeveloperExceptionPage(); // 💡 讓開發時直接看到詳細報錯
+    //}
+    //else
+    //{
+    //    app.UseExceptionHandler("/Error/Index"); // 正式環境導向錯誤頁
+    //} 
+
+    // 2. 啟用中介軟體 (必須放在 UseStaticFiles 之前)
+    app.UseWebOptimizer();
+    app.UseStaticFiles();
+
+    app.UseCookiePolicy();
+
+
+    var supportedCultures = new[]
+    {
+        new CultureInfo("zh-TW"),
+        new CultureInfo("en-US")
+    };
+
+    var localizationOptions = new RequestLocalizationOptions
+    {
+        DefaultRequestCulture = new RequestCulture("zh-TW"), // ⚡ 預設中文
+        SupportedCultures = supportedCultures,
+        SupportedUICultures = supportedCultures
+    };
+
+    // 可加上 QueryStringProvider 支援 ?culture=en-US
+    localizationOptions.RequestCultureProviders = new List<IRequestCultureProvider>
+    {
+        new CookieRequestCultureProvider(),        // ⭐ 優先讀 Cookie
+        new QueryStringRequestCultureProvider()    // 次要：支援 ?culture=xx
+    };
+
+    app.UseRequestLocalization(localizationOptions);
+
+
+    app.UseRouting();
+
+    app.UseMiddleware<I18nMiddleware>();
+
+    app.UseSession(); // 一定要在 UseRouting 後
+    app.UseAuthorization();
+
+    app.MapControllerRoute(
+        name: "default",
+        pattern: "{controller=Home}/{action=Index}/{id?}");
+
+    AppFinder.ServiceProvider = app.Services;
+
+    app.Run();
+}
+catch (Exception exception)
+{
+    // 捕捉啟動時的異常
+    logger.Error(exception, "Stopped program because of exception");
+    throw;
+}
+finally
+{
+    // 確保在應用程式結束前關閉 NLog，清空快取
+    LogManager.Shutdown();
+} 
+---------------------------------------------
+using System.Data;
+using Newtonsoft.Json;
+using OneSupplierPlatform.Helper.Extensions;
+using OneSupplierPlatform.Models;
+using OneSupplierPlatform.Models.Infra;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
+
+namespace OneSupplierPlatform.Services
+{
+    public interface ISupplierService
+    {
+        Task<List<vmMakerDetail>> GetMakerDataFromGroupAsync(string makername, string companyid);
+        Task<List<vmMakerDetail>> GetMakerDataInternalAsync(string makername);
+        Task<List<vmVendorDetail>> GetVendorInfoAsync(string makername);
+        Task<List<BaseDynamicField>> GetConfigFieldAsync(string section, Dictionary<string, object>? dicType);
+
+        Task<List<DynamicField>> GetConfigFileListAsync(Dictionary<string, object>? dicType);
+
+
+        Task<Dictionary<string, List<BaseDynamicField>>> MappingSendData(Dictionary<string, List<BaseDynamicField>> dicMapping, Dictionary<string, string>? SendData);
+
+        Task<bool> Save(Dictionary<string, string> data);
+
+
+    }
+      
+    public class SupplierService : BaseService,ISupplierService
+    {
+        public SupplierService() : base()
+        {
+        }
+
+
+        public async Task<List<vmMakerDetail>> GetMakerDataFromGroupAsync(string makername, string companyid)
+        {
+            try
+            {
+                string jsonString = await AsmxClient.GetMakerDataFromGroupAsync(makername, companyid);
+
+                if (string.IsNullOrEmpty(jsonString))
+                { 
+                    throw new InvalidOperationException("遠端 SOAP 服務回傳空值，系統無法繼續處理。");
+                }
+                 
+                var result = JsonConvert.DeserializeObject<List<vmMakerDetail>>(jsonString); 
+                return result ?? new List<vmMakerDetail>();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"呼叫失敗: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<List<vmMakerDetail>> GetMakerDataInternalAsync(string makername)
+        {
+            try
+            {
+                string jsonString = await AsmxClient.GetMakerDataInternalAsync(makername);
+                if (string.IsNullOrEmpty(jsonString))
+                {
+                    throw new InvalidOperationException("遠端 SOAP 服務回傳空值，系統無法繼續處理。");
+                }
+
+                var result = JsonConvert.DeserializeObject<List<vmMakerDetail>>(jsonString);
+
+                return result ?? new List<vmMakerDetail>();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"呼叫失敗: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<List<vmVendorDetail>> GetVendorInfoAsync(string makername)
+        {
+            try
+            {
+                string jsonString = await AsmxClient.GetVendorInfoAsync(makername);
+                if (string.IsNullOrEmpty(jsonString))
+                {
+                    throw new InvalidOperationException("遠端 SOAP 服務回傳空值，系統無法繼續處理。");
+                }
+
+                var result = JsonConvert.DeserializeObject<List<vmVendorDetail>>(jsonString);
+
+                return result ?? new List<vmVendorDetail>();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"呼叫失敗: {ex.Message}");
+                throw;
+            }
+        }
+         
+
+       
+        public async Task<List<DynamicField>> GetConfigFileListAsync(Dictionary<string, object>? dicType)
+        {
+            try
+            {
+                var vc_type = dicType?.GetString("vendor_class");
+
+                DataTable dt = new DataTable();
+                var sql = @" select vc_type VCType
+                                   ,Item_id ColId
+                                   ,Item_name ColName
+                                   ,object_type ObjectType
+                                   ,expired_date ExpiredDate
+                                   ,must_fill_data IsMust
+                                   ,default_value DefaultValue
+                                   ,format 
+                                   ,Sort [Order] 
+                            from osp_file_config_c c where vc_type =@vc_type and c.active='Y'
+							order by c.Sort Asc";
+                var result = await AmscDb.QueryAsync<DynamicField>(sql, new { vc_type = vc_type });
+
+                return result?.ToList() ?? new List<DynamicField>();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"呼叫失敗: {ex.Message}");
+                throw;
+            }
+        }
+
+
+        public async Task<List<BaseDynamicField>> GetConfigFieldAsync(string section, Dictionary<string, object>? dicType)
+        {
+            try
+            {
+                var type = dicType?.GetString("suppliertype");
+
+                var sqlWhere = string.Empty;
+                var sqlSelect = string.Empty;
+                switch (type)
+                {
+                    case "Vendor":
+                        sqlSelect += ",for_vendor_column IsMust";
+                        sqlWhere += " and a.for_vendor_column in ('Y','O') ";
+                        break;
+                    case "Maker":
+                        sqlSelect += ",for_maker_column IsMust";
+                        sqlWhere += " and a.for_maker_column in ('Y','O') ";
+                        break;
+                    case "MakerVendor":
+                        sqlSelect += ", CASE  WHEN for_vendor_column ='Y' or  for_maker_column ='Y' THEN 'Y' WHEN for_vendor_column ='Y' and  for_maker_column ='O' THEN 'Y' WHEN for_vendor_column ='O' and  for_maker_column ='Y' THEN 'Y' ELSE 'N' END AS IsMust";
+                        sqlWhere += " and (a.for_vendor_column in ('Y','O') or  a.for_maker_column in ('Y','O'))";
+                        break;
+                }
+
+                Logger.LogInformation("正在執行業務邏輯...");
+                DataTable dt = new DataTable();
+                var sql = string.Format(@"select * from (
+                            select NODE_ID NodeId
+                            ,PARENT_ID ParentId
+                            {0}
+                            ,section Section
+                            ,a.column_code ColId
+                            ,a.column_name ColName
+                            ,object_type ObjectType
+                            ,Sort [Order]
+                            ,SSAF_Sheet SheetName
+                            ,SSAF_Column SheetColumn 
+                            ,display Display
+                            ,Position
+						    ,STRING_AGG(CONCAT(b.attribute_text, ',',b.attribute_value), '^') WITHIN GROUP (ORDER BY a.Sort ASC) AS attribute
+                            from 
+							osp_column_config_c a left join osp_column_parameter_c b 
+							on a.column_code = b.column_code and a.column_name = b.column_name and a.Active ='Y' and b.Active ='Y'
+                            where a.section =@section
+                            {1}
+                            GROUP BY NODE_ID,PARENT_ID,for_maker_column,for_vendor_column,section,a.column_code,a.column_name,object_type,Sort,SSAF_Sheet,SSAF_Column,display,Position) c
+
+							order by [Order] Asc", sqlSelect, sqlWhere);
+                var result = await AmscDb.QueryAsync<BaseDynamicField>(sql, new { section = section });
+              
+                return result?.ToList() ?? new List<BaseDynamicField>();
+            }
+            catch (Exception ex)
+            { 
+                Logger.LogError($"呼叫失敗: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<Dictionary<string, List<BaseDynamicField>>> MappingSendData(Dictionary<string, List<BaseDynamicField>> dicMapping, Dictionary<string, string>? SendData)
+        {
+            var finalData = ViewHelper.MapKeysToJsonProperty<vmMakerDetail>(SendData);
+
+
+            var sql = string.Format(@"select * from osp_column_config_attr a
+						    where  a.type = 'Copy_Data' and a.[function] =@function
+							and a.Active ='Y'");
+            var result = await AmscDb.QueryAsync<dynamic>(sql, new { function = SendData["EventName"] });
+
+            var dictmp = result.ToDictionary(
+                    x => (string)x.column_code,
+                    x => (string)x.attr_value1
+                );
+
+            if (finalData != null)
+            {
+                foreach (var section in dicMapping)
+                {
+                    foreach (var field in section.Value)
+                    {
+                        // 1. 從資料庫配置 (dicConfig) 找該欄位的規則 (O/Y/N)
+                        if (dictmp.TryGetValue(field.ColId, out string rule))
+                        {
+                            // 2. 從前端傳入的 SendData 找該欄位的實際數值
+                            finalData.TryGetValue(field.ColId, out string? actualValue);
+                            string colValue = actualValue ?? "";
+
+                            switch (rule.ToUpper())
+                            {
+                                case "O": // Copy 不可改 (唯讀)
+                                    field.ColValue = colValue;
+                                    field.Readonly = true;
+                                    break;
+
+                                case "Y": // Copy 可改 (非唯讀)
+                                    field.ColValue = colValue;
+                                    field.Readonly = false;
+                                    break;
+
+                                case "N": // 不 Copy
+                                    field.Readonly = false;
+                                    // 不覆蓋 field.ColValue，維持預設
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+            return dicMapping;
+        }
+
+
+        public async Task<bool> Save(Dictionary<string, string> data)
+        { 
+            var VenderHeader = data.ToModel<VendorHeader>();
+            var VendorSubrange = data.ToModel<VendorSubrange>(); 
+
+            var VendorBank = data.ToModel<VendorHeader>();
+            var VendorFile = data.ToModel<VendorSubrange>();
+
+            return true;
+        }
+
+
+
+        //public async Task<List<vmMakerDetail>> GetSupplierDetail(string makername,string companyid, string makerlist)
+        //{ 
+        //    var client = new wsMakerGroupServiceSoapClient(wsMakerGroupServiceSoapClient.EndpointConfiguration.wsMakerGroupServiceSoap);
+        //    try
+        //    { 
+        //        var xmlResult = await client.GetMakerCheckGroupAsync(makername, companyid, "");
+
+        //        var nodes = xmlResult?.Nodes;
+
+        //        if (nodes == null || !nodes.Any())
+        //        {
+        //            return null;
+        //        }
+
+        //        XElement[] xmlArray = nodes.ToArray(); 
+        //        DataTable dt = new DataTable();
+        //        var rows = xmlArray[1].Descendants().Where(x => x.Name.LocalName == "Table").ToList();
+
+        //        if (rows.Any())
+        //        {
+        //            // 自動根據第一筆資料的子標籤建立欄位
+        //            foreach (var col in rows[0].Elements())
+        //                dt.Columns.Add(col.Name.LocalName);
+
+        //            // 填充資料
+        //            foreach (var row in rows)
+        //                dt.Rows.Add(row.Elements().Select(e => e.Value).ToArray());
+        //        }
+
+        //        var dd = dt.ToList<vmMakerDetail>();
+
+        //        return dd; 
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        // Log Error
+        //        return null;
+        //    }
+        //    finally
+        //    {
+        //        await client.CloseAsync();
+        //    }
+        //}
+
+
+
+    }
+}
+
+
+
+{"SupplierInformation":[{"ColId":"maker_code","ColName":"Maker Code","ColValue":"","Must":false,"EnumType":0,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":0,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"maker_local_name","ColName":"Maker Local Name","ColValue":"","Must":false,"EnumType":0,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":true,"Width":3,"Order":0,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"maker_english_name","ColName":"Maker English Name","ColValue":"","Must":false,"EnumType":0,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":true,"Width":3,"Order":0,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"company_code","ColName":"AMSC Company","ColValue":"","Must":false,"EnumType":2,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":1,"attribute":"AMSCTW,AMSCTW^AMSCXM,AMSCXM","Options":[{"Value":"AMSCTW","Color":"AMSCTW","Text":"AMSCTW"},{"Value":"AMSCXM","Color":"AMSCXM","Text":"AMSCXM"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"business_type","ColName":"Business Type","ColValue":"","Must":false,"EnumType":2,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":3,"attribute":"China Car,china_car^Global Car,global_car","Options":[{"Value":"china_car","Color":"china_car","Text":"China Car"},{"Value":"global_car","Color":"global_car","Text":"Global Car"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"vendor_class","ColName":"Vendor Class","ColValue":"","Must":false,"EnumType":2,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":4,"attribute":"VC1,VC1^VC2,VC2^VC3,VC3^VC4,VC4^VC5,VC5^VCL,VCL","Options":[{"Value":"VC1","Color":"VC1","Text":"VC1"},{"Value":"VC2","Color":"VC2","Text":"VC2"},{"Value":"VC3","Color":"VC3","Text":"VC3"},{"Value":"VC4","Color":"VC4","Text":"VC4"},{"Value":"VC5","Color":"VC5","Text":"VC5"},{"Value":"VCL","Color":"VCL","Text":"VCL"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":true,"InverseSelect":false},{"ColId":"vendor_group_code","ColName":"Vendor Group Code","ColValue":"","Must":false,"EnumType":3,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":5,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"maker_group_code","ColName":"Maker Group Code","ColValue":"","Must":false,"EnumType":3,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":6,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"technology","ColName":"Technology","ColValue":"","Must":false,"EnumType":3,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":7,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"upload_ssaaf","ColName":"Upload SSAAF","ColValue":"","Must":false,"EnumType":8,"Section":"Supplier Information","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":9,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false}],"VendorSubrange":[{"ColId":"ssr_description","ColName":"SSR Description","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":35,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"currency","ColName":"Currency","ColValue":"","Must":false,"EnumType":3,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":36,"attribute":"FetchCurrency,ERPMiddleWS.asmx","Options":[{"Value":"ERPMiddleWS.asmx","Color":"ERPMiddleWS.asmx","Text":"FetchCurrency"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"payment_term","ColName":"Payment term","ColValue":"","Must":false,"EnumType":3,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":37,"attribute":"FetchPaymentTerm,ERPMiddleWS.asmx","Options":[{"Value":"ERPMiddleWS.asmx","Color":"ERPMiddleWS.asmx","Text":"FetchPaymentTerm"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"incoterm","ColName":"Incoterm","ColValue":"","Must":false,"EnumType":3,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":38,"attribute":"FetchTradeTerm,ERPMiddleWS.asmx","Options":[{"Value":"ERPMiddleWS.asmx","Color":"ERPMiddleWS.asmx","Text":"FetchTradeTerm"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"freight_term","ColName":"Freight Term","ColValue":"","Must":false,"EnumType":3,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":39,"attribute":"FetchFreight,ERPMiddleWS.asmx","Options":[{"Value":"ERPMiddleWS.asmx","Color":"ERPMiddleWS.asmx","Text":"FetchFreight"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"tax_code","ColName":"Tax Code","ColValue":"","Must":false,"EnumType":3,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":40,"attribute":"FetchTax,ERPMiddleWS.asmx","Options":[{"Value":"ERPMiddleWS.asmx","Color":"ERPMiddleWS.asmx","Text":"FetchTax"}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"bank_name","ColName":"Bank Name","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":41,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"A14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"bank_branch","ColName":"Bank Branch","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":42,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"C14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"branch_country","ColName":"Bank Branch Country","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":43,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"account_name","ColName":"Bank Account Name","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":44,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"E14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"account_number","ColName":"Bank Account Number","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":45,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"F14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"branch_address","ColName":"Bank Branch Address","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":46,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"C19","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"bank_key","ColName":"Bank Key","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":47,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"D14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"routing_number","ColName":"Routing Number","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":48,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"H14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"swift_code","ColName":"SWIFT Code","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":49,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"J14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"iban","ColName":"IBAN","ColValue":"","Must":false,"EnumType":1,"Section":"Vendor Subrange","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":50,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"B Finance & C Quality","SheetColumn":"L14","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false}],"CompanyProfile":[{"ColId":"company_english_name","ColName":"Company English Name","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":10,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A5","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"company_local_name","ColName":"Company Local Name","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":11,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A7","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"company_owner","ColName":"Name of Company Owner/ Major Owner","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":12,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A9","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"historical_name","ColName":"Former/ Historical Company Name","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":13,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F9","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"country","ColName":"Country","ColValue":"","Must":false,"EnumType":2,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":14,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A17","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"city","ColName":"City/State","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":15,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A13","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"facility_address","ColName":"Facility Address","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":16,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A11","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"latitude","ColName":"Latitude","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":17,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"longitude","ColName":"Longitude","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":18,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"NA","SheetColumn":"NA","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"postal_code","ColName":"Postal Code","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":19,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A15","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"website_url","ColName":"Website (URL)","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":20,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A19","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"tax_identification","ColName":"Tax Identification Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":21,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A21","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"vat_number","ColName":"VAT Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":22,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A23","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"duns_number","ColName":"DUNS Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":23,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A25","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"head_duns_number","ColName":"Headquarter DUNS Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":24,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F25","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"register_number","ColName":"Commercial Register Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":25,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A27","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"contact_person","ColName":"Contact Person","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":26,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F11","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"position","ColName":"Position","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":27,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F13","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"e_mail","ColName":"E-mail","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":28,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F23","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"window_phone_number","ColName":"Contact Window Phone Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":29,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F19","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"company_office_number","ColName":"Company Office Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":30,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F17","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"fax_number","ColName":"Fax Number","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":31,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F21","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"language","ColName":"Language of Communication","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":32,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F15","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"subsidiary","ColName":"Subsidiary","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":33,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"A29","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"supplier_relationship","ColName":"Relationship of supplier","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":34,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"F29","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"ColId":"edi_connection","ColName":"EDI Connection","ColValue":"","Must":false,"EnumType":1,"Section":"Company Profile","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":51,"attribute":",","Options":[{"Value":"","Color":"","Text":""}],"SheetName":"A Company Profile","SheetColumn":"J70","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false}]}
+
+{"SupplierVC":[{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_ssa","ColName":"Supplier Self Assessment","ColValue":"","Must":true,"EnumType":1,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":1,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_amsc_qrs","ColName":"AMSC Quality Requirements for Suppliers","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":10,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_fss","ColName":"Financial Screening of Supplier","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Red/Yellow/Green","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":11,"attribute":"","Options":[{"Value":"","Color":"","Text":"Red/Yellow/Green"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_amsc_plg","ColName":"AMSC Packing and Logistics Guidelines ","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":12,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_pscr","ColName":"Product Safety and Compliance Responsible (PSCR)","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":13,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_sp02_23_tp_sra","ColName":"SP02_23_TP Supplier Risk Assessment ","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Red/Yellow/Green","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":14,"attribute":"","Options":[{"Value":"","Color":"","Text":"Red/Yellow/Green"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_wa","ColName":"Warranty Agreement (if applicable)","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":15,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_ic","ColName":"Integrity Commitment","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":16,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_rba","ColName":"RBA","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":17,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_gdpr","ColName":"GDPR","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":18,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_cr_pdf","ColName":"Commercial Register (PDF)","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":19,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_vda63_pa_self","ColName":"VDA 6.3 Potential Analysis (self audit)","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Red/Yellow/Green","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":2,"attribute":"","Options":[{"Value":"","Color":"","Text":"Red/Yellow/Green"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_obd_pdf","ColName":"Official Bank Document (PDF)","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":20,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_pi","ColName":"Payment Instruction","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":21,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_omc_agent","ColName":"Original manufacturer certificate (Agent Only)","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Y/N","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":22,"attribute":"","Options":[{"Value":"","Color":"","Text":"Y/N"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_email_cert_nc","ColName":"Email certificate (non corporate email only)","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Y/N","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":23,"attribute":"","Options":[{"Value":"","Color":"","Text":"Y/N"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_ship_rem_cn","ColName":"Shipment Reminder (China Supplier only)","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Y/N","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":24,"attribute":"","Options":[{"Value":"","Color":"","Text":"Y/N"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"Y","IsExpired":true,"FileList":[],"ColId":"vc1_iatf16949","ColName":"IATF 16949","ColValue":"","Must":false,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":3,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"Y","IsExpired":true,"FileList":[],"ColId":"vc1_iso9001","ColName":"ISO 9001","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":4,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"Y","IsExpired":true,"FileList":[],"ColId":"vc1_iso14001","ColName":"ISO 14001","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":5,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"Y","IsExpired":true,"FileList":[],"ColId":"vc1_tisax","ColName":"TISAX Assessment","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":6,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"Y","IsExpired":true,"FileList":[],"ColId":"vc1_iso27001","ColName":"ISO/ IEC 27001","ColValue":"","Must":false,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":7,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_mpa","ColName":"Material Purchase Agreement","ColValue":"","Must":true,"EnumType":2,"Section":"","Min":null,"Max":null,"DefaultValue":"Y/N","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":8,"attribute":"","Options":[{"Value":"","Color":"","Text":"Y/N"}],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false},{"VCType":"VC1","ExpiredDate":"N","IsExpired":false,"FileList":[],"ColId":"vc1_poi","ColName":"Proof of Insurance","ColValue":"","Must":true,"EnumType":0,"Section":"","Min":null,"Max":null,"DefaultValue":"","Pattern":"","Placeholder":"","Readonly":false,"Hidden":false,"Width":3,"Order":9,"attribute":"","Options":[],"SheetName":"","SheetColumn":"","Position":"","ColumnDesc":"","IsRedirect":false,"InverseSelect":false}]}
+
