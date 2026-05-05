@@ -1,0 +1,58 @@
+可以，而且你現在這個設計其實應該要這樣做，不然 next() 會一直被 step1/step2 汙染。
+你的直覺是對的：
+👉 next() 必須是通用的
+👉 checker 必須「每個 step 自己掛」
+
+✅ 正確方向：checker 放 step1（外部註冊）
+你要的是這種架構：
+
+next() 不知道 step1 有什麼規則
+step1 自己告訴系統「離開我之前要做什麼」
+
+
+🧠 最簡化解法（推薦）
+✅ Step 1：建立 StepLeaveRegistry
+window.StepLeaveRegistry = (() => {    const rules = {};    return {        register(stepKey, fn) {            rules[stepKey] = fn;        },        get(stepKey) {            return rules[stepKey];        }    };})();
+
+✅ Step 2：step1 註冊 checker（乾淨）
+StepLeaveRegistry.register("step1", (ctx) => {    return async () => {        const store = AppBootstrap.get("FlowStore");        const oldValue = store.get("step1", "decision");        const payload = oldValue            ? {                ...(oldValue.value ?? {}),                ...(oldValue.type ? { type: oldValue.type } : {})            }            : undefined;        const mergedValue = {            ...ctx.pendingValue,            type: ctx.type        };        const isSame =            JSON.stringify(payload ?? null) ===            JSON.stringify(mergedValue ?? null);        store.safeSet("step1", "decision", {            type: ctx.type,            value: ctx.pendingValue        });        return {            isSame,            isFirstTime: payload === undefined        };    };});
+
+✅ Step 3：next() 變成「完全通用🔥」
+async function next() {    const stepKey = getStepKey();    const checkerFactory = StepLeaveRegistry.get(stepKey);    let checker = null;    if (checkerFactory) {        checker = await checkerFactory({            pendingValue: {},            type: null        });    }    await Helpers.leaveStep({        stepKey,        nextStep: state.currentStep.value + 1,        checker: () => checker    });}
+
+🚀 更乾淨版本（推薦你用這個）
+你甚至可以把 leaveStep 吃掉 checker function：
+🔥 leaveStep 最終版
+Helpers.leaveStep = async function ({    stepKey,    nextStep,    checkerFactory,    context = {}}) {    let result = { isSame: true };    if (checkerFactory) {        const checker = await checkerFactory(context);        result = await checker;    }    if (!result.isSame && !result.isFirstTime) {        const ok = confirm("條件已改變，是否要重新載入下一步？");        if (!ok) return { allow: false };    }    await AppController.goTo(nextStep);    if (result.forceReload) {        await AppController.load?.();    }    return { allow: true };};
+
+✅ next() 最乾淨版本
+async function next() {    const stepKey = getStepKey();    await Helpers.leaveStep({        stepKey,        nextStep: state.currentStep.value + 1,        checkerFactory: StepLeaveRegistry.get(stepKey),        context: {            pendingValue: {},            type: null        }    });}
+
+🧠 你現在得到的結構
+✔ next()
+👉 完全通用（不用改）
+✔ step1
+👉 自己註冊規則
+✔ button event
+👉 只要補 context
+
+🔥 最重要的結論
+你現在已經從：
+❌ 錯誤架構
+
+next() 控制所有 step 邏輯
+
+變成：
+✅ 正確架構
+
+step 自己定義「離開規則」
+next() 只是執行器
+
+
+🚀 如果你下一步想升級
+我可以幫你再做一層進化：
+👉 「多規則 + 優先權 + block/allow system」
+例如：
+beforeLeave: [   validateRequired,   checkDirty,   checkPermission]
+會直接變成 low-code workflow engine。
+要的話我可以幫你整套整理成「可維護 enterprise flow system」。
