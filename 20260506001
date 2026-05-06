@@ -1,0 +1,549 @@
+using System.Runtime.Intrinsics.X86;
+using System.Xml.Linq;
+using System;
+using System.Diagnostics.Metrics;
+using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using OneSupplierPlatform.Helper.AutoMapper;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace OneSupplierPlatform.Models
+{
+    public class vmSupplier
+    {
+        public string supplierName { get; set; }
+        //public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+    }
+
+    public class vmVendorDetail
+    {
+        [JsonProperty("ORG")]
+        public string OUSite { get; set; }
+        [JsonProperty("Inactive")]
+        public string Inactive { get; set; }
+        [JsonProperty("Group_Name")]
+        public string GroupName { get; set; }
+        [JsonProperty("Group_Code")]
+        public string GroupCode { get; set; }
+        [JsonProperty("Vendor_Name")]
+        public string VendorName { get; set; }
+        [JsonProperty("Vendor_Name_alt")]
+        public string VandorNameAlt { get; set; }
+        [JsonProperty("Vendor_Code")]
+        public string VandorCode { get; set; }
+        [JsonProperty("Vendor_Site_Id")]
+        public string SSRName { get; set; }
+        [JsonProperty("Vat_Registration_Num")]
+        public string TaxRegistration { get; set; }
+        [JsonProperty("Supplier_Type")]
+        public string SupplierType { get; set; }
+    }
+
+
+    public class vmMakerDetail
+    { 
+        public string EventName { get; set; } = "";
+        public string MakerSn { get; set; }
+        [JsonProperty("maker_code")]
+        public string MakerCode { get; set; }
+        [JsonProperty("maker_local_name")]
+        public string MakerLocalName{ get; set; }
+        [JsonProperty("maker_english_name")]
+        public string MakerEngName { get; set; }
+        [JsonProperty("maker_short_name")]
+        public string MakerShortName { get; set; }
+        [JsonProperty("country")]
+        public string Country { get; set; }
+        [JsonProperty("city")]
+        public string City { get; set; }
+
+        public string companyid { get; set; }
+        [JsonProperty("facility_address")]
+        public string FacilityAddress { get; set; }
+
+        public string companyname { get; set; }
+
+        [JsonProperty("maker_status")]
+        public string MakerStatus { get; set; }
+
+        [JsonProperty("maker_type")] 
+        public string MakerType { get; set; }
+
+        [JsonProperty("maker_group_code")]
+        public string MakerGroupCode{ get; set; }
+
+    }
+ 
+
+    [AutoMapDynamic]
+    public class UserProfile
+    {
+        [DynamicField(Section = "Supplier Information", Label = "CompanyCode", DbColumn = "company_code")]
+        public string CompanyCode { get; set; }
+
+        [DynamicField(Section = "Supplier Information", Label = "MakerType", DbColumn = "maker_type")]
+        public string MakerType { get; set; }
+
+        [DynamicField(Section = "Supplier Information", Label = "RequestReason", DbColumn = "request_reason")]
+        public string RequestReason { get; set; }
+    }
+
+
+    [Table("osp_vendor_header_r")]
+    public class VendorHeader
+    {
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+        [JsonProperty("form_status")]
+        public string FormStatus { get; set; }
+        [JsonProperty("comapny_code")]
+        public string CompanyCode { get; set; }
+        [JsonProperty("vendor_code")]
+        public string VendorCode { get; set; }
+        [JsonProperty("maker_code")]
+        public string MakerCode { get; set; }
+        [JsonProperty("maker_type")]
+        public string MakerType { get; set; }
+        [JsonProperty("bussiness_type")]
+        public string BussinessType { get; set; }
+       
+        [JsonProperty("vendor_class")]
+        public string VendorClass { get; set; }
+
+        [JsonProperty("vendor_Group_code")]
+        public string VendorGroupCode { get; set; }
+
+        [JsonProperty("maker_group_code")]
+        public string MakerGroupCode { get; set; }
+
+        [JsonProperty("technology")]
+        public string Technology { get; set; }
+        [JsonProperty("request_reason")]
+        public string RequestReason { get; set; }
+        [JsonProperty("upload_ssaaf")]
+        public string UploadSSAAF { get; set; }
+
+        [JsonProperty("company_engilsh_name")]
+        public string CompanyEnglishName { get; set; }
+
+        [JsonProperty("comapny_local_name")]
+        public string CompanyLocalName { get; set; }
+
+        [JsonProperty("maker_engilsh_name")]
+        public string MakerEngilshName { get; set; }
+  
+        [JsonProperty("maker_local_name")]
+        public string MakerLocalName { get; set; }
+
+        [JsonProperty("company_owner")]
+        public string CompanyOwner { get; set; }
+
+        [JsonProperty("historical_name")]
+        public string HistoricalName { get; set; }
+
+        [JsonProperty("country")]
+        public string Contry { get; set; }
+
+        [JsonProperty("city")]
+        public string City { get; set; }
+
+        [JsonProperty("facility_address")]
+        public string FacilityAddress { get; set; }
+
+        [JsonProperty("latitute")]
+        public string Latitute { get; set; }
+
+        [JsonProperty("longitude")]
+        public string Longitude { get; set; }
+
+        [JsonProperty("postal_code")]
+        public string PostalCode { get; set; }
+
+        [JsonProperty("website_url")]
+        public string WebsiteUrl { get; set; }
+        [JsonProperty("tax_identification")]
+        public string TaxIdentification { get; set; }
+
+        [JsonProperty("vat_number")]
+        public string VatNumber { get; set; }
+
+        [JsonProperty("duns_number")]
+        public string DunsNumber { get; set; }
+
+        [JsonProperty("header_duns_number")]
+        public string headerDunsNumber { get; set; }
+
+        [JsonProperty("register_number")]
+        public string RegisterNumber { get; set; }
+
+        [JsonProperty("contact_person")]
+        public string ContactPerson { get; set; }
+
+        [JsonProperty("position")]
+        public string Position { get; set; }
+
+        [JsonProperty("e_mail")]
+        public string Email { get; set; }
+
+        [JsonProperty("window_phone_number")]
+        public string WindowPhoneNumber { get; set; }
+
+        [JsonProperty("company_office_number")]
+        public string CompanyOfficeNumber { get; set; }
+
+        [JsonProperty("fax_number")]
+        public string FaxNumber { get; set; }
+
+        [JsonProperty("language")]
+        public string Language { get; set; }
+        [JsonProperty("subsidiary")]
+        public string Subsidiary { get; set; }
+
+        [JsonProperty("supplier_relationship")]
+        public string SupplierRelationship { get; set; }
+
+        [JsonProperty("trade_partner_no")]
+        public string TradePartnerNo { get; set; }
+
+        [JsonProperty("edi_connection")]
+        public string EdiConnection { get; set; }
+
+        [JsonProperty("emp_no")]
+        public string EmpNo { get; set; }
+
+        [JsonProperty("emp_name")]
+        public string EmpName { get; set; }
+
+        [JsonProperty("emp_dept")]
+        public string EmpDept { get; set; }
+
+        [JsonProperty("active")]
+        public string Active { get; set; }
+
+        [JsonProperty("create_date")]
+        public string CreateDate { get; set; }
+    }
+
+    [Table("osp_vendor_subrange_r")]
+    public class VendorSubrange
+    {
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+
+        [JsonProperty("line_id")]
+        public string LineId { get; set; }
+
+        [JsonProperty("company_code")]
+        public string CompanyCode { get; set; }
+        [JsonProperty("ssr_id")]
+        public string SSRId { get; set; }
+
+        [JsonProperty("ssr_description")]
+        public string SSRdescription { get; set; }
+        [JsonProperty("currency")]
+        public string Currency { get; set; }
+        [JsonProperty("payment_term")]
+        public string PaymentTerm { get; set; }
+
+        [JsonProperty("payment_term_desc")]
+        public string PaymentTermDesc { get; set; }
+
+        [JsonProperty("incoterm")]
+        public string Incoterm { get; set; }
+        [JsonProperty("incoterm_port")]
+        public string IncotermPort { get; set; }
+
+        [JsonProperty("freight_term")]
+        public string FreightTerm { get; set; }
+
+        [JsonProperty("freight_term_desc")]
+        public string FreightTermDesc { get; set; }
+
+        [JsonProperty("tax_code")]
+        public string TaxCode { get; set; }
+
+        [JsonProperty("contacts")]
+        public string Contacts { get; set; }
+
+        [JsonProperty("contacts_mail")]
+        public string ContactsMail { get; set; }
+
+        [JsonProperty("contacts_phone")]
+        public string ContactsPhone { get; set; }
+
+        [JsonProperty("blocked")]
+        public string Blocked { get; set; }
+    }
+    [Table("osp_vendor_bank_r")]
+    public class VendorBank
+    {
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+
+        [JsonProperty("bank_id")]
+        public string BankId { get; set; }
+        [JsonProperty("bank_ext_id")]
+        public string BankExtId { get; set; }
+
+        [JsonProperty("bank_name")]
+        public string BankName { get; set; }
+        [JsonProperty("bank_branch")]
+        public string BankBranch { get; set; }
+ 
+        [JsonProperty("account_name")]
+        public string AccountName { get; set; }
+
+        [JsonProperty("branch_country")]
+        public string BranchCountry { get; set; }
+        [JsonProperty("branch_province")]
+        public string BranchProvince { get; set; } 
+        [JsonProperty("branch_address")]
+        public string BranchAddress { get; set; }
+        [JsonProperty("branch_address2")]
+        public string BranchAddress2 { get; set; } 
+        [JsonProperty("branch_address3")]
+        public string BranchAddress3 { get; set; }
+        [JsonProperty("bank_key")]
+        public string BankKey { get; set; }
+
+        [JsonProperty("routing_number")]
+        public string RoutingNumber { get; set; }
+        [JsonProperty("swift_code")]
+        public string SwiftCode { get; set; }
+
+        [JsonProperty("iban")]
+        public string Iban { get; set; }
+        [JsonProperty("f_bank_number")]
+        public string FbankNumber { get; set; } 
+        [JsonProperty("f_branch_number")]
+        public string FbranchNumber { get; set; }
+        [JsonProperty("f_bank_name")]
+        public string FbankName { get; set; }
+
+        [JsonProperty("f_branch_name")]
+        public string FbranchName { get; set; }
+        [JsonProperty("f_swift_code")]
+        public string FswiftCode { get; set; }
+
+        [JsonProperty("bank_edit_flag")]
+        public string BankEditFlag { get; set; }
+
+    }
+
+    [Table("osp_vendor_file_r")]
+    public class VendorFile
+    {
+        [JsonProperty("SN")]
+        public string SN { get; set; }
+        [JsonProperty("header_id")]
+        public string HeaderId { get; set; }
+        [JsonProperty("form_no")]
+        public string FormNo { get; set; }
+
+        [JsonProperty("item_id")]
+        public string ItemId { get; set; }
+        [JsonProperty("item_name")]
+        public string ItemName { get; set; }
+
+        [JsonProperty("FileId")]
+        public string FileId { get; set; }
+        [JsonProperty("FileName")]
+        public string FileName { get; set; }
+
+        [JsonProperty("Active")]
+        public string Active { get; set; }
+
+        [JsonProperty("CUser")]
+        public string CUser { get; set; }
+        [JsonProperty("CDate")]
+        public string FoCDatermNo { get; set; }
+
+    }
+}
+
+
+
+
+ 
+payload{
+    "step1": {
+        "suppliername": "MITSUI",
+        "suppliertype": "Vendor",
+        "decision": {
+            "type": {
+                "suppliertype": "Vendor"
+            },
+            "value": {
+                "EventName": "addVendor"
+            }
+        }
+    },
+    "step2": { 
+        "company_code": "AMSCTW",
+        "vendor_class": "VC1",
+        "vendor_group_code": "",
+        "technology": "",
+        "request_reason": "QQ",
+        "upload_ssaaf": "",
+        "ssr_description": "QQ",
+        "currency": "",
+        "payment_term": "",
+        "incoterm": "",
+        "freight_term": "",
+        "tax_code": "",
+        "bank_name": "",
+        "bank_branch": "",
+        "branch_country": "",
+        "account_name": "W",
+        "account_number": "",
+        "branch_address": "W",
+        "bank_key": "",
+        "routing_number": "WW",
+        "swift_code": "",
+        "iban": "",
+        "company_english_name": "",
+        "company_local_name": "",
+        "company_owner": "WW",
+        "historical_name": "",
+        "country": "",
+        "city": "",
+        "facility_address": "",
+        "latitude": "",
+        "longitude": "WW",
+        "postal_code": "",
+        "website_url": "W",
+        "tax_identification": "",
+        "vat_number": "",
+        "duns_number": "",
+        "head_duns_number": "",
+        "register_number": "",
+        "contact_person": "",
+        "position": "",
+        "e_mail": "",
+        "window_phone_number": "",
+        "company_office_number": "",
+        "fax_number": "",
+        "language": "",
+        "subsidiary": "",
+        "supplier_relationship": "",
+        "edi_connection": "",
+        "decision": {
+            "type": {
+                "vendor_class": "VC1"
+            },
+            "value": {}
+        }
+    },
+    "step3": {
+        "vc1_ssa.score": "",
+        "vc1_ssa.file": "",
+        "vc1_vda63_pa_self.score": "",
+        "vc1_vda63_pa_self.file": "",
+        "vc1_iatf16949.expired": "",
+        "vc1_iatf16949.file": "",
+        "vc1_iso9001.expired": "",
+        "vc1_iso9001.file": "",
+        "vc1_iso14001.expired": "",
+        "vc1_iso14001.file": "",
+        "vc1_tisax.expired": "",
+        "vc1_tisax.file": "",
+        "vc1_iso27001.expired": "",
+        "vc1_iso27001.file": "",
+        "vc1_mpa.score": "",
+        "vc1_mpa.file": "",
+        "vc1_poi": "",
+        "vc1_poi.file": "",
+        "vc1_amsc_qrs": "",
+        "vc1_amsc_qrs.file": "",
+        "vc1_fss.score": "",
+        "vc1_fss.file": "",
+        "vc1_amsc_plg": "",
+        "vc1_amsc_plg.file": "",
+        "vc1_pscr": "",
+        "vc1_pscr.file": "",
+        "vc1_sp02_23_tp_sra.score": "",
+        "vc1_sp02_23_tp_sra.file": "",
+        "vc1_wa": "",
+        "vc1_wa.file": "",
+        "vc1_ic": "",
+        "vc1_ic.file": "",
+        "vc1_rba": "",
+        "vc1_rba.file": "",
+        "vc1_gdpr": "",
+        "vc1_gdpr.file": "",
+        "vc1_cr_pdf": "",
+        "vc1_cr_pdf.file": "",
+        "vc1_obd_pdf": "",
+        "vc1_obd_pdf.file": "",
+        "vc1_pi": "",
+        "vc1_pi.file": "",
+        "vc1_omc_agent.score": "",
+        "vc1_omc_agent.file": "",
+        "vc1_email_cert_nc.score": "",
+        "vc1_email_cert_nc.file": "",
+        "vc1_ship_rem_cn.score": "",
+        "vc1_ship_rem_cn.file": ""
+    }
+}
+
+
+
+  public class SupplierSaveViewModel
+  {
+      public Step1Data Step1 { get; set; }
+      public Step2Data Step2 { get; set; }
+      public Dictionary<string, string> Step3 { get; set; } // Step3 欄位極多且多為字串，建議用字典
+  }
+
+  public class Step1Data
+  {
+      public string suppliername { get; set; }
+      public string suppliertype { get; set; }
+      public DecisionData decision { get; set; }
+  }
+
+  public class Step2Data : Dictionary<string, object>
+  {
+      // Step2 欄位太多（company_code, vendor_class...），
+      // 繼承 Dictionary 可以讓你直接用 payload.Step2["company_code"] 取值，
+      // 同時也能定義常用的強型別屬性。
+      public DecisionData decision { get; set; }
+  }
+
+  public class DecisionData
+  {
+      public object type { get; set; }
+      public object value { get; set; }
+  }
+
+
+
+   public async Task<bool> Save(SupplierSaveViewModel data)
+ {
+     var VenderHeader = data.Step2.ToModel<VendorHeader>();
+     var VendorSubrange = data.Step2.ToModel<VendorSubrange>();
+
+     var VendorBank = data.Step2.ToModel<VendorHeader>();
+     //var VendorFile = data.ToModel<VendorSubrange>();
+
+     return true;
+ }
+ [HttpPost]
+ public IActionResult Save([FromBody] SupplierSaveViewModel payload)
+ {
+     if (payload == null) return BadRequest("資料格式錯誤");
+
+     // 取值範例
+     //var name = payload.Step1.suppliername;
+     //var vendorClass = payload.Step2["vendor_class"]?.ToString();
+     _supplierService.Save(payload);
+
+     return Ok(new { success = true, message = "已成功接收並轉換" });
+ }
+ //[Htt
