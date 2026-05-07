@@ -1,0 +1,823 @@
+ 
+
+window.ValidationRules = {
+
+	required: (val) => {
+
+		if (val instanceof File)
+			return val ? true : "必填";
+
+		if (Array.isArray(val))
+			return val.length > 0 || "必填";
+
+		return (val === null || val === undefined || val === "")
+			? "必填"
+			: true;
+	},
+
+	min: (val, ctx) => {
+		if (val == null || val === "") return true;
+		return parseFloat(val) >= parseFloat(ctx.arg) || `不可小於${ctx.arg}`;
+	},
+
+	max: (val, ctx) => {
+		if (val == null || val === "") return true;
+		return parseFloat(val) <= parseFloat(ctx.arg) || `不可大於${ctx.arg}`;
+	},
+
+	// =========================
+	// ⭐ NEW: file validators
+	// =========================
+	accept: (file, ctx) => {
+		if (!file) return true;
+
+		const types = ctx.arg.split(",");
+		return types.some(t => file.type.includes(t))
+			|| `檔案格式需為 ${ctx.arg}`;
+	},
+
+	maxsize: (file, ctx) => {
+		if (!file) return true;
+
+		const maxMB = parseFloat(ctx.arg);
+		return file.size <= maxMB * 1024 * 1024
+			|| `檔案不可超過 ${maxMB}MB`;
+	},
+	// =========================
+	// 🔥 async validator（統一版本）
+	// =========================
+	// =========================
+	// 🔥 async validator（升級版）
+	// =========================
+	async: async (val, ctx) => {
+
+		if (val === undefined) return;
+
+		let res;
+
+		// =========================
+		// ⭐ FILE MODE
+		// =========================
+		if (val instanceof File) {
+
+			const formData = new FormData();
+			formData.append("file", val);
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				body: formData,
+				signal: ctx.signal
+			});
+
+		}
+		// =========================
+		// ⭐ MULTIPLE FILE
+		// =========================
+		else if (Array.isArray(val) && val[0] instanceof File) {
+
+			const formData = new FormData();
+
+			val.forEach((f, i) => {
+				formData.append(`files[${i}]`, f);
+			});
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				body: formData,
+				signal: ctx.signal
+			});
+		}
+		// =========================
+		// ⭐ NORMAL VALUE（原本邏輯）
+		// =========================
+		else {
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					value: val,
+					stepKey: ctx.stepKey,
+					field: ctx.field
+				}),
+				signal: ctx.signal
+			});
+		}
+
+		const data = await res.json();
+
+		if (data.valid === false) {
+			return data.message || "驗證失敗";
+		}
+
+		return {
+			valid: true,
+			data: data.data || {},
+			message: data.message || ""
+		};
+	}
+};
+// =========================
+// ✅ FormValidation（唯一引擎）
+// =========================
+//window.FormValidation = (() => {
+
+//	const store = () => AppBootstrap.get("FormStore");
+
+//	function parseRules(ruleStr) {
+//		if (!ruleStr) return [];
+
+//		return ruleStr.split("|").map(r => {
+//			const [name, arg] = r.split(":");
+//			return { name, arg };
+//		});
+//	}
+
+//	function run(stepKey, field, val, el) {
+
+//		const s = store();
+
+//		// 🔵 Graph（優先）
+//		const nodes = ValidationGraph.getNodes(stepKey, field);
+
+//		for (const node of nodes) {
+
+//		    const result = node.run({ val, stepKey, field });
+
+//		    if (result !== true) {
+//		        s.setError(stepKey, field, result);
+//		        s.setStatus(stepKey, field, "error");
+//		        return false;
+//		    }
+//		}
+
+//		// 🔵 data-rules
+//		//const rules = parseRules(el.dataset.rules);
+
+//		//for (const r of rules) {
+
+//		//	const fn = ValidationRules[r.name];
+//		//	if (!fn) continue;
+
+//		//	const result = fn(val, { arg: r.arg });
+
+//		//	if (result !== true) {
+//		//		s.setError(stepKey, field, result);
+//		//		s.setStatus(stepKey, field, "error");
+//		//		return false;
+//		//	}
+//		//}
+
+//		// 🟢 success
+//		s.clearError(stepKey, field);
+//		s.setStatus(stepKey, field, "success");
+
+//		return true;
+//	}
+
+//	return { run };
+
+//})(); 
+ 
+// =========================
+// ✅ FieldBinder（初始化✔ + UX 正確）
+// =========================
+window.FieldBinder = (() => {
+	 
+	function bindFields(container, stepKey) {
+		const plugins = AppBootstrap.get("FilePlugin");
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+		container.querySelectorAll("[data-field]").forEach(el => {
+
+			if (el.dataset.bound) return;
+			el.dataset.bound = "1";
+
+			const rawCol = el.dataset.col;
+			const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+			const key = makeKey(el.dataset.field, col);
+
+			// ⭐ 修正：傳 el 進去讓 rules 用 key
+			registerValidationRules(el, stepKey);
+
+			// =========================
+			// INIT
+			// =========================
+			let initVal = store.get(stepKey, key);
+
+			if (initVal === undefined) {
+
+				// ⭐ 從 DOM 抓預設值
+				if (el.dataset.type === "label" || el.type === "hidden") {
+					initVal = el.dataset.value ?? el.textContent.trim() ?? null;
+				}
+				else if (el.type === "checkbox") {
+					initVal = el.checked;
+				}
+				else if (el.type === "radio") {
+					initVal = el.checked ? el.value : null;
+				}
+				else if (el.tagName === "SELECT") {
+					initVal = el.value;
+				}
+				else {
+					initVal = el.value;
+				}
+
+				// ⭐ 塞進 store（關鍵）
+				if (initVal !== undefined) {
+					GraphV2.notify(stepKey, key, initVal == null ? '' : initVal.trim());
+				}
+
+			} else {
+				// store 已有 → 直接同步 UI
+
+				GraphV2.notify(stepKey, key, initVal);
+			}
+
+			// =========================
+			// plugin
+			// =========================
+			if (plugins) {
+				plugins.init(el, {
+					stepKey,
+					key,
+					store,
+					graph: GraphV2
+				});
+
+				if (plugins[el.type]) return;
+			}
+
+			// =========================
+			// input handler
+			// =========================
+			const update = (e) => {
+
+				const target = e?.target || el;
+
+				store.setTouched(stepKey, key);
+
+				let val;
+
+				if (target.type === "file") {
+					val = target.multiple
+						? Array.from(target.files || [])
+						: target.files?.[0] || null;
+				}
+				else if (target.type === "checkbox") {
+					val = target.checked;
+				}
+				else if (target.type === "radio") {
+
+					const selector = col
+						? `input[data-field='${field}'][data-col='${col}']:checked`
+						: `input[data-field='${field}']:checked`;
+
+					const checked = container.querySelector(selector);
+
+					val = checked ? checked.value : null;
+				}
+				else if (target.type === "number") {
+					val = target.value === "" ? null : Number(target.value);
+				}
+				 
+				else if (target.type === "select-one" && target.classList.contains("dropdownColor")) {
+					val = target.value;
+
+					const color = target.selectedOptions[0]?.dataset.color;
+					target.style.backgroundColor = color || "";
+				}
+				else {
+					val = target.value;
+				}
+
+				GraphV2.notify(stepKey, key, val);
+			};
+
+			// =========================
+			// events
+			// =========================
+			if (el.tagName === "SELECT") {
+
+				const $el = $(el);
+
+				if ($el.data("select2")) {
+					$el.on("select2:select select2:clear change", () => {
+						update({ target: el });
+					});
+				} else {
+					el.addEventListener("change", update);
+				}
+
+				//return;
+			}
+			//if (el.dataset.type === "label" || el.type === "hidden") {
+
+			//	Vue.watch(
+			//		() => store.get(stepKey, key),
+			//		(val) => {
+			//			GraphV2.notify(stepKey, key, el.textContent.trim()); 
+			//		},
+			//		{ immediate: true }
+			//	);
+
+			//	return; // ⭐ label 不需要下面 input handler
+			//}
+			 
+			if (el.type === "file" || el.type === "radio" ) {
+				el.addEventListener("change", update);
+			}
+			else {
+				el.addEventListener("input", update);
+			}
+
+			el.addEventListener("blur", () => {
+				store.setTouched(stepKey, key);
+			});
+
+			// =========================
+			// UI watch
+			// =========================
+			Vue.watch(
+				() => [
+					store.getError(stepKey, key),
+					store.getStatus(stepKey, key),
+					store.isTouched(stepKey, key),
+					store.isStepSubmitted(stepKey),
+					store.get(stepKey, key)
+				],
+				([error, status, touched, submitted, val]) => {
+
+					const show = touched || submitted;
+
+					const isEmpty =
+						val === null ||
+						val === undefined ||
+						val === "" ||
+						(Array.isArray(val) && val.length === 0) ||
+						(val instanceof File && !val);
+					 
+					if (show && isEmpty) {
+						FieldStatus.set(el, "error", "必填");
+						store.setError(stepKey, key, "必填");
+						store.setStatus(stepKey, key, "error");
+						return;
+					}
+					if (show && !isEmpty) {
+						FieldStatus.set(el, "success"); 
+						return;
+					}
+
+					if (!show && !val) {
+						FieldStatus.clear(el);
+						return;
+					}
+
+					if (status === "processing") {
+						if (val) { 
+							FieldStatus.set(el, "success");
+							return;
+						}
+						FieldStatus.set(el, "processing");
+						return;
+					}
+
+					if (status === "error") {
+						FieldStatus.set(el, "error");
+						return;
+					}
+
+					if (status === "success") {
+						FieldStatus.set(el, "success");
+					}
+				},
+				{ immediate: true, deep: true }
+			);
+		});
+	}
+	function setReadonly(
+		stepKey,
+		field,
+		readonly
+	) {
+		const el =
+			document.querySelector(
+				`[data-field='${field}']`
+			);
+		//const el =
+		//	getField(stepKey, field);
+
+		if (!el)
+			return;
+
+		const type =
+			(el.type || "").toLowerCase();
+
+		if (
+			el.tagName === "SELECT" ||
+			type === "checkbox" ||
+			type === "radio"
+		) {
+
+			el.disabled = readonly;
+
+		} else {
+
+			el.readOnly = readonly;
+		}
+
+		el.classList.toggle(
+			"readonly",
+			readonly
+		);
+	}
+	return { bindFields, setReadonly };
+
+})();
+
+window.FieldStatus = (() => {
+
+	const icons = {
+		success: '<i class="bi bi-check-circle text-success"></i>',
+		error: '<i class="bi bi-x-circle text-danger"></i>',
+		processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+	};
+
+	return {
+
+		set(el, state, msg = "") {
+
+			const field = el.closest(".field");
+			if (!field) return;
+
+			const icon = field.querySelector(".field-icon");
+			const msgEl = field.querySelector(".field-msg");
+
+			if (msgEl) msgEl.textContent = msg || "";
+
+			el.classList.remove("is-valid", "is-invalid");
+
+			if (!state) {
+				field.classList.remove("has-icon");
+				if (icon) icon.innerHTML = "";
+				return;
+			}
+
+			field.classList.add("has-icon");
+
+			if (state === "error") el.classList.add("is-invalid");
+			if (state === "success") el.classList.add("is-valid");
+			//console.log("FIELD CLASS:", field.className); console.log(el.closest(".field"));
+			if (icon) icon.innerHTML = icons[state] || "";
+		},
+
+		clear(el) {
+
+			const field = el.closest(".field");
+			if (!field) return;
+
+			const icon = field.querySelector(".field-icon");
+			const msgEl = field.querySelector(".field-msg");
+
+			if (msgEl) msgEl.textContent = "";
+
+			el.classList.remove("is-valid", "is-invalid");
+
+			field.classList.remove("has-icon");
+
+			if (icon) {
+				icon.innerHTML = "";
+				icon.style.opacity = "0";
+			}
+		}
+	};
+})();
+
+window.RuleFactory = (() => {
+
+	// 🔥 防止重複註冊
+	const registry = new Set();
+
+	function buildId(stepKey, field, name) {
+		return `${stepKey}.${field}.${name}`;
+	}
+
+	function registerOnce({ stepKey, field, name, handler }) {
+
+		const id = buildId(stepKey, field, name);
+
+		// ❌ 已註冊 → 不再重複
+		if (registry.has(id)) return;
+
+		registry.add(id);
+
+		ValidationGraph.register({
+			id,
+			stepKey,
+			field,
+
+			run: ({ val, stepKey }) => {
+
+				// 🔥 可擴展（未來支援跨欄位）
+				const data = FlowStore.getStep(stepKey);
+
+				return handler({
+					val,
+					stepKey,
+					field,
+					data
+				});
+			}
+		});
+	}
+
+	return {
+		registerOnce
+	};
+
+})();
+window.GraphV2 = (() => {
+
+	const nodes = [];
+	const timers = new Map();
+
+	// version control（避免 async race）
+	const versionMap = {};
+
+	function register(node) {
+		nodes.push(node);
+	}
+
+	function makeVersionKey(stepKey, field) {
+		return `${stepKey}.${field}`;
+	}
+
+	function getVersion(stepKey, field) {
+		const k = makeVersionKey(stepKey, field);
+		return versionMap[k] ?? 0;
+	}
+
+	function bumpVersion(stepKey, field) {
+		const k = makeVersionKey(stepKey, field);
+		versionMap[k] = (versionMap[k] || 0) + 1;
+		return versionMap[k];
+	}
+
+	// =========================
+	// 🚀 input entry (唯一入口)
+	// =========================
+	function notify(stepKey, field, value) {
+
+		const version = bumpVersion(stepKey, field);
+
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+		store.safeSet(stepKey, field, value, { version });
+		store.setStatus(stepKey, field, "processing");
+
+		schedule(stepKey, field, version);
+	}
+
+	// =========================
+	// ⏱ debounce scheduler
+	// =========================
+	function schedule(stepKey, field, version) {
+
+		const key = `${stepKey}:${field}`;
+
+		clearTimeout(timers[key]);
+
+		timers[key] = setTimeout(() => {
+			run(stepKey, field, version);
+		}, 80);
+	}
+
+	// =========================
+	// ⚙️ graph execution
+	// =========================
+	async function run(stepKey, changedField, version) {
+
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+		const data = store.getStep(stepKey);
+
+		const list = nodes.filter(n =>
+			n.stepKey === stepKey &&
+			n.deps.includes(changedField)
+		);
+
+		for (const n of list) {
+
+			const target = n.target;
+			//const key = `${stepKey}.${target}`;
+
+			// 🚫 stale guard
+			 
+			if (n.type != 'ui') { 
+				if (version !== getVersion(stepKey, target)) continue;
+			}
+			try {
+
+				// =========================
+				// validation node
+				// =========================
+				if (n.type === "validation") {
+
+					store.setStatus(stepKey, target, "processing");
+
+					const result = await n.run({ data, stepKey });
+
+					if (version !== getVersion(stepKey, target)) continue;
+
+					if (result !== true && result?.valid !== true) {
+						store.setError(stepKey, target, result.message || result);
+						store.setStatus(stepKey, target, "error");
+						continue;
+					}
+
+					store.clearError(stepKey, target);
+					store.setStatus(stepKey, target, "success");
+				}
+
+				// =========================
+				// effect node
+				// =========================
+				else if (n.type === "effect") {
+
+					const result = await n.run({ data, stepKey });
+
+					if (version !== getVersion(stepKey, target)) continue;
+
+					if (result?.patch) {
+
+						for (const [k, v] of Object.entries(result.patch)) {
+							store.safeSet(stepKey, k, v, { version });
+						}
+					}
+				}
+				else if (n.type === "ui") {
+
+					await n.run({
+						data,
+						stepKey
+					});
+				}
+			} catch (e) {
+
+				if (e.name === "AbortError") return;
+
+				store.setError(stepKey, target, "系統錯誤");
+				store.setStatus(stepKey, target, "error");
+			}
+		}
+	}
+
+	return {
+		register,
+		notify
+	};
+
+})();
+
+
+ 
+
+
+
+function makeKey(field, col) {
+	if (!col || col === "undefined" || col === "null") {
+		return field;
+	}
+	return `${field}.${col}`;
+}
+
+function getKey(el) {
+	const rawCol = el.dataset.col;
+	const col = rawCol && rawCol.trim() ? rawCol.trim() : null; 
+	return makeKey(el.dataset.field, col);
+}
+
+ 
+function parseRule(ruleStr) {
+
+	if (!ruleStr) {
+		return { validators: [], async: null, mapping: null };
+	}
+
+	const parts = ruleStr.split("|");
+
+	const validators = [];
+	let async = null;
+	let mapping = null;
+
+	for (const p of parts) {
+
+		// =========================
+		// async:/api
+		// =========================
+		if (p.startsWith("async:")) {
+			async = p.replace("async:", "").trim();
+			continue;
+		}
+
+		// =========================
+		// map:a=b,c=d
+		// =========================
+		if (p.startsWith("map:")) {
+
+			mapping = {};
+
+			const raw = p.replace("map:", "").split(",");
+
+			for (const item of raw) {
+
+				const [target, source] = item.split("=");
+
+				if (!target || !source) continue;
+
+				mapping[target.trim()] = source.trim();
+			}
+
+			continue;
+		}
+
+		// =========================
+		// sync validators
+		// =========================
+		validators.push(p);
+	}
+
+	return { validators, async, mapping };
+}
+function registerValidationRules(el, stepKey) {
+
+	const rawCol = el.dataset.col;
+	const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+	const key = makeKey(el.dataset.field, col);
+
+	const parsed = parseRule(el.dataset.rule);
+
+	// =========================
+	// sync validators
+	// =========================
+	parsed.validators.forEach((r, i) => {
+
+		const [name, arg] = r.split(":");
+		const fn = ValidationRules[name];
+		if (!fn) return;
+
+		GraphV2.register({
+			type: "validation",
+			stepKey,
+			deps: [key],
+			target: key,
+			id: `${stepKey}.${key}.${name}.${i}`,
+
+			run: ({ data }) => fn(data[key], { arg })
+		});
+	});
+
+	// =========================
+	// async
+	// =========================
+	if (parsed.async) {
+
+		GraphV2.register({
+			type: "validation",
+			stepKey,
+			deps: [key],
+			target: key,
+			id: `${stepKey}.${key}.async`,
+
+			run: async ({ data }) => {
+				return await ValidationRules.async(data[key], {
+					url: parsed.async,
+					stepKey,
+					field: key
+				});
+			}
+		});
+	}
+}
+
+            GraphV2.register({
+
+    stepKey: "step2",
+
+    deps: ["vendor_class"],
+
+    target: "technology",
+
+    type: "ui",
+
+    run: ({ data, stepKey }) => {
+    const readonly =  data.vendor_class =='VC5' ;
+    window.FieldBinder.setReadonly(
+        stepKey,
+        "technology",
+        readonly
+    );
+        
+    }
+});
