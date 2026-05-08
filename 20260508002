@@ -1,0 +1,1942 @@
+const REQUIRED_MODULES = [
+    
+    "FieldBinder",
+    "FlowStore",
+    //"FormValidation"
+];
+window.AppBootstrap = (() => {
+
+    const modules = {};
+    let ready = false;
+
+    function checkReady() {
+        ready = REQUIRED_MODULES.every(k => modules[k]);
+        return ready;
+    }
+
+    return {
+
+        register(name, instance) {
+            modules[name] = instance;
+            checkReady();
+        },
+
+        get(name) {
+            return modules[name];
+        },
+
+        isReady() {
+            return ready;
+        },
+
+        wait(timeout = 3000) {
+            return new Promise((resolve) => {
+
+                const start = Date.now();
+
+                const loop = () => { 
+
+                    const ready = REQUIRED_MODULES.every(k => modules[k]);
+
+                    if (ready) {
+                        resolve(this.modules);
+                        return;
+                    }
+
+                    if (Date.now() - start > timeout) {
+                        console.warn("Bootstrap timeout (non-blocking)");
+                        resolve(this.modules); // ⭐ 不 reject
+                        return;
+                    }
+
+                    requestAnimationFrame(loop);
+                };
+
+                loop();
+            });
+        }
+    };
+
+})();
+
+
+window.Helpers = window.Helpers || {};
+
+Helpers.stepNextWithConfirm = async function ({
+    stepKey = "step1",
+    nextStep,
+    storeKey = "decision",
+    value,
+    type,
+    autoGoTo = true 
+}) {
+    const store = AppBootstrap.get("FlowStore");
+    const oldValue = store.get(stepKey, storeKey);
+
+    const payload = oldValue ?? undefined;
+    const isFirstTime = typeof payload === "undefined";
+
+    // 這裡必須跟 safeSet 存入的結構一致，才能正確比對
+    const mergedValue = { type, value };
+
+    // 2. 比對新舊值是否完全相同
+    const isSame = JSON.stringify(payload) === JSON.stringify(mergedValue);
+
+    let forceReload = false;
+
+    // 1️⃣ 檢查不同且非第一次進入
+    if (!isSame && !isFirstTime) { 
+        const ok = await window.showConfirm("條件已改變", "是否要重新載入下一步？");
+        if (!ok) return { success: false }; // 使用者選「取消」，停止換頁
+        forceReload = true;
+    }
+
+    // 2️⃣ 存新值 (不論有沒有變，通常換頁前會更新 store)
+    store.safeSet(stepKey, storeKey, mergedValue);
+
+    // 3️⃣ 執行換頁
+    if (autoGoTo && nextStep !== undefined) {
+        await window.AppController.goTo(nextStep);
+        if (forceReload) {
+            const store = AppBootstrap.get("FlowStore");
+            store.clearStep('step' + nextStep) 
+            //$('.select2').val(null).trigger('change');  
+            //store.safeSet('step' + nextStep, null, {}); 
+            await window.AppController.load?.();
+        }
+    }
+
+    // 回傳結果供 Hook 或呼叫端判斷
+    return {
+        success: true,
+        isSame,
+        forceReload
+    };
+};
+ 
+
+const FormStore = (() => {
+
+    const state = Vue.reactive({ steps: {} });
+    const errors = Vue.reactive({ steps: {} });
+    const status = Vue.reactive({ steps: {} });
+
+    const touched = {};
+    const submitState = Vue.reactive({});
+    const ensure = (step) => {
+
+        state.steps[step] ||= {};
+        errors.steps[step] ||= {};
+        status.steps[step] ||= {};
+
+        state.steps[step].__version ||= {};
+        touched[step] ||= new Set();
+    };
+
+    return {
+        markStepSubmitted(step) {
+            submitState[step] = true;
+        },
+
+        unmarkStepSubmitted(step) {
+            submitState[step] = false;
+        },
+
+        isStepSubmitted(step) {
+            return !!submitState[step];
+        },
+        getStep(step) {
+            ensure(step);
+            return state.steps[step];
+        },
+
+        get(step, key) {
+            ensure(step);
+            return state.steps[step][key];
+        },
+        isStepValid(step) {
+            ensure(step);
+            return Object.values(errors.steps[step]).every(x => !x);
+        },
+
+        // =========================
+        // 🚀 safe write (version aware)
+        // =========================
+        safeSet(step, key, val, meta = {}) {
+
+            ensure(step);
+
+            const stepObj = state.steps[step];
+
+            const current = stepObj.__version[key] || 0;
+
+            if (meta.version != null && meta.version < current) return;
+
+            stepObj.__version[key] = current + 1;
+            console.log("🔥 BEFORE SET:", step, key, stepObj);
+
+            stepObj[key] = val;
+            console.log("🔥 AFTER SET:", stepObj);
+
+        },
+
+        setError(step, key, val) {
+            ensure(step);
+            errors.steps[step][key] = val;
+        },
+
+        clearError(step, key) {
+            ensure(step);
+            errors.steps[step][key] = null;
+        },
+
+        getError(step, key) {
+            return errors.steps?.[step]?.[key];
+        },
+
+        setStatus(step, key, val) {
+            ensure(step);
+            status.steps[step][key] = val;
+        },
+
+        getStatus(step, key) {
+            return status.steps?.[step]?.[key];
+        },
+
+        setTouched(step, key) {
+            ensure(step);
+            touched[step].add(key);
+        },
+
+        isTouched(step, key) {
+            return touched?.[step]?.has(key);
+        },
+        deleteField(step, key) {
+            ensure(step);
+
+            delete state.steps[step][key];
+            delete errors.steps[step][key];
+            delete status.steps[step][key];
+            delete state.steps[step].__version[key];
+
+            touched[step]?.delete(key);
+        },
+        resetField(step, key) {
+            ensure(step);
+
+            state.steps[step][key] = null;
+            errors.steps[step][key] = null;
+            status.steps[step][key] = null;
+
+            touched[step]?.delete(key);
+        },
+        clearStep(step) {
+
+            const stepObj = state.steps[step];
+
+            if (stepObj) {
+                // 2. 逐一刪除所有屬性（這會觸發 Vue UI 偵測到屬性消失）
+                Object.keys(stepObj).forEach(key => {
+                    delete stepObj[key];
+                });
+
+                // 3. 重新初始化內部必要的結構
+                stepObj.__version = {};
+            }
+
+            // 4. 對於 errors 和 status，如果 UI 有綁定，也建議用同樣方式處理
+            if (errors.steps[step]) {
+                Object.keys(errors.steps[step]).forEach(k => delete errors.steps[step][k]);
+            }
+            if (status.steps[step]) {
+                Object.keys(status.steps[step]).forEach(k => delete status.steps[step][k]);
+            }
+
+            // 5. Touched 是普通 Set，可以直接替換
+            touched[step] = new Set();
+
+            console.log(`✅ Step [${step}] 已清空，UI 應同步更新`);
+
+
+            //state.steps[step] = { __version: {} };
+            //errors.steps[step] = {};
+            //status.steps[step] = {};
+            //touched[step] = new Set();
+        },
+
+         
+    };
+
+})();
+window.FlowStore = (() => {
+
+    const toStepKey = (stepKey) => {
+        let state = window.AppController.getState();
+        if (!stepKey) return stepKey;
+
+        const prefix = state.flowId + ".";
+
+        if (stepKey.startsWith(prefix)) {
+            return stepKey;
+        }
+
+        if (stepKey.includes(".")) {
+            console.warn("⚠️ stepKey already has prefix:", stepKey);
+            return stepKey;
+        }
+
+        return prefix + stepKey;
+    };
+
+    return {
+
+        get(stepKey, key) {
+            return FormStore.get(toStepKey(stepKey), key);
+        },
+
+        getStep(stepKey) {
+            return FormStore.getStep(toStepKey(stepKey));
+        },
+
+        safeSet(stepKey, key, val, meta) {
+            return FormStore.safeSet(toStepKey(stepKey), key, val, meta);
+        },
+
+        setError(stepKey, key, val) {
+            return FormStore.setError(toStepKey(stepKey), key, val);
+        },
+        setStatus(stepKey, key, val) {
+            return FormStore.setStatus(toStepKey(stepKey), key, val);
+        },
+        getStatus(stepKey, key) {
+            return FormStore.getStatus(toStepKey(stepKey), key);
+        },
+        getError(stepKey, key) {
+            return FormStore.getError(toStepKey(stepKey), key);
+        },
+        clearError(stepKey, key) {
+            return FormStore.clearError(toStepKey(stepKey), key);
+        },
+        isTouched(stepKey, key) {
+            return FormStore.isTouched(toStepKey(stepKey), key);
+        },
+        isStepValid(stepKey) {
+            return FormStore.isStepValid(toStepKey(stepKey));
+        },
+        isStepSubmitted(stepKey) {
+            return FormStore.isStepSubmitted(toStepKey(stepKey));
+        },
+        setTouched(stepKey, key) {
+            return FormStore.setTouched(toStepKey(stepKey), key);
+        },
+        markStepSubmitted(stepKey) {
+            return FormStore.markStepSubmitted(toStepKey(stepKey));
+        },
+        deleteField(stepKey, key) {
+            return FormStore.deleteField(toStepKey(stepKey), key);
+        },
+
+        clearStep(stepKey) {
+            return FormStore.clearStep(toStepKey(stepKey));
+        },
+
+        resetField(stepKey, key) {
+            return FormStore.resetField(toStepKey(stepKey), key);
+        }
+
+    };
+
+})();
+
+
+window.AppController = (() => { 
+    const state = {
+        flowId: "default",
+        stepsRef: null,
+        currentStep: null,
+        setStep: null, 
+        currentPage: null,
+        loading: false,
+        _beforeHooks: []
+    };
+
+
+    function initSelect2(container) {
+        function setSelect2Background(select) {
+            let color = select.find("option:selected").data("color") || "";
+            select.next(".select2-container")
+                .find(".select2-selection--single")
+                .css("background-color", color);
+        }
+        function formatOption(item) {
+            if (!item.id) return item.text;
+            let color = $(item.element).data("color") || "";
+            return $('<div style="background:' + color + '; padding:4px 6px;">' + item.text + '</div>');
+        }
+
+        function formatSelection(item) { return item.text; }
+
+        $(container).find("select.select2").each(function () {
+
+            const $el = $(this);
+
+            if ($el.data("select2")) return;
+
+            $el.select2({
+                width: "100%",
+                placeholder: $el.attr("placeholder") || "請選擇",
+                allowClear: true,
+                templateResult: formatOption,
+                templateSelection: formatSelection
+            });
+            setTimeout(() => {
+                setSelect2Background($el);
+            }, 0);
+            $el.on("select2:select select2:clear", function () {
+                setSelect2Background($el);
+                // 🔥 強制同步 value
+                const value = $el.val();
+
+                // 🔥 直接用原生 dispatch（比 trigger 穩）
+                $el[0].dispatchEvent(new Event("change", { bubbles: true }));
+            });
+
+            $el.trigger("change.select2");
+        });
+    }
+
+
+    function getStepKey() {
+        return `step${state.currentStep.value || 1}`;
+    }
+     
+    async function init({ steps, currentStep, setStep }) {
+
+        state.flowId = window.__FLOW_ID__ || "default";
+        state.stepsRef = steps;
+        state.currentStep = currentStep;
+        state.setStep = setStep;
+        await registerModules();
+        //initInternalHooks();
+        await load();
+
+
+        const ribbon = document.querySelector('.wizard-ribbon');
+        if (ribbon) {
+            ribbon.style.setProperty('--total', steps.value.length);
+        }
+    }
+    async function registerModules() {
+
+        /*//AppBootstrap.register("FormStore", FormStore);*/
+        AppBootstrap.register("StepLoader", StepLoader);
+        AppBootstrap.register("FlowStore", FlowStore);
+        //AppBootstrap.register("FormValidation", FormValidation);
+        AppBootstrap.register("FilePlugin", FilePlugin);
+        AppBootstrap.register("FieldBinder", FieldBinder);
+        //AppBootstrap.register("ComputedRegistry", ComputedRegistry);
+        //AppBootstrap.register("ComputedEngine", ComputedEngine);
+        //if (window.FieldBinder)
+        //    AppBootstrap.register("FieldBinder", FieldBinder);
+        // 如果你有這些
+        //if (window.FieldStatus)
+        //    AppBootstrap.register("FieldStatus", FieldStatus);
+
+        //if (window.ValidationCenter)
+        //    AppBootstrap.register("ValidationCenter", ValidationCenter);
+
+        await AppBootstrap.wait(); // 🔥 等全部 ready
+
+        //const computed = AppBootstrap.get("ComputedEngine");
+        //computed.init();
+        //computed.enable();
+
+
+    }
+
+    function initInternalHooks() {
+        state._beforeHooks.push(async ({ currentStep, targetStep }) => {
+            // 只有向後走才檢查，回退不檢查
+            if (targetStep <= currentStep) return true;
+
+            const stepKey = `step${currentStep}`;
+            const currentPage = state.currentPage; // 這是目前頁面的實例
+
+            // 💡 關鍵：我們需要從目前頁面取得「現在選了什麼」來跟「舊資料」比對
+            // 假設你的頁面物件都有實作 getSubmitData() 
+            if (currentPage && typeof currentPage.getSubmitData === "function") {
+                const currentData = currentPage.getSubmitData();
+
+                const result = await Helpers.stepNextWithConfirm({
+                    stepKey: stepKey,
+                    nextStep: targetStep,
+                    value: currentData.value,
+                    type: currentData.type,
+                    autoGoTo: false // ⚡ 重要：這裡必須為 false，否則會跟 goTo 互衝造成死循環
+                });
+
+                // 如果 result.success 為 false (使用者按了取消)，hook 回傳 false 攔截換頁
+                return result.success;
+            }
+
+            return true;
+        });
+    }
+
+
+
+
+    async function load() {
+
+        if (state.loading) return;
+        state.loading = true;
+
+        try {
+
+            const StepLoader = AppBootstrap.get("StepLoader");
+            const stepIndex = state.currentStep.value;
+            const stepKey = `step${stepIndex}`;
+            const container = await StepLoader.load(stepIndex, state);
+            state.currentPage = window.StepPages?.[stepKey];
+            initSelect2(container)
+            hydrateFields(container, stepKey);
+
+            const fieldBinder = AppBootstrap.get("FieldBinder");
+            fieldBinder.bindFields(container, stepKey);
+            return container;
+
+        } catch (err) {
+
+            console.error("❌ load step failed:", err);
+
+            // 🔥 關鍵：避免卡死
+            state.loading = false;
+
+            // 🔥 可選：強制回復 UI（很重要）
+            //await forceRecoverStep();
+
+            throw err; // or swallow depending UX
+
+        }
+        finally {
+            state.loading = false;
+        }
+    }
+    function hydrateFields(container, stepKey) {
+        //const store = AppBootstrap.get("FormStore");
+        const store = AppBootstrap.get("FlowStore");
+        container
+            .querySelectorAll("input[data-field], select[data-field], textarea[data-field]")
+            .forEach(el => {
+                const rawCol = el.dataset.col;
+                const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+                const key = makeKey(el.dataset.field, col);
+
+                const storeVal = store.get(stepKey, key);
+
+                // 🟢 Store 優先
+                if (storeVal !== undefined && storeVal !== null) {
+
+                    if (el.type === "checkbox") {
+                        //el.checked = storeVal;
+                        GraphV2.notify(stepKey, key, storeVal);
+
+                    } else if (el.type === "radio") {
+                       // el.checked = (el.value === storeVal);
+                        GraphV2.notify(stepKey, key, (el.value === storeVal));
+                    }
+                    else if (el.type === "file") {
+
+                        // ❌ 永遠不要回填 file input value
+                        GraphV2.notify(stepKey, key, storeVal);
+                        // ✅ 改成更新 UI 顯示區
+                         
+                    }
+                    else {
+                       // el.value = storeVal;
+                        GraphV2.notify(stepKey, key, storeVal);
+                    }
+
+                } else {
+
+                    // 🔵 UI 補 Store（只做一次）
+                    let val;
+
+                    if (el.type === "checkbox") {
+                        val = el.checked;
+
+                    } else if (el.type === "radio") {
+
+                        const checked = container.querySelector(
+                            `input[data-field='${key}']:checked`
+                        );
+
+                        val = checked ? checked.value : null;
+
+                    } else {
+                        val = el.value;
+                    }
+
+                    if (val !== undefined && val !== null && val !== "") {
+                        /*  const token = Symbol(`${stepKey}.${key}`);*/
+                        store.safeSet(stepKey, key, val);
+                    }
+                }
+            });
+
+    }
+    async function next() {
+        const currentStep = state.currentStep.value;
+        const targetStep = currentStep + 1;
+
+        // 1️⃣ 執行所有註冊過的 Hooks (包含你在 STEP2 init 加的那個)
+        const canProceed = await runBeforeHooks(targetStep);
+
+        // 如果 Hook 回傳 false (代表 confirm 點了取消)，就中斷，不換頁
+        if (!canProceed) {
+            console.log("🚫 Hook 攔截：停止換頁");
+            return;
+        }
+
+        // 2️⃣ 如果 Hook 通過了，才執行原本的換頁邏輯
+        const stepKey = getStepKey();
+        // const store = AppBootstrap.get("FlowStore");
+        // if (!store.isStepValid(stepKey)) { ... }
+
+        // 3️⃣ 換頁前清空舊 Hook，避免 Hook 重複累積
+        state._beforeHooks = [];
+
+        state.setStep(targetStep);
+        await load();
+        //const stepKey = getStepKey();
+        //const store = AppBootstrap.get("FlowStore");
+        ////if (!store.isStepValid(stepKey)) {
+        ////    alert("請修正錯誤");
+        ////    return;
+        ////}
+
+        //state.setStep(state.currentStep.value + 1);
+        //await load();
+    }
+
+    async function prev() {
+        state._beforeHooks = [];
+        state.setStep(state.currentStep.value - 1);
+        await load();
+    }
+
+    async function goTo(i) {
+        const target = Number(i);
+
+        // 🔥 先跑 hook
+        const ok = await runBeforeHooks(target);
+
+        if (!ok) return;
+
+        state._beforeHooks = []; 
+
+        state.setStep(target);
+        await load();
+    }
+
+    async function finish() {
+        const store = AppBootstrap.get("FlowStore");
+        const payload = {};
+        state.stepsRef.value.forEach(s => {
+            payload[`step${s.StepIndex}`] = store.getStep(`step${s.StepIndex}`);  
+            store.markStepSubmitted(`step${s.StepIndex}`);
+        });
+
+        console.log("FINAL:", payload);
+
+        await fetch("/Supplier/Save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload, (key, value) => {
+                // 如果 key 是 __version，回傳 undefined 就會被從 JSON 中剔除
+                if (key === "__version") return undefined;
+                return value;
+            })
+        });
+    }
+
+    async function runBeforeHooks(targetStep) {
+        for (const hook of state._beforeHooks) {
+            const ok = await hook({
+                currentStep: state.currentStep.value,
+                targetStep,
+                state
+            });
+            if (!ok) return false;
+        }
+        return true;
+    }
+
+    return {
+        init,
+        next,
+        prev,
+        goTo,
+        finish,
+        load,
+        addBeforeHook(fn) {
+            state._beforeHooks.push(fn);
+        },
+        getState: () => state,
+    };
+
+})();
+
+
+
+async function callAsmxProxy(methodName, params) {
+    const response = await fetch('/Supplier/GetERP', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            methodName: methodName, // 指定要呼叫 ASMX 的哪個 Function
+            params: params          // 傳入該 Function 需要的參數物件
+        })
+    });
+    const result = await response.json();
+    return result.d; // 自動解開 ASMX 的 .d
+}
+
+function isEmpty(val) {
+    return (val === undefined || val == null || val.length <= 0) ? true : false;
+}
+$(document).on("mouseenter", ".tooltip-auto", function () {
+
+    let instance = bootstrap.Tooltip.getInstance(this);
+
+    if (!instance) {
+        instance = new bootstrap.Tooltip(this, {
+            title: this.dataset.title || "",
+            placement: "top",
+            trigger: "manual",   // ⭐ 改 manual
+            container: "body"
+        });
+    }
+
+    instance.show(); // ⭐ 直接顯示
+});
+
+$(document).on("mouseleave", ".tooltip-auto", function () {
+    const instance = bootstrap.Tooltip.getInstance(this);
+    if (instance) instance.hide();
+});
+
+
+window.showAlert = (title, text, icon = 'success') => {
+    Swal.fire({
+        title: title,
+        text: text,
+        icon: icon,
+        confirmButtonColor: '#004070', // 使用您的友達藍
+        confirmButtonText: '確定'
+    });
+};
+
+//window.showConfirm = (title, text, callback) => {
+//    Swal.fire({
+//        title: title,
+//        text: text,
+//        icon: 'warning',
+//        showCancelButton: true,
+//        confirmButtonColor: '#004070',
+//        cancelButtonColor: '#d33',
+//        confirmButtonText: '確定',
+//        cancelButtonText: '取消'
+//    }).then((result) => {
+//        if (result.isConfirmed && callback) {
+//            callback();
+//        }
+//    });
+//};
+window.showConfirm = (title, text, callback) => {
+    // 加上 return，讓外部可以接到 Promise
+    return Swal.fire({
+        title: title,
+        text: text,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#004070',
+        cancelButtonColor: '#d33',
+        confirmButtonText: '確定',
+        cancelButtonText: '取消'
+    }).then((result) => {
+        // 1. 保留原本邏輯：如果有 callback 且點擊確定，則執行
+        if (result.isConfirmed && typeof callback === 'function') {
+            callback();
+        }
+
+        // 2. 擴展功能：回傳 true/false 給外部的 await 接收
+        return result.isConfirmed;
+    });
+};
+
+
+$.ajaxSetup({
+    beforeSend: function (xhr) {
+        // 💡 從 Layout 產生的那個隱藏 input 取值
+        var token = $('input[name="__RequestVerificationToken"]').val();
+        if (token) {
+            xhr.setRequestHeader("RequestVerificationToken", token);
+        }
+    },
+    // 💡 當任何 AJAX 發生錯誤時觸發
+    error: function (xhr, status, error) {
+        const data = xhr.responseJSON;
+        if (!data) return;
+
+        // 1. 取得後端 Filter 傳來的資訊
+        const msg = (data && data.message) ? data.message : "系統連線異常";
+        const reqId = (data && data.requestId) ? data.requestId : "N/A";
+        const isFatal = data && data.isFatal === true;
+        const targetUrl = (data && data.redirectUrl) ? data.redirectUrl : "/Error/Index";
+        if (data && data.isFatal) {
+            xhr.isHandledByGlobal = true;
+
+            Swal.fire({
+                title: data.isFatal ? '系統異常' : '提醒',
+                html: `${data.message}<br/><br/><small class="text-muted">錯誤編號：${data.requestId}</small>`,
+                icon: data.isFatal ? 'error' : 'warning',
+                confirmButtonColor: '#004070',
+                confirmButtonText: data.isFatal ? '查看詳細資訊' : '確定',
+                allowOutsideClick: !data.isFatal
+            }).then((result) => {
+                if (data.isFatal && result.isConfirmed) {
+                    window.location.href = data.redirectUrl;
+                }
+            }); 
+        } 
+    }
+});
+
+
+
+
+window.StepRegistry = (() => {
+
+
+    const modules = {};
+    const waiters = {};
+
+
+    return {
+
+
+        register(name, module) {
+
+
+            modules[name] = module;
+
+
+
+            if (waiters[name]) {
+                waiters[name].forEach(fn => fn(module));
+                delete waiters[name];
+            }
+        },
+
+
+        get(name) {
+            return modules[name];
+        },
+
+        wait(name) {
+            return new Promise(resolve => {
+
+                if (modules[name]) {
+                    resolve(modules[name]);
+                    return;
+                }
+
+                waiters[name] ||= [];
+                waiters[name].push(resolve);
+            });
+        },
+
+        // ⭐ 新增（很重要）
+        clear(name) {
+            delete modules[name];
+        }
+    };
+
+
+
+
+})();
+window.StepLoader = (() => {
+    function injectHtmlWithScripts(container, html) {
+
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+
+        // 先塞 HTML（不含 script）
+        container.innerHTML = "";
+
+
+        doc.body.childNodes.forEach(node => {
+
+
+
+
+
+
+
+            if (node.tagName === "SCRIPT") return;
+
+            container.appendChild(node.cloneNode(true));
+        });
+
+        // 再執行 script
+        doc.querySelectorAll("script").forEach(oldScript => {
+
+            const s = document.createElement("script");
+
+
+            if (oldScript.src) {
+                s.src = oldScript.src;
+            } else {
+                s.textContent = oldScript.textContent;
+            }
+
+            document.body.appendChild(s);
+
+
+        });
+    }
+
+    async function load(stepIndex, ctx) {
+
+        const storeKey = "decision";
+        const store = AppBootstrap.get("FlowStore");
+
+        const prevStep = stepIndex > 1 ? stepIndex - 1 : stepIndex;
+
+        const extraData = store.get(`step${prevStep}`, storeKey);
+
+        const payload = {
+            stepIndex,
+            flowData: extraData
+                ? {
+                    [`step${stepIndex}`]: {
+                        type: extraData.type,
+                        data: JSON.parse(JSON.stringify(extraData.value))
+                    }
+                }
+                : null
+        };
+
+        const res = await fetch(`/Supplier/Step`, {
+            method: "post",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const msg = await res.text();
+            throw new Error(msg || `Step load failed: ${res.status}`);
+        }
+        const html = await res.text();
+
+        const container = document.getElementById("step-container");
+
+        const key = `step${stepIndex}`; 
+
+        if (ctx.currentPage?.destroy) {
+            try {
+                ctx.currentPage.destroy(container);
+            } catch (e) {
+                console.warn("destroy failed:", e);
+            }
+        }
+ 
+        if (window.StepRegistry?.clear) {
+            window.StepRegistry.clear(key);
+        } 
+       
+        injectHtmlWithScripts(container, html); 
+        
+        const module = await window.StepRegistry.wait(key);
+
+        if (!module) {
+            throw new Error(`Step module not registered: ${key}`);
+        }
+         
+        ctx.currentPage = module; 
+        module.init?.(container, {
+            formData: store,
+            currentStep: ctx.currentStep
+        });
+
+        return container;
+    }
+
+    return { load };
+
+})();
+
+
+
+window.ValidationRules = {
+
+	required: (val) => {
+
+		if (val instanceof File)
+			return val ? true : "必填";
+
+		if (Array.isArray(val))
+			return val.length > 0 || "必填";
+
+		return (val === null || val === undefined || val === "")
+			? "必填"
+			: true;
+	},
+
+	min: (val, ctx) => {
+		if (val == null || val === "") return true;
+		return parseFloat(val) >= parseFloat(ctx.arg) || `不可小於${ctx.arg}`;
+	},
+
+	max: (val, ctx) => {
+		if (val == null || val === "") return true;
+		return parseFloat(val) <= parseFloat(ctx.arg) || `不可大於${ctx.arg}`;
+	},
+
+	// =========================
+	// ⭐ NEW: file validators
+	// =========================
+	accept: (file, ctx) => {
+		if (!file) return true;
+
+		const types = ctx.arg.split(",");
+		return types.some(t => file.type.includes(t))
+			|| `檔案格式需為 ${ctx.arg}`;
+	},
+
+	maxsize: (file, ctx) => {
+		if (!file) return true;
+
+		const maxMB = parseFloat(ctx.arg);
+		return file.size <= maxMB * 1024 * 1024
+			|| `檔案不可超過 ${maxMB}MB`;
+	},
+	// =========================
+	// 🔥 async validator（統一版本）
+	// =========================
+	// =========================
+	// 🔥 async validator（升級版）
+	// =========================
+	async: async (val, ctx) => {
+
+		if (val === undefined) return;
+
+		let res;
+
+		// =========================
+		// ⭐ FILE MODE
+		// =========================
+		if (val instanceof File) {
+
+			const formData = new FormData();
+			formData.append("file", val);
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				body: formData,
+				signal: ctx.signal
+			});
+
+		}
+		// =========================
+		// ⭐ MULTIPLE FILE
+		// =========================
+		else if (Array.isArray(val) && val[0] instanceof File) {
+
+			const formData = new FormData();
+
+			val.forEach((f, i) => {
+				formData.append(`files[${i}]`, f);
+			});
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				body: formData,
+				signal: ctx.signal
+			});
+		}
+		// =========================
+		// ⭐ NORMAL VALUE（原本邏輯）
+		// =========================
+		else {
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					value: val,
+					stepKey: ctx.stepKey,
+					field: ctx.field
+				}),
+				signal: ctx.signal
+			});
+		}
+
+		const data = await res.json();
+
+		if (data.valid === false) {
+			return data.message || "驗證失敗";
+		}
+
+		return {
+			valid: true,
+			data: data.data || {},
+			message: data.message || ""
+		};
+	}
+};
+ 
+ 
+
+// =========================
+// ✅ FieldBinder（初始化✔ + UX 正確）
+// =========================
+window.FieldBinder = (() => {
+
+	function bindFields(container, stepKey) {
+		const plugins = AppBootstrap.get("FilePlugin");
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+
+		container.querySelectorAll("[data-field]").forEach(el => {
+
+			if (el.dataset.bound) return;
+			el.dataset.bound = "1";
+
+			const rawCol = el.dataset.col;
+			const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+			const key = makeKey(el.dataset.field, col);
+
+			// ⭐ 修正：傳 el 進去讓 rules 用 key
+			registerValidationRules(el, stepKey);
+
+			// =========================
+			// INIT
+			// =========================
+			let initVal = store.get(stepKey, key);
+
+			if (initVal === undefined) {
+
+				// ⭐ 從 DOM 抓預設值
+				if (el.dataset.type === "label" || el.type === "hidden") {
+					initVal = el.dataset.value ?? el.textContent.trim() ?? null;
+				}
+				else if (el.type === "checkbox") {
+					initVal = el.checked;
+				}
+				else if (el.type === "radio") {
+					initVal = el.checked ? el.value : null;
+				}
+				else if (el.tagName === "SELECT") {
+					initVal = el.value;
+				}
+				else {
+					initVal = el.value;
+				}
+
+				// ⭐ 塞進 store（關鍵）
+				if (initVal !== undefined) {
+					GraphV2.notify(stepKey, key, initVal == null ? '' : initVal.trim());
+				}
+
+			} else {
+				// store 已有 → 直接同步 UI
+
+				GraphV2.notify(stepKey, key, initVal);
+			}
+
+			// =========================
+			// plugin
+			// =========================
+			if (plugins) {
+				plugins.init(el, {
+					stepKey,
+					key,
+					store,
+					graph: GraphV2
+				});
+
+				if (plugins[el.type]) return;
+			}
+
+			// =========================
+			// input handler
+			// =========================
+			const update = (e) => {
+
+				const target = e?.target || el;
+
+				store.setTouched(stepKey, key);
+
+				let val;
+
+				if (target.type === "file") {
+					val = target.multiple
+						? Array.from(target.files || [])
+						: target.files?.[0] || null;
+					if (e.currentTarget.id == 'upload_ssaaf') {
+
+						const formData = new FormData();
+					 
+						formData.append("file", val);
+
+						$.ajax({
+							url: '/Supplier/UploadSSAAF', // 你的路徑
+							type: 'POST',
+							data: formData,
+							processData: false,
+							contentType: false,
+							success: function (response) { 
+								console.log("收到後端資料：", response); 
+								for (let mapkey in response) {
+									container
+										.querySelectorAll("input[data-field], select[data-field], textarea[data-field]")
+										.forEach(el => { 
+											const rawCol = el.dataset.col;
+											const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+											const key = makeKey(el.dataset.field, col); 
+											if (mapkey == key) {
+											 
+												if (el.type === "checkbox") {
+													el.checked = response[key];
+
+												} else if (el.type === "radio") {
+													el.checked = (el.value === response[key]); 
+												} 
+												else {
+													el.value = response[key];
+												}
+												GraphV2.notify(stepKey, key, isEmpty(response[key]) ? "" : response[key]);
+												store.setTouched(stepKey, key);
+											} 
+										}); 
+								 
+									//console.log("欄位：" + key + "，值：" + response[key]);
+								} 
+							},
+							error: function (xhr, status, error) {
+								console.error("出錯了：", error);
+								alert("上傳或讀取失敗");
+							}
+						});
+					}
+				}
+				else if (target.type === "checkbox") {
+					val = target.checked;
+				}
+				else if (target.type === "radio") {
+
+					const selector = col
+						? `input[data-field='${field}'][data-col='${col}']:checked`
+						: `input[data-field='${field}']:checked`;
+
+					const checked = container.querySelector(selector);
+
+					val = checked ? checked.value : null;
+				}
+				else if (target.type === "number") {
+					val = target.value === "" ? null : Number(target.value);
+				}
+				else if (target.type === "select-one" && target.classList.contains("dropdownColor")) {
+					val = target.value;
+
+					const color = target.selectedOptions[0]?.dataset.color;
+					target.style.backgroundColor = color || "";
+				}
+				else {
+					val = target.value;
+				}
+
+				GraphV2.notify(stepKey, key, val);
+			};
+
+			// =========================
+			// events
+			// =========================
+			if (el.tagName === "SELECT") {
+
+				const $el = $(el);
+
+				if ($el.data("select2")) {
+					$el.on("select2:select select2:clear change", () => {
+						update({ target: el });
+					});
+				} else {
+					el.addEventListener("change", update);
+				}
+
+				//return;
+			}
+			//if (el.dataset.type === "label" || el.type === "hidden") {
+
+			//	Vue.watch(
+			//		() => store.get(stepKey, key),
+			//		(val) => {
+			//			GraphV2.notify(stepKey, key, el.textContent.trim()); 
+			//		},
+			//		{ immediate: true }
+			//	);
+
+			//	return; // ⭐ label 不需要下面 input handler
+			//}
+
+			if (el.type === "file" || el.type === "radio") {
+				el.addEventListener("change", update);
+			}
+			else {
+				el.addEventListener("input", update);
+			}
+
+			el.addEventListener("blur", () => {
+				store.setTouched(stepKey, key);
+			});
+
+			// =========================
+			// UI watch
+			// =========================
+			Vue.watch(
+				() => [
+					store.getError(stepKey, key),
+					store.getStatus(stepKey, key),
+					store.isTouched(stepKey, key),
+					store.isStepSubmitted(stepKey),
+					store.get(stepKey, key)
+				],
+				([error, status, touched, submitted, val]) => {
+
+					const show = touched || submitted;
+
+					const isEmpty =
+						val === null ||
+						val === undefined ||
+						val === "" ||
+						(Array.isArray(val) && val.length === 0) ||
+						(val instanceof File && !val);
+
+					if (show && isEmpty && el.dataset.rule?.includes('required')) {
+						FieldStatus.set(el, "error", "必填");
+						store.setError(stepKey, key, "必填");
+						store.setStatus(stepKey, key, "error");
+						return;
+					}
+					if (show && !isEmpty) {
+						FieldStatus.set(el, "success");
+						return;
+					}
+
+					if (!show && !val) {
+						FieldStatus.clear(el);
+						return;
+					}
+
+					if (status === "processing") {
+						if (val) {
+							FieldStatus.set(el, "success");
+							return;
+						}
+						if (!val && !el.dataset.rule?.includes('required')) {
+							FieldStatus.clear(el);
+							return
+						}
+						FieldStatus.set(el, "processing");
+						return;
+					}
+
+					if (status === "error") {
+						FieldStatus.set(el, "error");
+						return;
+					}
+
+					if (status === "success") {
+						FieldStatus.set(el, "success");
+					}
+				},
+				{ immediate: true, deep: true }
+			);
+		});
+	}
+
+	function setReadonly(stepKey,field,readonly) {
+		const el =
+			document.querySelector(
+				`[data-field='${field}']`
+			);
+		//const el =
+		//	getField(stepKey, field);
+
+		if (!el)
+			return;
+
+		const type =
+			(el.type || "").toLowerCase();
+
+		if (
+			el.tagName === "SELECT" ||
+			type === "checkbox" ||
+			type === "radio"
+		) {
+
+			el.disabled = readonly;
+
+		} else {
+
+			el.readOnly = readonly;
+		}
+
+		el.classList.toggle(
+			"readonly",
+			readonly
+		);
+	}
+
+	function refreshUI(field, value) {
+		const el = document.querySelector(`[data-field='${field}']`);
+		if (!el) return; 
+		 
+		const wrapper = el.closest(".file-wrapper");
+
+		if (wrapper) {
+
+			const nameEl = wrapper.querySelector(".file-name");
+
+
+			if (value instanceof File) {
+				nameEl.textContent = value.name;
+				const lineEl = wrapper.querySelector(".file-line");
+				if (lineEl)
+					lineEl.dataset.title = value.name;
+			}
+			else if (Array.isArray(value)) {
+				nameEl.textContent = value.length
+					? value.map(f => f.name).join(", ")
+					: "";
+			}
+			else if (value?.name) {
+				nameEl.textContent = value.name;
+			}
+			else {
+				nameEl.textContent = "";
+			}
+			return; 
+		}
+
+		if (el.type === "radio") {
+			el.checked = !!value;
+			return;
+		}
+
+		if (el.type === "checkbox") {
+			el.checked = !!value;
+			return;
+		}
+
+		if (el.value === String(value)) return;
+
+		el.value = value;
+
+		if (window.jQuery && (jQuery(el).data('select2'))) { 
+			jQuery(el).trigger('change');
+		}
+	}
+	function setOptions(stepKey, key, list) {
+		// 1. 取得 Store
+		const store = AppBootstrap.get("FlowStore");
+
+		// 2. 格式化資料 (將 TAX_ID / NAME 轉為標準的 value / text)
+		// 這樣 UI 元件才能用統一的 Key 來跑迴圈
+		//const formattedOptions = list.map(item => ({
+		//	value: item.value,
+		//	text: item.text
+		//}));
+
+		const el =
+			document.querySelector(
+				`[data-field='${key}']`
+			);
+		if (!el)
+			return;
+
+		if (el.tagName === "SELECT") {
+			// 1. 準備新的選項 HTML (假設保留第一項為「請選擇」)
+			let optionsHtml = '<option value="">-- 請選擇 --</option>';
+
+			let dataList = list;
+			if (typeof list === "string") {
+				try {
+					dataList = JSON.parse(list);
+				} catch (e) {
+					console.error("解析 JSON 失敗", e);
+					return;
+				}
+			}
+
+			if (Array.isArray(dataList)) {
+				dataList.forEach(item => {
+					const val = item.value;
+					const txt = item.text;
+					optionsHtml += `<option value="${val}">${txt}</option>`;
+				});
+			}
+
+			// 3. 填入原生 SELECT
+			el.innerHTML = optionsHtml;
+
+			// 4. 如果是 Select2，必須通知它「清單已更新」並重新渲染
+			//if (window.jQuery) {
+			//	const $el = jQuery(el);
+			//	if ($el.data('select2') || el.classList.contains("select2-hidden-accessible")) {
+			//		// .trigger('change') 會讓 Select2 重新抓取 innerHTML 裡的內容
+			//		$el.trigger('change');
+			//	}
+			//}
+
+			let val = store.get(stepKey, key);
+			GraphV2.notify(stepKey, key, val);
+		}
+		// 3. 寫入 Store
+		//if (store.setFieldOptions) {
+		//	store.setFieldOptions(stepKey, field, formattedOptions);
+		//} else {
+		//	// 如果 Store 沒有專屬方法，通常是存入一個約定好的 metadata 欄位
+		//	store.safeSet(stepKey, `_options_${field}`, formattedOptions);
+		//}
+
+		//// 4. (選用) 如果是純 JS 操控 DOM，這裡要直接操作 Select 元件
+		//const selectEl = document.querySelector(`[data-step="${stepKey}"][name="${field}"]`);
+		//if (selectEl && selectEl.tagName === 'SELECT') {
+		//	selectEl.innerHTML = formattedOptions
+		//		.map(opt => `<option value="${opt.value}">${opt.text}</option>`)
+		//		.join('');
+		//}
+	}
+	return { bindFields, setReadonly, setOptions, refreshUI };
+
+})();
+
+window.FieldStatus = (() => {
+
+	const icons = {
+		success: '<i class="bi bi-check-circle text-success"></i>',
+		error: '<i class="bi bi-x-circle text-danger"></i>',
+		processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+	};
+
+	return {
+
+		set(el, state, msg = "") {
+
+			const field = el.closest(".field");
+			if (!field) return;
+
+			const icon = field.querySelector(".field-icon");
+			const msgEl = field.querySelector(".field-msg");
+
+			if (msgEl) msgEl.textContent = msg || "";
+
+			el.classList.remove("is-valid", "is-invalid");
+
+			if (!state) {
+				field.classList.remove("has-icon");
+				if (icon) icon.innerHTML = "";
+				return;
+			}
+
+			field.classList.add("has-icon");
+
+			if (state === "error") el.classList.add("is-invalid");
+			if (state === "success") el.classList.add("is-valid");
+			//console.log("FIELD CLASS:", field.className); console.log(el.closest(".field"));
+			if (icon) icon.innerHTML = icons[state] || "";
+		},
+
+		clear(el) {
+
+			const field = el.closest(".field");
+			if (!field) return;
+
+			const icon = field.querySelector(".field-icon");
+			const msgEl = field.querySelector(".field-msg");
+
+			if (msgEl) msgEl.textContent = "";
+
+			el.classList.remove("is-valid", "is-invalid");
+
+			field.classList.remove("has-icon");
+
+			if (icon) {
+				icon.innerHTML = "";
+				icon.style.opacity = "0";
+			}
+		}
+	};
+})();
+
+window.RuleFactory = (() => {
+
+	// 🔥 防止重複註冊
+	const registry = new Set();
+
+	function buildId(stepKey, field, name) {
+		return `${stepKey}.${field}.${name}`;
+	}
+
+	function registerOnce({ stepKey, field, name, handler }) {
+
+		const id = buildId(stepKey, field, name);
+
+		// ❌ 已註冊 → 不再重複
+		if (registry.has(id)) return;
+
+		registry.add(id);
+
+		ValidationGraph.register({
+			id,
+			stepKey,
+			field,
+
+			run: ({ val, stepKey }) => {
+
+				// 🔥 可擴展（未來支援跨欄位）
+				const data = FlowStore.getStep(stepKey);
+
+				return handler({
+					val,
+					stepKey,
+					field,
+					data
+				});
+			}
+		});
+	}
+
+	return {
+		registerOnce
+	};
+
+})();
+window.GraphV2 = (() => {
+
+	const nodes = [];
+	const timers = new Map();
+
+	// version control（避免 async race）
+	const versionMap = {};
+
+	function register(node) {
+		nodes.push(node);
+	}
+
+	function makeVersionKey(stepKey, field) {
+		return `${stepKey}.${field}`;
+	}
+
+	function getVersion(stepKey, field) {
+		const k = makeVersionKey(stepKey, field);
+		return versionMap[k] ?? 0;
+	}
+
+	function bumpVersion(stepKey, field) {
+		const k = makeVersionKey(stepKey, field);
+		versionMap[k] = (versionMap[k] || 0) + 1;
+		return versionMap[k];
+	}
+
+	// =========================
+	// 🚀 input entry (唯一入口)
+	// =========================
+	function notify(stepKey, field, value) {
+
+		const version = bumpVersion(stepKey, field);
+
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+
+		store.safeSet(stepKey, field, value, { version });
+		store.setStatus(stepKey, field, "processing");
+		window.FieldBinder.refreshUI(field, value);
+		schedule(stepKey, field, version);
+	}
+
+	// =========================
+	// ⏱ debounce scheduler
+	// =========================
+	function schedule(stepKey, field, version) {
+
+		const key = `${stepKey}:${field}`;
+
+		clearTimeout(timers[key]);
+
+		timers[key] = setTimeout(() => {
+			run(stepKey, field, version);
+		}, 80);
+	}
+
+	// =========================
+	// ⚙️ graph execution
+	// =========================
+	async function run(stepKey, changedField, version) {
+
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+		const data = store.getStep(stepKey);
+
+		const list = nodes.filter(n =>
+			n.stepKey === stepKey &&
+			n.deps.includes(changedField)
+		);
+
+		for (const n of list) {
+
+			const target = n.target;
+			const key = `${stepKey}.${target}`;
+
+			// 🚫 stale guard
+			if (n.type == 'validation' || n.type == 'effect') {
+				if (version !== getVersion(stepKey, target)) continue;
+			}
+			 
+			try {
+
+				// =========================
+				// validation node
+				// =========================
+				if (n.type === "validation") {
+
+					store.setStatus(stepKey, target, "processing");
+
+					const result = await n.run({ data, stepKey });
+
+					if (version !== getVersion(stepKey, target)) continue;
+
+					if (result !== true && result?.valid !== true) {
+						store.setError(stepKey, target, result.message || result);
+						store.setStatus(stepKey, target, "error");
+						continue;
+					}
+
+					store.clearError(stepKey, target);
+					store.setStatus(stepKey, target, "success");
+				}
+
+				// =========================
+				// effect node
+				// =========================
+				else if (n.type === "effect") {
+
+					const result = await n.run({ data, stepKey });
+
+					if (version !== getVersion(stepKey, target)) continue;
+
+					if (result?.patch) {
+
+						for (const [k, v] of Object.entries(result.patch)) {
+							store.safeSet(stepKey, k, v, { version });
+						}
+					}
+				} else if (n.type === "ui") {
+
+					await n.run({
+						data,
+						stepKey
+					});
+				}
+				else if (n.type === "bind") {
+
+					await n.run({
+						data,
+						stepKey
+					});
+				}
+
+			} catch (e) {
+
+				if (e.name === "AbortError") return;
+
+				store.setError(stepKey, target, "系統錯誤");
+				store.setStatus(stepKey, target, "error");
+			}
+		}
+	}
+
+	return {
+		register,
+		notify
+	};
+
+})();
+
+
+
+
+
+
+function makeKey(field, col) {
+	if (!col || col === "undefined" || col === "null") {
+		return field;
+	}
+	return `${field}.${col}`;
+}
+
+function getKey(el) {
+	const rawCol = el.dataset.col;
+	const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+	return makeKey(el.dataset.field, col);
+}
+
+
+function parseRule(ruleStr) {
+
+	if (!ruleStr) {
+		return { validators: [], async: null, mapping: null };
+	}
+
+	const parts = ruleStr.split("|");
+
+	const validators = [];
+	let async = null;
+	let mapping = null;
+
+	for (const p of parts) {
+
+		// =========================
+		// async:/api
+		// =========================
+		if (p.startsWith("async:")) {
+			async = p.replace("async:", "").trim();
+			continue;
+		}
+
+		// =========================
+		// map:a=b,c=d
+		// =========================
+		if (p.startsWith("map:")) {
+
+			mapping = {};
+
+			const raw = p.replace("map:", "").split(",");
+
+			for (const item of raw) {
+
+				const [target, source] = item.split("=");
+
+				if (!target || !source) continue;
+
+				mapping[target.trim()] = source.trim();
+			}
+
+			continue;
+		}
+
+		// =========================
+		// sync validators
+		// =========================
+		validators.push(p);
+	}
+
+	return { validators, async, mapping };
+}
+function registerValidationRules(el, stepKey) {
+
+	const rawCol = el.dataset.col;
+	const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+	const key = makeKey(el.dataset.field, col);
+
+	const parsed = parseRule(el.dataset.rule);
+
+	// =========================
+	// sync validators
+	// =========================
+	parsed.validators.forEach((r, i) => {
+
+		const [name, arg] = r.split(":");
+		const fn = ValidationRules[name];
+		if (!fn) return;
+
+		GraphV2.register({
+			type: "validation",
+			stepKey,
+			deps: [key],
+			target: key,
+			id: `${stepKey}.${key}.${name}.${i}`,
+
+			run: ({ data }) => fn(data[key], { arg })
+		});
+	});
+
+	// =========================
+	// async
+	// =========================
+	if (parsed.async) {
+
+		GraphV2.register({
+			type: "validation",
+			stepKey,
+			deps: [key],
+			target: key,
+			id: `${stepKey}.${key}.async`,
+
+			run: async ({ data }) => {
+				return await ValidationRules.async(data[key], {
+					url: parsed.async,
+					stepKey,
+					field: key
+				});
+			}
+		});
+	}
+}
+
+
+namespace OneSupplierPlatform.Models
+{ 
+    /// <summary>
+    /// 地理位置 / 經緯度
+    /// </summary>
+    public class vmGeography
+    {
+        //距離
+        public string DISTANCE { get; set; }
+        //單位
+        public string UNIT { get; set; }
+        //使用哪種API計算
+        public string MAP_FROM { get; set; }
+        // 地址
+        public string ADDRESS { get; set; }
+        // 緯度
+        public string LATITUDE { get; set; }
+        // 經度
+        public string LONGITUDE { get; set; }
+
+        public bool RESULT { get; set; } = false;
+
+        //Post資料集
+        public class PostData
+        {
+            //來源(經度)
+            public string oriLng { get; set; }
+            //來源(緯度)
+            public string oriLat { get; set; }
+            //目的(經度)
+            public string destLng { get; set; }
+            //目的(緯度)
+            public string destLat { get; set; }
+            //地址
+            public string addr { get; set; }
+        }
+    }
+}
