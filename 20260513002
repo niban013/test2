@@ -1,0 +1,195 @@
+const cap_Login_url = "http://xx.com/CAP_EX/Login/Index";
+
+
+const cap_api_url = "http://xx.com/CAP_EX_API/api/AuthFuncs";
+
+// CAP Cookie Name站点注册时候产生，可请管理员查询后提供
+var cap_cookie_Name = ".AUOFORMSAUTH709_TOKEN";
+//获取浏览器Cookie中存储的CAP AuthToken
+const cap_authToken = CAP_GetAuthToken(cap_cookie_Name);
+const cap_check_authToken = CAP_CheckAuthToken(cap_authToken);
+
+
+//【1】获取User基础信息【调用该方法，获取User信息，通过返回值可确认是否通过CAP验证，若没有通过，则自动跳转至CAP登入页面】
+function CAP_GetUserInfo() {
+    var result = "";
+    if (cap_check_authToken) {
+        $.ajax({
+            type: "get",
+            url: cap_api_url + "/GetUserInfoByToken",
+            dataType: "json",
+            async: false,
+            data: { authToken: cap_authToken },
+            success: function (data) {
+                if (data != null && data != '') {
+                    result = data;
+                }
+                else {
+                    //跳转CAP登入页面
+                    window.location.href = CAP_ReturnUrl();
+                }
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                alert("CAP GetUserInfoByToken Error," + textStatus + ": " + errorThrown);
+            }
+        });
+    }
+    else {
+        //跳转CAP登入页面
+        window.location.href = CAP_ReturnUrl();
+    }
+    return result;
+}
+
+//【2】检查权限
+function CAP_CheckAuth(cap_authToken, company, sysId, func) {
+    var result = "";
+    if (cap_check_authToken) {
+        $.ajax({
+            type: "get",
+            url: cap_api_url + "/CheckAuth",
+            dataType: "json",
+            data: { authToken: cap_authToken, company: company, sysId: sysId, func: func },
+            success: function (data) {
+                result = data;
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                alert("CAP CheckAuth Error," + textStatus + ": " + errorThrown);
+            }
+        });
+    }
+    else {
+        alert('AuthToken is null or empty');
+    }
+    return result;
+}
+
+//【3】根据功能获取User
+function CAP_GetUserByFunc(cap_authToken, company, sysId, funcs) {
+    var result = "";
+    if (cap_check_authToken) {
+        $.ajax({
+            type: "post",
+            url: cap_api_url + "/GetUserByFunc",
+            dataType: "json",
+            data: { AuthToken: cap_authToken, company: company, sysId: sysId, Funcs: funcs },
+            success: function (data) {
+                result = data;
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                alert("CAP GetUserByFunc Error," + textStatus + ": " + errorThrown);
+            }
+        });
+    }
+    else {
+        alert('AuthToken is null or empty');
+    }
+    return result;
+}
+
+//【4】获取角色列表
+function CAP_GetRoleList(cap_authToken, company, sysId) {
+    var result = "";
+    if (cap_check_authToken) {
+        $.ajax({
+            type: "get",
+            url: cap_api_url + "/GetRoleList",
+            dataType: "json",
+            data: { authToken: cap_authToken, company: company, sysId: sysId },
+            success: function (data) {
+                result = data;
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                alert("CAP GetRoleList Error," + textStatus + ": " + errorThrown);
+            }
+        });
+    }
+    else {
+        alert('AuthToken is null or empty');
+    }
+    return result;
+}
+
+//【5】根据User获取角色与功能列表
+function CAP_GetRoleFuncList(cap_authToken, company, sysId) {
+    var result = "";
+    if (cap_check_authToken) {
+        $.ajax({
+            type: "get",
+            url: cap_api_url + "/GetRoleFuncList",
+            dataType: "json",
+            data: { authToken: cap_authToken, company: company, sysId: sysId },
+            success: function (data) {
+                result = data;
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                alert("CAP GetRoleFuncList Error," + textStatus + ": " + errorThrown);
+            }
+        });
+    }
+    else {
+        alert('AuthToken is null or empty');
+    }
+    return result;
+}
+
+//获取浏览器URL中存储的CAP AuthToken
+function CAP_GetAuthToken(cap_cookie_Name) {
+    var arr, reg = new RegExp("(^| )" + cap_cookie_Name + "=([^;]*)(;|$)");
+    if (arr = document.cookie.match(reg)) {
+        return unescape(arr[2]);
+    }
+    else {
+        return null;
+    }
+}
+
+// 获取浏览器Cookie中存储的CAP AuthToken(推荐此方法)
+function CAP_GetAuthToken (cap_cookie_Name) {
+    //读取Cookie
+    if (document.cookie.length > 0) {
+        c_start = document.cookie.indexOf(cap_cookie_Name + "=")
+        if (c_start != -1) {
+            c_start = c_start + cap_cookie_Name.length + 1
+            c_end = document.cookie.indexOf(";", c_start)
+            if (c_end == -1) c_end = document.cookie.length
+            return unescape(document.cookie.substring(c_start, c_end))
+        }
+    }
+    return null
+}
+
+//【6】获取登入CAP完成后，浏览器URL中产生的CapAuthToken
+//function CAP_GetUrlAuthToken() {
+//    //URL中CapAuthToken参数名
+//    var name = "CapAuthToken";
+//    var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
+//    var r = window.location.search.substr(1).match(reg);
+//    if (r != null) return unescape(r[2]); return null;
+//}
+
+//检查取出的AuthToken是否有值
+function CAP_CheckAuthToken(authToken) {
+    var result = false;
+    if (authToken == null || authToken == '' || authToken == undefined) {
+        result = false;
+    }
+    else {
+        result = true;
+    }
+    return result;
+}
+
+//获取CAP登入页面
+function CAP_ReturnUrl() {
+    return cap_Login_url + "?ReturnUrl=" + encodeURIComponent(window.location.href) + "&AppPath=" + encodeURIComponent(CAP_GetRootPath());  //登入页面地址;
+}
+
+//获取网站根路径(站点及虚拟目录)   
+function CAP_GetRootPath() {
+    var pathName = window.location.pathname.substring(1);
+    var webName = pathName == '' ? '' : pathName.substring(0, pathName.indexOf('/'));
+    //【注：有的系统没有webName，只需要截取到host即可，同样，注册时候也只需要注册到Host即可】
+    //return window.location.protocol + '//' + window.location.host;
+    return window.location.protocol + '//' + window.location.host + '/' + webName;
+}
