@@ -1,0 +1,2815 @@
+
+if (typeof window !== 'undefined' && typeof window.crypto !== 'undefined' && !window.crypto.randomUUID) {
+    window.crypto.randomUUID = function () {
+        return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    };
+}
+window.PreviewModule = (() => {
+
+    // =========================
+    // STATE（原封不動）
+    // =========================
+    let PreviewState = {
+        version: 0,
+        type: null,
+        payload: null
+    };
+
+    const $panel = () => $("#previewPanel");
+
+    // =========================
+    // 原 function（全部保留簽名）
+    // =========================
+
+    function clearPreview() {
+        const $p = $panel();
+
+        const iframe = $p.find("iframe");
+        if (iframe.length) {
+            iframe.attr("src", "about:blank");
+            iframe.remove();
+        }
+
+        $p.empty();
+        $p.removeData("file-name");
+        $p.html(`<div class="empty">Select file</div>`);
+    }
+
+    function flushPreview() {
+
+        const $p = $panel();
+
+        const prevIframe = $p.find("iframe");
+        if (prevIframe.length) {
+            prevIframe.attr("src", "about:blank");
+            prevIframe.remove();
+        }
+
+        $p.empty();
+
+        if (!PreviewState.type) {
+            $p.html(`<div class="empty">Select file</div>`);
+            return;
+        }
+
+        if (PreviewState.type === "pdf") {
+
+            const iframe = document.createElement("iframe");
+            iframe.src = PreviewState.payload;
+            iframe.style.cssText = "width:100%;height:100%;border:0;";
+
+            $p.append(iframe);
+            return;
+        }
+
+        if (PreviewState.type === "image") {
+
+            const bitmap = PreviewState.payload;
+
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+
+            ctx.drawImage(bitmap, 0, 0);
+
+            canvas.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;";
+
+            $p.append(canvas);
+
+            bitmap.close?.();
+            return;
+        }
+
+        if (PreviewState.type === "error") {
+            $p.html(PreviewState.payload);
+        }
+    }
+
+    function renderImage(bitmap, version) {
+
+        if (version !== PreviewState.version) {
+            bitmap.close?.();
+            return;
+        }
+
+        PreviewState.type = "image";
+        PreviewState.payload = bitmap;
+
+        flushPreview();
+    }
+
+    function renderPdf(url, version) {
+
+        if (version !== PreviewState.version) {
+            URL.revokeObjectURL(url);
+            return;
+        }
+
+        if (PreviewState.type === "pdf" && PreviewState.payload) {
+            URL.revokeObjectURL(PreviewState.payload);
+        }
+
+        PreviewState.type = "pdf";
+        PreviewState.payload = url;
+
+        flushPreview();
+    }
+
+    function forceDownload(blob, fileName) {
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName || "download";
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    function showUnsupported(blob, message = "", fileName = "download", version) {
+
+        if (version !== PreviewState.version) return;
+
+        PreviewState.type = "error";
+        PreviewState.payload = `
+            <div class="empty text-center">
+                ⚠ 無法預覽此檔案<br>
+                ${message ? `<small>${message}</small><br>` : ""}
+                ${blob
+                ? `<button class="btn-download">下載</button>`
+                : `<div>無法下載</div>`
+            }
+            </div>
+        `;
+
+        flushPreview();
+
+        if (blob) {
+            $(".btn-download").off("click").on("click", () => {
+                forceDownload(blob, fileName);
+            });
+        }
+    }
+
+    async function removeFile(stepKey, key, clientId) {
+
+        const store = FileRuntime.getStore();
+
+        const current = store.get(stepKey, key) || [];
+
+        const file = current.find(f => f.clientId === clientId);
+
+        if (!file) return;
+
+        // =========================
+        // server delete only if exists
+        // =========================
+        if (file.status === "success" && file.id) {
+            try {
+                await fetch(`${window.AppBasePath}api/file/${file.id}`, {
+                    method: "DELETE"
+                });
+            } catch (err) {
+                console.error("server delete failed", err);
+            }
+        }
+
+        // =========================
+        // local remove (ONLY by clientId)
+        // =========================
+        const next = current.filter(f =>
+            f.clientId !== clientId
+        );
+
+        store.safeSet(stepKey, key, next);
+        GraphV2.notify(stepKey, key, next);
+
+
+        const previewName = $("#previewPanel").data("file-name");
+        if (previewName === file.name) {
+            PreviewModule.resetPreview();
+        }
+    }
+
+    // =========================
+    // Worker（不變）
+    // =========================
+    const PreviewWorker = (() => {
+
+        let worker = null;
+        let url = null;
+
+        function getWorker() {
+
+            if (worker) return worker;
+
+            const code = `
+                self.onmessage = async function (e) {
+                    const { blob, type } = e.data;
+                    try {
+                        if (type.startsWith("image/")) {
+                            const bitmap = await createImageBitmap(blob);
+                            self.postMessage({ bitmap }, [bitmap]);
+                        } else {
+                            self.postMessage({ blob });
+                        }
+                    } catch (err) {
+                        self.postMessage({ error: err.message });
+                    }
+                };
+            `;
+
+            const blob = new Blob([code], { type: "application/javascript" });
+            url = URL.createObjectURL(blob);
+
+            worker = new Worker(url);
+            return worker;
+        }
+
+        function destroy() {
+            if (worker) worker.terminate();
+            if (url) URL.revokeObjectURL(url);
+            worker = null;
+            url = null;
+        }
+
+        return { getWorker, destroy };
+
+    })();
+
+    // =========================
+    // PreviewService（不變但私有）
+    // =========================
+    const PreviewService = {
+
+        open: async function (stepKey, key, file) {
+
+            const $p = $panel();
+
+            $p.data("file-name", file.name);
+            $p.html(`<div class="empty">⏳ 載入中...</div>`);
+
+            const version = ++PreviewState.version;
+
+            let realFile;
+
+            try {
+                realFile = await FileRuntime.ensureFileObject(file, stepKey, key);
+            } catch {
+                if (version !== PreviewState.version) return;
+                showUnsupported(null, "載入失敗", file.name, version);
+                return;
+            }
+
+            const blob = realFile instanceof File ? realFile : realFile?.file;
+
+            if (!blob) {
+                showUnsupported(null, "無內容", file.name, version);
+                return;
+            }
+
+            let handled = false;
+
+            const worker = PreviewWorker.getWorker();
+
+            worker.onmessage = (e) => {
+
+                handled = true;
+
+                if (version !== PreviewState.version) return;
+
+                if (e.data.error) {
+                    showUnsupported(blob, "預覽失敗", file.name, version);
+                    return;
+                }
+
+                const type = (file.type || blob.type || "").toLowerCase();
+
+                if (e.data.bitmap && type.startsWith("image/")) {
+                    createImageBitmap(e.data.bitmap)
+                        .then(bitmap => renderImage(bitmap, version));
+                    return;
+                }
+
+                if (type === "application/pdf") {
+                    const url = URL.createObjectURL(blob);
+                    renderPdf(url, version);
+                    return;
+                }
+
+                showUnsupported(blob, "不支援預覽", file.name, version);
+            };
+
+            worker.onerror = () => {
+                showUnsupported(blob, "worker error", file.name, version);
+            };
+
+            worker.postMessage({ blob, type: file.type || blob.type || "" });
+
+            setTimeout(() => {
+                if (!handled && version === PreviewState.version) {
+                    showUnsupported(blob, "逾時", file.name, version);
+                }
+            }, 5000);
+        }
+    };
+
+    // =========================
+    // PUBLIC API（只開這些）
+    // =========================
+
+    function resetPreview() {
+
+        PreviewState.version++;
+
+        if (PreviewState.type === "pdf" && PreviewState.payload) {
+            URL.revokeObjectURL(PreviewState.payload);
+        }
+
+        PreviewState.type = null;
+        PreviewState.payload = null;
+
+        flushPreview();
+        PreviewWorker.destroy();
+    }
+    function setUploadMode(mode) {
+
+        const isSingle = mode === "single";
+
+        // 左側清單（multi only）
+        $(".multi-only").toggleClass("d-none", isSingle);
+
+        // 右側 preview panel（single / multi 都要）
+        $(".single-only").toggleClass("d-none", !isSingle);
+
+        // optional：可以加 class 控制 layout
+        $("#uploadModal").toggleClass("single-mode", isSingle);
+    }
+    function buildTooltip(file, extra = "") {
+
+        const sizeKB = file.size ? Math.round(file.size / 1024) : 0;
+        const time = file.lastModified
+            ? new Date(file.lastModified).toLocaleString()
+            : (file.uploadTime || "");
+
+        return `
+        <div style="text-align:left">
+            <b>${file.name || "unknown"}</b><br>
+            Size: ${sizeKB} KB<br>
+            Time: ${time}
+            ${extra ? `<br><span style="color:#dc3545">${extra}</span>` : ""}
+        </div>
+    `;
+    }
+    function getFileIcon(file) {
+        if (file.status === "error") {
+            return "❌";
+        }
+        const type = (file.type || "").toLowerCase();
+        const name = (file.name || "").toLowerCase();
+
+        // =========================
+        // 圖片
+        // =========================
+        if (type.startsWith("image/")) {
+            return "🖼️";
+        }
+
+        // =========================
+        // PDF
+        // =========================
+        if (type === "application/pdf" || name.endsWith(".pdf")) {
+            return "📕";
+        }
+
+        // =========================
+        // Excel
+        // =========================
+        if (
+            type.includes("spreadsheet") ||
+            name.endsWith(".xls") ||
+            name.endsWith(".xlsx")
+        ) {
+            return "📊";
+        }
+
+        // =========================
+        // Word
+        // =========================
+        if (
+            type.includes("word") ||
+            name.endsWith(".doc") ||
+            name.endsWith(".docx")
+        ) {
+            return "📄";
+        }
+
+        // =========================
+        // 壓縮檔
+        // =========================
+        if (
+            name.endsWith(".zip") ||
+            name.endsWith(".rar") ||
+            name.endsWith(".7z")
+        ) {
+            return "🗜️";
+        }
+
+        // =========================
+        // 可執行 / DLL
+        // =========================
+        if (
+            name.endsWith(".exe") ||
+            name.endsWith(".dll")
+        ) {
+            return "⚙️";
+        }
+
+        // =========================
+        // 預設
+        // =========================
+        return "📎";
+    }
+    function render(stepKey, key, files) {
+
+        const $list = $("#uploadList");
+
+        $list.empty();
+
+        const failCount = files.filter(x => x.status === "error").length;
+
+        $("#uploadSummary").html(
+
+            failCount
+                ? `
+            <div class="alert alert-danger py-1 px-2 mb-2">
+                ⚠ ${failCount} 個檔案上傳失敗
+            </div>
+        `
+                : ""
+        );
+
+        files.forEach(file => {
+            const isError =
+                file.status === "error";
+
+            const icon = isError
+                ? "❌"
+                : getFileIcon(file);
+
+
+            const tooltip = buildTooltip(
+                file,
+                file.error
+            );
+
+            const $item = $(`
+        
+<li class="drive-item ${isError ? "file-error" : ""}">
+
+    <div class="drive-name"  
+         data-bs-toggle="tooltip"
+         data-bs-html="true"
+         title='${tooltip}'>
+
+        <span class="drive-icon"> 
+            ${icon}
+        </span>
+         
+        <span class="drive-scroll">  
+            <span class="drive-text">
+                ${file.name}
+            </span> 
+        </span> 
+    </div> 
+    <div class="drive-actions"> 
+       <button class="btn btn-sm btn-outline-primary btn-view"> 
+       ${isError ? "Retry" : "View"} 
+     </button>
+
+        <button class="btn btn-sm btn-outline-danger btn-del">
+            Del
+        </button>
+
+    </div>
+
+</li>
+`);
+
+            // =========================
+            // preview
+            // =========================
+
+            const $viewBtn = $item.find(".btn-view");
+            const $name = $item.find(".drive-name");
+
+            $viewBtn
+                .off("click")
+                .on("click", async (e) => {
+
+                    e.stopPropagation();
+
+                    $(".drive-item").removeClass("active");
+                    $item.addClass("active");
+
+                    // =========================
+                    // ERROR → RETRY
+                    // =========================
+                    if (file.status === "error") {
+
+                        const controller = PreviewModule._uploadController;
+                        const ctx = PreviewModule._ctx;
+
+                        file.status = "pending";
+                        file.error = null;
+                        file.progress = 0;
+
+                        PreviewModule.refreshList(stepKey, key, files);
+                        //const ctx = {
+                        //    stepKey,
+                        //    key
+                        //};
+                        await controller.uploadSingleFile(
+                            ctx,
+                            key,
+                            file,
+                            files
+                        );
+
+                        return;
+                    }
+
+                    // =========================
+                    // NORMAL → PREVIEW
+                    // =========================
+                    await PreviewService.open(stepKey, key, file);
+                });
+            $name
+                .off("click")
+                .on("click", async () => {
+                    $viewBtn.trigger("click");
+                });
+
+
+            // =========================
+            // delete
+            // =========================
+
+
+
+
+            $item.find(".btn-del")
+                .off("click")
+                .on("click", async (e) => {
+
+                    e.stopPropagation();
+
+                    await removeFile(stepKey, key, file.clientId);
+
+                    const store = FileRuntime.getStore();
+                    const updated = store.get(stepKey, key) || [];
+
+                    // ⭐ 只做一件事：統一刷新 UI
+                    PreviewModule.refreshList(stepKey, key, updated);
+
+                    const previewName =
+                        $("#previewPanel").data("file-name");
+
+                    if (previewName === file.name) {
+                        resetPreview();
+                    }
+                });
+
+            $list.append($item);
+        });
+
+        setTimeout(() => {
+
+            $('[data-bs-toggle="tooltip"]')
+                .tooltip({
+                    container: 'body',
+                    html: true
+
+                });
+
+        });
+    }
+    function refreshList(stepKey, key, files) {
+        render(stepKey, key, files);
+    }
+    async function loadFiles(ctx) {
+        const store = FileRuntime.getStore();
+        let key = ctx.key.replace('.file','')
+        let formno ='2'
+        // =========================
+        // 1. 從後端拿 metadata list
+        // =========================
+        let files = await fetch(
+            `${window.AppBasePath}api/file/list?formno=${formno}&key=${key}`
+        ).then(r => r.json());
+
+
+        // =========================
+        // 2. normalize（只放 metadata，不下載）
+        // =========================
+        files = (files || []).map(f => ({
+            id: f.FileId,              // serverId
+            name: f.FileName,
+         //   size: f.size,
+         //   type: f.type,
+            lazy: true,            // ⭐ 重點：還沒下載 blob
+            file: null,           // ⭐ 不放 File object
+            status: "success",
+            error: null,
+            progress: 100
+        }));
+
+        store.safeSet(ctx.stepKey, ctx.key, files);
+        render(ctx.stepKey, ctx.key, files);
+    }
+    function openUploadModal(ctx) {
+
+        let controller = new UploadController(ctx);
+        PreviewModule._uploadController = controller; // ⭐ 加這行
+        PreviewModule._ctx = ctx;
+
+        resetPreview();
+
+        const store = window.FileRuntime.getStore();
+        const file = store.get(ctx.stepKey, ctx.key);
+
+        //UploadContext.open(ctx);
+
+        const isMulti = ctx.mode;
+        setUploadMode(isMulti ? "multi" : "single");
+
+        $("#uploadModal").modal("show");
+
+        $("#uploadModal").one("shown.bs.modal", async () => {
+
+            if (isMulti) {
+
+                loadFiles(ctx);
+                $panel().html(`<div class="empty">Select file</div>`);
+
+            } else if (file) {
+
+                $("#uploadList").empty();
+                await PreviewService.open(ctx.stepKey, ctx.key, file);
+            }
+        });
+    }
+    function registerEffects(config) {
+        if (typeof GraphV2 === 'undefined') return;
+
+        GraphV2.register({
+            type: "effect",
+            stepKey: config.stepKey,
+            deps: [config.fullKey],
+            target: config.fullKey,
+            run: ({ data }) => {
+                if (!config?.$row || config?.$row?.length === 0) return; 
+                const targetKey = config.fullKey; 
+                const files = data[targetKey] || []; 
+                const $icon = config?.$row.find("td i.bi"); 
+                const hasFile = files.length > 0; 
+                $icon.attr(
+                    "class",
+                    hasFile
+                        ? "bi bi-check-circle text-success"
+                        : "bi bi-x-circle text-danger"
+                );
+            }
+        });
+    }
+    // =========================
+    // 外部只拿這些
+    // =========================
+    return {
+        openUploadModal,
+        resetPreview,
+        refreshList,
+        init: function () {
+
+            $(document).on("click", ".uploadBtn, .btn-upload", function () {
+                const $btn = $(this);
+                const stepKey = $btn.data("step");
+                const field = $btn.data("field");
+                const col = $btn.data("col") || "";
+                const fullKey = col !== "" ? `${field}.${col}` : field;
+                const fieldName = $btn.data("fieldName");
+                const headerid = $btn.data("headerid");
+                const formno = $btn.data("formno");
+                const $row = $btn.closest("tr");
+
+               
+                if ($btn.hasClass("uploadBtn")) {
+                    registerEffects({
+                        stepKey: stepKey,
+                        fullKey: fullKey,
+                        $row: $row
+                    });
+                }
+
+                // 不論是哪種按鈕，最後都開啟上傳 Modal
+                window.PreviewModule.openUploadModal({
+                    stepKey: stepKey,
+                    key: fullKey,
+                    $row: $row,
+                    mode: $btn.hasClass("uploadBtn") ?'multi':'single'
+                });
+            }); 
+            
+
+            $(document).on("hidden.bs.modal", "#uploadModal", function () {
+                PreviewModule.resetPreview();
+            });
+        }, 
+    };
+
+})();
+
+ 
+window.FileRuntime = (() => {
+
+    const inflightMap = new Map();
+    // =========================
+    // ⭐ LRU Cache (File Object)
+    // =========================
+    const fileCache = new Map(); // file.id → File
+    const MAX_CACHE = 30;
+
+    function touchCache(fileId, fileObj) {
+
+        if (fileCache.has(fileId)) {
+            fileCache.delete(fileId);
+        }
+
+        fileCache.set(fileId, {
+            file: fileObj,
+            ts: Date.now()
+        });
+
+        // LRU cleanup
+        if (fileCache.size > MAX_CACHE) {
+
+            const oldest = [...fileCache.entries()]
+                .sort((a, b) => a[1].ts - b[1].ts)[0];
+
+            if (oldest) {
+                fileCache.delete(oldest[0]);
+            }
+        }
+    }
+
+    function getCache(fileId) {
+        const hit = fileCache.get(fileId);
+        if (!hit) return null;
+
+        hit.ts = Date.now(); // refresh
+        return hit.file;
+    }
+    function getStore() {
+        return AppBootstrap.get("FlowStore"); //AppBootstrap.get("FormStore");
+    }
+
+    //function buildKey(stepKey, field, col) {
+    //    return col ? `${field}.${col}` : field;
+    //}
+
+    // =========================
+    // ⭐ 共用下載（in-flight + cache + abort）
+    // =========================
+    async function ensureFileObject(file, stepKey, key) {
+
+        if (file instanceof File) return file;
+        if (file.file instanceof File) return file.file;
+        if (!file.lazy) return file;
+
+        const cached = getCache(file.id);
+        if (cached) return cached;
+
+        if (inflightMap.has(file.id)) {
+            const prev = inflightMap.get(file.id);
+            prev.controller.abort();
+            inflightMap.delete(file.id);
+        }
+
+        const controller = new AbortController();
+
+        const promise = (async () => {
+            try {
+
+                const res = await fetch(`${window.AppBasePath}api/file/${file.id}`, {
+                    signal: controller.signal
+                });
+
+                if (!res.ok) throw new Error(`下載失敗: ${res.status}`);
+
+                const blob = await res.blob();
+                if (!blob || blob.size === 0) throw new Error("空檔案");
+
+                const realFile = new File(
+                    [blob],
+                    file.name,
+                    { type: blob.type || "application/octet-stream" }
+                );
+
+                file.file = realFile;
+                file.lazy = false;
+                // 👉 ⭐ 放這裡
+                touchCache(file.id, realFile);
+                const store = getStore();
+                const current = store.get(stepKey, key) || [];
+
+                store.safeSet(stepKey, key,
+                    current.map(f => f.id === file.id ? file : f)
+                );
+
+                return realFile;
+
+            } catch (err) {
+
+                if (err.name === "AbortError") return;
+
+                console.error(err);
+
+                file.lazy = true;
+                throw err;
+
+            } finally {
+                inflightMap.delete(file.id);
+            }
+        })();
+
+        inflightMap.set(file.id, { controller, promise });
+
+        return promise;
+    }
+
+    return {
+        ensureFileObject,
+        //buildKey,
+        getStore
+    };
+
+})();
+ 
+ 
+window.FilePlugin = {
+    setFileUI(wrapper, file) {
+        const input = wrapper.querySelector(".file-input");
+        const nameEl = wrapper.querySelector(".file-name");
+        const actions = wrapper.querySelector(".file-actions");
+
+        const hasFile = !!file;
+
+        if (hasFile) {
+
+            // input 隱藏
+            input.classList.add("d-none");
+
+            // 顯示檔名
+            nameEl.classList.remove("d-none");
+            nameEl.textContent = file.name;
+
+            // 顯示操作
+            actions.classList.remove("d-none");
+
+            const lineEl = wrapper.querySelector(".file-line");
+            if (lineEl)
+                lineEl.dataset.title = file.name;
+
+        } else {
+
+            // input 顯示
+            input.classList.remove("d-none");
+
+            // 清空 + 隱藏 name
+            nameEl.textContent = "";
+            nameEl.classList.add("d-none");
+
+            // 隱藏 actions
+            actions.classList.add("d-none");
+        }
+    },
+    init(el, ctx) {
+        const setFileUI = FilePlugin.setFileUI;
+        if (!(el instanceof HTMLInputElement) || el.type !== "file") {
+            return;
+        }
+
+        const wrapper = el.closest(".file-wrapper");
+
+        if (!wrapper) {
+            console.warn("FilePlugin: missing wrapper", el);
+            return;
+        }
+
+
+        const store = FileRuntime.getStore();
+
+        el.addEventListener("change", () => {
+            const rawFiles = el.multiple
+                ? Array.from(el.files || [])
+                : el.files?.[0] || null;
+            let files = null;
+            // =========================
+            // multi
+            // =========================
+            if (Array.isArray(rawFiles)) {
+
+                files = rawFiles.map(f => ({
+
+                    id: crypto.randomUUID(),
+
+                    name: f.name,
+                    size: f.size,
+                    type: f.type,
+
+                    file: f,
+
+                    status: "success",
+                    error: null,
+
+                    progress: 0,
+
+                    lazy: false,
+                    isNew: true
+                }));
+            }
+
+            // =========================
+            // single
+            // =========================
+            else if (rawFiles) {
+
+                files = {
+
+                    id: crypto.randomUUID(),
+
+                    name: rawFiles.name,
+                    size: rawFiles.size,
+                    type: rawFiles.type,
+
+                    file: rawFiles,
+
+                    status: "success",
+                    error: null,
+
+                    progress: 0,
+
+                    lazy: false,
+                    isNew: true
+                };
+            }
+
+            store.safeSet(
+                ctx.stepKey,
+                ctx.key,
+                files
+            );
+            GraphV2.notify(ctx.stepKey, ctx.key, files);
+            setFileUI(wrapper, files);
+            //this.render(wrapper, files);
+        });
+
+
+        // =========================
+        // ⭐ FIX：wrapper safe check
+        // =========================
+
+
+        wrapper.addEventListener("click", async (e) => {
+            // =========================
+            // preview button ONLY
+            // =========================
+            const previewBtn = e.target.closest(".file-preview-btn");
+            if (previewBtn) {
+
+                PreviewModule.openUploadModal({
+                    stepKey: ctx.stepKey,
+                    key: ctx.key,
+                    mode: false // ⭐ single
+                });
+                return;
+            }
+
+            // =========================
+            // remove button ONLY
+            // =========================
+            const removeBtn = e.target.closest(".file-remove");
+            if (removeBtn) {
+
+                el.value = "";
+
+                store.safeSet(ctx.stepKey, ctx.key, null);
+                //store.setStatus(ctx.stepKey, ctx.key, "idle");
+
+                GraphV2.notify(ctx.stepKey, ctx.key, null);
+                setFileUI(wrapper, null);
+                //this.render(wrapper, null);
+                return;
+            }
+        });
+        setFileUI(wrapper, store.get(ctx.stepKey, ctx.key));
+        //this.render(wrapper, store.get(ctx.stepKey, ctx.key));
+    },
+    render(wrapper, files) {
+
+        const actions = wrapper.querySelector(".file-actions");
+        const name = wrapper.querySelector(".file-name");
+        const lineEl = wrapper.querySelector(".file-line");
+        if (lineEl)
+            lineEl.dataset.title = file.name;
+        const hasFile = files && (Array.isArray(files) ? files.length > 0 : true);
+
+        // =========================
+        // ⭐ 控制顯示/隱藏
+        // =========================
+        if (actions) {
+            actions.classList.toggle("d-none", !hasFile);
+        }
+
+        if (name) {
+            name.textContent = hasFile
+                ? (Array.isArray(files) ? files[0].name : files.name)
+                : "";
+        }
+    }
+
+};
+
+
+class UploadController {
+
+    constructor(ctx) {
+
+        this.ctxProvider = ctx;
+
+        this.$modal = $("#uploadModal");
+
+        this.$fileInput = $("<input type='file' multiple style='display:none'>");
+        $("body").append(this.$fileInput);
+
+        this.bind();
+    }
+    async retryFile(stepKey, key, fileModel) {
+
+        const store = FileRuntime.getStore();
+
+        const merged = store.get(stepKey, key) || [];
+
+        try {
+
+            fileModel.status = "uploading";
+            fileModel.progress = 0;
+            fileModel.error = null;
+
+            PreviewModule.refreshList(stepKey, key, merged);
+
+            //const fd = new FormData();
+            //fd.append("file", fileModel.file); 
+
+            let ItemName = this.ctxProvider.$row != undefined ? this.ctxProvider.$row.find("td:eq(0) .tooltip-auto").data("title") : key.replace('.file', '') || ""
+
+            const fd = new FormData();
+            fd.append(`ItemId`, key.replace('.file', '') || "");
+            fd.append(`ItemName`, ItemName);
+            fd.append(`FormNo`, '2');
+            fd.append(`FileId`, '');
+            fd.append(`FileName`, fileModel.name); 
+            fd.append(`File`, fileModel.file);
+
+            const result =
+                await this.uploadWithProgress(
+                    `${window.AppBasePath}api/file/UploadFileAsync`,
+                    fd,
+                    percent => {
+                        fileModel.progress = percent;
+                        PreviewModule.refreshList(stepKey, key, merged);
+                    }
+                );
+
+            fileModel.status = "success";
+            fileModel.id = result.id;
+            fileModel.file = null;
+            fileModel.lazy = true;
+            fileModel.uploadTime = new Date().toISOString();
+
+        } catch (err) {
+
+            fileModel.status = "error";
+            fileModel.error = err.message || "retry failed";
+        }
+
+        store.safeSet(stepKey, key, merged);
+        GraphV2.notify(stepKey, key, merged);
+        PreviewModule.refreshList(stepKey, key, merged);
+    }
+    bind() {
+        this.$modal.off("click.myUpload");
+        this.$modal.on("click.myUpload", "#btnSelectFile", () => {
+            this.$fileInput.trigger("click");
+        });
+
+
+        this.$fileInput.off("change.myUpload");
+        this.$fileInput.on("change.myUpload", async (e) => {
+            await this.handleFiles(e.target.files);
+            e.target.value = "";
+        });
+
+
+        this.$modal.off("dragover.myUpload");
+        this.$modal.on("dragover.myUpload", e => e.preventDefault());
+
+        this.$modal.off("drop.myUpload");
+        this.$modal.on("drop.myUpload", async (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer || e.originalEvent.dataTransfer;
+            if (files && files.files) {
+                await this.handleFiles(files.files);
+            }
+        });
+    }
+
+    validateFile(file) {
+
+        const ext = file.name
+            .split(".")
+            .pop()
+            .toLowerCase();
+
+        const deny = ["exe", "dll"];
+
+        if (deny.includes(ext)) {
+            return "不允許的檔案格式";
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+            return "檔案超過 20MB";
+        }
+
+        return null;
+    }
+
+    createFileModel(file) {
+
+        const error = this.validateFile(file);
+
+        return {
+
+            id: crypto.randomUUID(),
+
+            file: error ? null : file,
+
+            name: file.name,
+            type: file.type,
+            size: file.size,
+
+            status: error ? "error" : "success",
+            error,
+
+            lazy: false,
+            isNew: true
+        };
+    }
+    async uploadSingleFile(
+        ctx,
+        key,
+        fileModel,
+        merged
+    ) {
+
+        const store = FileRuntime.getStore();
+
+        try {
+
+            // =========================
+            // uploading
+            // =========================
+
+            fileModel.status = "uploading";
+            fileModel.error = null;
+
+            PreviewModule.refreshList(
+                ctx.stepKey,
+                key,
+                merged
+            );
+         
+            // =========================
+            // formdata
+            // =========================
+
+
+            let ItemName = ctx.$row != undefined ? ctx.$row.find("td:eq(0) .tooltip-auto").data("title") : key.replace('.file', '') || ""
+             
+            const fd = new FormData();
+            fd.append(`ItemId`, key.replace('.file', '') || "");
+            fd.append(`ItemName`, ItemName);
+            fd.append(`FormNo`, '2');
+            fd.append(`FileId`, '');
+            fd.append(`FileName`, fileModel.name);
+       /*     fd.append(`Active`, "Y");*/
+         /*   fd.append(`CUser`, "1204636");*/
+            fd.append(`File`, fileModel.file);
+
+            //fd.append(
+            //    "file",
+            //    fileModel.file
+            //);
+
+            // =========================
+            // upload
+            // =========================
+
+            const result =
+                await this.uploadWithProgress(
+                    `${window.AppBasePath}api/file/UploadFileAsync`,
+                    fd,
+                    percent => { 
+                        fileModel.progress = percent; 
+                        PreviewModule.refreshList(
+                            ctx.stepKey,
+                            key,
+                            merged
+                        );
+                    }
+                );
+
+            // =========================
+            // success
+            // =========================
+
+
+            if (result == 'fail') {
+                throw new Error(`上傳失敗: 可能上傳副檔有限制`);
+            }
+            fileModel.status = "success";
+
+            fileModel.progress = 100;
+
+            fileModel.uploadTime = new Date().toISOString();
+
+            // backend id
+            fileModel.id = result;
+
+            // lazy mode
+            fileModel.file = null;
+            fileModel.lazy = true;
+            fileModel.status = "success";
+            fileModel.error = null;
+        } catch (err) {
+
+            console.error(err);
+
+            // =========================
+            // fail
+            // =========================
+
+            fileModel.status = "error";
+
+            fileModel.error = err.message || "upload failed";
+        }
+
+        store.safeSet(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        GraphV2.notify(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        PreviewModule.refreshList(
+            ctx.stepKey,
+            key,
+            merged
+        );
+    }
+    uploadWithProgress(url, formData, onProgress) {
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", url);
+            // =========================
+            // upload progress
+            // =========================
+
+            xhr.upload.onprogress = e => {
+                if (!e.lengthComputable)
+                    return;
+                const percent =Math.round((e.loaded / e.total) * 100);
+                onProgress(percent);
+            };
+
+            // =========================
+            // success
+            // =========================
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 &&xhr.status < 300) {
+                    try { 
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch {
+                        
+                        resolve(xhr.responseText);
+                    } 
+                } else {
+                    reject(new Error(`Upload failed (${xhr.status})`));
+                }
+            };
+
+            // =========================
+            // network error
+            // =========================
+
+            xhr.onerror = () => {
+                reject(new Error("network error"));
+            };
+
+            // =========================
+            // timeout
+            // =========================
+
+            xhr.ontimeout = () => {
+                reject(new Error("upload timeout"));
+            };
+            xhr.send(formData);
+        });
+    }
+    async handleFiles(files) {
+
+        const ctx = this.ctxProvider;
+        const key = ctx.key;
+
+        const store = FileRuntime.getStore();
+
+        const current =
+            store.get(ctx.stepKey, key) || [];
+
+        const merged = [...current];
+
+        // =========================
+        // create file models
+        // =========================
+
+        const newItems = [];
+
+        Array.from(files).forEach(f => {
+
+            // duplicate
+            if (merged.some(x => x.name === f.name)) {
+                return;
+            }
+
+            // validate
+            const validateError = this.validateFile(f);
+
+            const model = {
+                // backend file id
+                id: null,
+
+                // temp client id
+                clientId: crypto.randomUUID(),
+
+                // meta
+                name: f.name,
+                size: f.size,
+                type: f.type,
+
+                // actual file
+                file: f,
+
+                // upload state
+                status:
+                    validateError
+                        ? "error"
+                        : "pending",
+
+                error: validateError || null,
+
+                // %
+                progress: 0,
+
+                // server lazy mode
+                lazy: false,
+
+                // UI state
+                isNew: true,
+
+                uploadTime: null
+            };
+
+            merged.push(model);
+            newItems.push(model);
+        });
+
+        // =========================
+        // render immediately
+        // =========================
+
+        store.safeSet(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        GraphV2.notify(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        PreviewModule.refreshList(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        // =========================
+        // upload queue
+        // =========================
+
+        const uploadables =
+            newItems.filter(x =>
+                x.status === "pending"
+            );
+
+        // parallel uploads
+        await Promise.allSettled(
+            uploadables.map(file =>
+                this.uploadSingleFile(
+                    ctx,
+                    key,
+                    file,
+                    merged
+                )
+            )
+        );
+
+        // final refresh
+        store.safeSet(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        GraphV2.notify(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        PreviewModule.refreshList(
+            ctx.stepKey,
+            key,
+            merged
+        );
+    }
+}
+
+
+$(() => {
+    window.PreviewModule.init();
+}); 
+
+@model List<WizardStepOption>
+
+<div id="app">
+    <!-- STEP RIBBON -->
+    <div class="wizard-container">
+        <div class="wizard-ribbon"
+             :style="{ '--step': currentStep, '--total': steps.length }">
+
+            <div v-for="step in steps"
+                 v-show="!(isJumpIn && step.StepIndex === 1)"
+                 :key="step.StepIndex"
+                 class="ribbon-step"
+                 :class="getStepClass(step)"
+                 style="cursor:pointer">
+
+                <span class="ribbon-text">{{ step.Title }}</span>
+                <span class="ribbon-check" v-if="step.StepIndex <= currentStep">✔</span>
+            </div>
+
+            <div class="ribbon-progress-bg">
+                <div class="ribbon-progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STEP CONTENT -->
+    <div id="step-container" class="mt-4"></div>
+
+    <!-- ACTION BUTTONS -->
+    <div class="mt-3 d-flex justify-content-between">
+
+        <div>
+            <button v-if="isJumpIn ? currentStep > 2 : currentStep > 1"
+                    class="btn btn-secondary"  @@click ="prev">
+                上一步
+            </button>
+        </div>
+
+        <div class="d-flex gap-2">
+          @*   <button class="btn btn-dark" @@click="dumpJson">
+                輸出 JSON
+            </button> *@
+            <button v-if="currentStep < steps.length && currentStep > 1"
+                    class="btn btn-primary"
+                    @@click="saveDraft">
+                Draft
+            </button>
+            <button v-if="currentStep < steps.length && showNext"
+                    class="btn btn-primary"
+                    @@click="next">
+                下一步
+            </button>
+
+            <button v-if="currentStep === steps.length"
+                    class="btn btn-success"
+                    @@click="finish">
+                完成
+            </button>
+        </div>
+    </div>
+</div>
+
+
+<style>
+     
+</style>
+@section Scripts {
+    <script>
+        window.__FLOW_ID__ = "supplier";
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+
+        setup() {
+ 
+            const steps = ref( @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model)));
+
+            const targetStepValue = @(ViewBag.TargetStep ?? 1);
+            const formno = @(ViewBag.FormNo ?? 0);
+            const currentStep = ref(targetStepValue);
+            const isJumpIn = ref(targetStepValue > 1);
+
+            const showNext = ref(true);
+
+            onMounted(() => {
+
+                if (!window.AppController) {
+                    console.error("AppController not found");
+                    return;
+                }
+                
+                AppController.init({
+                    steps,
+                    currentStep, 
+                    setStep: (v) => {
+                        currentStep.value = v;
+                        showNext.value = true;
+                    },
+                    formno
+                });
+                window.toggleNextButton = (isVisible) => {
+                     showNext.value = isVisible;
+                };
+            });
+ 
+            const next = () => AppController.next();
+            const prev = () => AppController.prev();
+            const goToStep = (i) => AppController.goTo(i);
+            const saveDraft = () => AppController.saveDraft();
+            const finish = () => AppController.finish();
+
+          
+            const getStepClass = (step) => ({
+                active: step.StepIndex === currentStep.value,
+                done: step.StepIndex < currentStep.value
+            });
+
+          
+            const dumpJson = () => {
+
+                const result = {};
+                const store = AppBootstrap.get("FlowStore");
+                // steps.value.forEach(s => {
+                //     result[`step${s.StepIndex}`] = store.getStep(`step${s.StepIndex}`);
+                // });
+                // store.markStepSubmitted("step2");
+
+                alert(JSON.stringify(result, null, 2));
+            };
+
+          
+            return {
+                steps,
+                currentStep,
+                showNext,
+                next,
+                prev,
+                goToStep,
+                finish,  isJumpIn,
+                dumpJson,saveDraft,
+                getStepClass
+            };
+        }
+
+        }).mount("#app");
+
+
+         document.addEventListener("DOMContentLoaded", async () => {
+          
+            const targetStep = @(ViewBag.TargetStep ?? 1);
+
+            // 如果目標是一開始的第一步，交由系統原本的預設初始化即可，不重複載入
+            if (targetStep === 1) return;
+
+            // 2. 💡 建立或直接綁定現有 AppController 期待的上下文 (ctx)
+            // 這裡優先嘗試指向全域已存在的 PageContext
+            const ctx = window.PageContext || {
+                currentPage: null,
+                currentStep: targetStep
+            };
+
+            ctx.currentStep = targetStep;
+
+            try {
+                console.log(`🚀 偵測到 Vue 與進度條已同步至步驟 ${targetStep}，開始驅動 StepLoader...`);
+
+                // 3. 執行 PartialView 非同步載入
+                await window.StepLoader.load(targetStep, ctx);
+
+                // 4. 關鍵同步：通知您的 AppController 外部狀態已經更換
+                // 這樣可以確保後續點擊「上一步」、「下一步」時，AppController 內部指引不會錯亂
+                if (window.AppController && typeof window.AppController.setStep === 'function') {
+                    window.AppController.setStep(targetStep);
+                }
+
+                // 5. 回寫全域上下文
+                window.PageContext = ctx; 
+                console.log("✅ 畫面的 Vue 進度條與後端 PartialView 已成功全面同步！");
+            } catch (error) {
+                console.error("❌ 自動載入步驟失敗:", error);
+            }
+        });
+
+    </script>
+}
+
+
+using System.Configuration;
+using AutoMapper;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using OneSupplierPlatform.Helper.Extensions;
+using OneSupplierPlatform.Models;
+using OneSupplierPlatform.Models.Infra;
+using OneSupplierPlatform.Service;
+using OneSupplierPlatform.Services;
+using OneSupplierFLM;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text;
+using Microsoft.IdentityModel.Logging;
+using System.Diagnostics;
+using System.Net;
+using NUglify.JavaScript;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
+
+namespace OneSupplierPlatform.Controllers
+{
+
+    public class SupplierSaveViewModel
+    {
+        public FormInfo FormInfo { get; set; }
+        public Step1Data Step1 { get; set; }
+        public Step2Data Step2 { get; set; }
+        public Dictionary<string, string> Step3 { get; set; } // Step3 欄位極多且多為字串，建議用字典
+        public string mode { get; set; }
+        public bool hasError { get; set; }
+    }
+
+    public class Step1Data
+    {
+        public string suppliername { get; set; }
+        public string suppliertype { get; set; }
+        public DecisionData decision { get; set; }
+    }
+
+    public class Step2Data : Dictionary<string, object>
+    {
+        // Step2 欄位太多（company_code, vendor_class...），
+        // 繼承 Dictionary 可以讓你直接用 payload.Step2["company_code"] 取值，
+        // 同時也能定義常用的強型別屬性。
+        public DecisionData decision { get; set; }
+    }
+
+    public class DecisionData
+    {
+        public object type { get; set; }
+        public object value { get; set; }
+    }
+    public class StepPayload
+    {
+        public Dictionary<string, object>? Type { get; set; }
+
+        public Dictionary<string, object>? Data { get; set; }
+    }
+    public class StepRequest
+    {
+        public int StepIndex { get; set; }
+
+        public string formno { get; set; }
+        public Dictionary<string, StepPayload>? FlowData { get; set; }
+    }
+    public class SupplierController : BaseController
+    {
+        private static readonly List<WizardStepOption> Steps = new()
+        {
+            new WizardStepOption { StepIndex = 1, Title = "Apply New Supplier", PartialView = "Supplier/_StepApplyNewSupplier", Locked = false },
+            new WizardStepOption { StepIndex = 2, Title = "Supplier Information", PartialView = "Supplier/_StepSupplierInformation" },
+            new WizardStepOption { StepIndex = 3, Title = "File List", PartialView = "Supplier/_StepFileList" }
+        };
+
+        private readonly ISupplierService _supplierService;
+        private readonly DynamicFieldService _dynamicFieldService;
+        private readonly IMapper _mapper;
+        private readonly OneSupplierFLMService _oneSupplierFLMService;
+
+        private readonly IHttpClientFactory _httpClientFactory;
+
+        private readonly IConfiguration _config;
+        public SupplierController(IConfiguration config,IHttpClientFactory httpClientFactory,OneSupplierFLMService oneSupplierFLMService, IMapper mapper, ISupplierService supplierService, DynamicFieldService dynamicFieldService)
+        {
+            _supplierService = supplierService;
+            _dynamicFieldService = dynamicFieldService;
+            _mapper = mapper;
+            _oneSupplierFLMService = oneSupplierFLMService;
+            _httpClientFactory = httpClientFactory;
+            _config = config;
+        }
+
+
+        public async Task<IActionResult> Index(int? formno, int? targetStep)
+        {
+            // 1. 動態計算真正的目標步進
+            // 如果網址有帶 targetStep，就用網址帶的數字；如果完全沒帶（即從選單全新申請），則預設為步驟 1
+            int actualTargetStep = targetStep ?? 1;
+
+            // 2. 💡 留給您未來的草稿還原機制 (目前您先註解掉，未來要恢復時只要把 formId 傳入即可)
+            if (formno.HasValue)
+            {
+                // SupplierSaveViewModel draftData = await _supplierService.GetDraftByIdAsync(formId.Value);
+                // if (draftData != null) { ... 塞入 ViewBag ... }
+
+                // 💡 防呆安全網：既然都有傳 formId 過來了，如果網址忘了寫 targetStep，通常代表要直接去步驟 2 編輯
+                if (targetStep == null)
+                {
+                    actualTargetStep = 2;
+                }
+            }
+
+            // 3. 將最終計算出來的目標步驟塞入 ViewBag 傳給前端
+            // 正常填寫：此時值為 1 ➡️ 前端 Vue 判定 isJumpIn = false，正常顯示所有步驟。
+            // 查詢跳轉：此時值為 2 ➡️ 前端 Vue 判定 isJumpIn = true，自動執行 POST 並隱藏第一步。
+            ViewBag.TargetStep = actualTargetStep;
+            ViewBag.FormNo = formno;
+            // 4. 維持您原本的設計，將 Steps 列表傳給 View
+            return View(Steps);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Step([FromBody] StepRequest req)
+        {
+            var stepIndex = req.StepIndex;
+
+            if (stepIndex < 1 || stepIndex > Steps.Count)
+                return BadRequest("Invalid step index");
+
+            var stepKey = "step" + req.StepIndex;
+            var step = req.FlowData?[stepKey];
+
+            var formno = req.formno;
+            var type = step?.Type;
+            var decision = step?.Data;
+
+            var stepInfo = Steps[stepIndex - 1];
+
+            object model = stepIndex switch
+            {
+                1 => await GenerateStep(stepIndex),
+                2 => await GenerateStep(stepIndex, formno,type, decision),
+                3 => await GenerateStep(stepIndex, formno,type),
+                _ => null
+            };
+            ViewBag.Title = stepInfo.Title;
+            return PartialView(stepInfo.PartialView, model);
+        }
+
+        async Task<IStepViewModel> GenerateStep(int stepIndex, string formno ="", Dictionary<string, object>? type = null, Dictionary<string, object>? SendData = null)
+        {
+
+            IStepViewModel? model = null;
+            //Dictionary<string, object>? dicType = new Dictionary<string, object>();
+            //if (!string.IsNullOrEmpty(type))
+            //{
+            //    dicType["Search"] = type;
+            //}
+            switch (stepIndex)
+            {
+                case 1:
+                    Dictionary<string, List<TableSchema>> dic = new Dictionary<string, List<TableSchema>>();
+                    var maker = new List<TableSchema>
+                    {
+                         new()
+                        {
+                            TableId = "tbMaker1",
+                            AjaxUrl = "Supplier/GetMakerData",
+                            FetchMode = FetchMode.All,
+                            Message="* Existed in the company",
+                            //AjaxParams  = new
+                            //{
+                            //    makername = "MITSUI",
+                            //    companyid = "2"
+                            //},
+                    
+                            Features = new TableFeatures
+                            {
+                                Checkbox = false,
+                                Export = true,
+                                RowButtons = true,
+                                ColumnToggle = true,
+                                RowSelect = true,
+                                SelectAll = true,
+                                VirtualScroll = true,
+                                ColumnFilter = false,   // 可選，每欄都有 filter
+                                StickyHeader = true    // 可選，表頭固定
+                            },
+
+                            Config = new TableConfig
+                            {
+                                PageLength = 2,
+                                VirtualScrollHeight = "500px",
+                                Searching = false,
+                                Ordering = false,
+                                Paging = true,
+                                LengthChange = false,
+                                StateSave = true
+                            },
+
+                            //ToolbarButtons =
+                            //{
+                            //    new("Add", "add"),
+                            //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                            //    new("Reload", "reload", "btn btn-secondary")
+                            //},
+
+                            Columns =  TableSchema.Create<vmMakerDetail>(new()
+                            {
+                                x => x.MakerCode,       // 自動轉為 "maker_code"
+                                x => x.MakerLocalName,  // 自動轉為 "maker_local_name"
+                                x => x.MakerEngName,
+                                x => x.MakerShortName,
+                                x => x.MakerEngName,
+                                "Country",              // 自動轉為 "country"
+                                "City",                 // 自動轉為 "city"
+                                x => x.FacilityAddress,
+                            }).Columns,
+
+
+                            RowButtons =
+                            {
+                                new(){ Title="Add Another Maker Type", Event="addMakerType", Icon="bi-pencil"},
+                                new(){ Title="Add New Site", Event="addNewSite", Icon="bi-pencil"}
+                            }
+                        }
+                        ,new()
+                        {
+                            TableId = "tbMaker2",
+                            AjaxUrl = "",
+                            FetchMode = FetchMode.All,
+                            Message="* Existed in the group companyd(excluding itself)",
+                            Features = new TableFeatures
+                            {
+                                Checkbox = false,
+                                Export = true,
+                                RowButtons = true,
+                                ColumnToggle = true,
+                                RowSelect = true,
+                                SelectAll = true,
+                                VirtualScroll = true,
+                                ColumnFilter = false,   // 可選，每欄都有 filter
+                                StickyHeader = true    // 可選，表頭固定
+                            },
+
+                            Config = new TableConfig
+                            {
+                                PageLength = 20,
+                                VirtualScrollHeight = "500px",
+                                Searching = false,
+                                Ordering = false,
+                                Paging = false,
+                                LengthChange = false,
+                                StateSave = true
+                            },
+
+                            //ToolbarButtons =
+                            //{
+                            //    new("Add", "add"),
+                            //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                            //    new("Reload", "reload", "btn btn-secondary")
+                            //},
+                            Columns =  TableSchema.Create<vmMakerDetail>(new()
+                            {
+                                x => x.MakerCode,       // 自動轉為 "maker_code"
+                                x => x.MakerLocalName,  // 自動轉為 "maker_local_name"
+                                x => x.MakerEngName,
+                                x => x.MakerShortName,
+                                x => x.MakerEngName,
+                                "Country",              // 自動轉為 "country"
+                                 "City",                 // 自動轉為 "city"
+                                x => x.FacilityAddress,
+                                x => x.MakerStatus,
+                            }).Columns,
+                            //Columns =
+                            //{ 
+                            //    new("MakerCode"),
+                            //    new("MakerLocalName"),
+                            //    new("MakerEngName"),
+                            //    new("MakerShortName"),
+                            //    new("Country"),
+                            //    new("City"),
+                            //    new("FacilityAddress"),
+                            //    new("MakerStatus"),
+                            //    //new("MakerType",visible:true)
+                            //},
+
+                            RowButtons =
+                            {
+                                new(){ Title="Copy Maker", Event="cpMaker", Icon="bi-pencil"},
+                                //new(){ Title="Copy Maker", Event="cpMaker", Icon="bi-pencil"}
+                            }
+                        }
+                    };
+                    var vendor = new List<TableSchema>
+                    {
+                        new()
+                        {
+                              TableId = "tbVendor",
+                              AjaxUrl = "Supplier/GetVendorData",
+                              FetchMode = FetchMode.All,
+
+                              Features = new TableFeatures
+                              {
+                                  Checkbox = false,
+                                  Export = true,
+                                  RowButtons = true,
+                                  ColumnToggle = true,
+                                  RowSelect = true,
+                                  SelectAll = true,
+                                  VirtualScroll = true,
+                                  ColumnFilter = false,   // 可選，每欄都有 filter
+                                  StickyHeader = true    // 可選，表頭固定
+                              },
+
+                              Config = new TableConfig
+                              {
+                                  PageLength = 20,
+                                  VirtualScrollHeight = "500px",
+                                  Searching = false,
+                                  Ordering = false,
+                                  Paging = false,
+                                  LengthChange = false,
+                                  StateSave = true
+                              },
+
+                              //ToolbarButtons =
+                              //{
+                              //    new("Add", "add"),
+                              //    new("Delete Selected", "deleteSelected", "btn btn-danger"),
+                              //    new("Reload", "reload", "btn btn-secondary")
+                              //},
+                              Columns =  TableSchema.Create<vmVendorDetail>(new()
+                              {
+                                    x => x.OUSite,
+                                    x => x.Inactive,
+                                    x => x.GroupName,
+                                    x => x.GroupCode,
+                                    x => x.VendorName,
+                                    "VandorNameAlt",
+                                        "VandorCode",
+                                    x => x.SSRName,
+                                    x => x.TaxRegistration,
+                                    x => x.SupplierType,
+                              }).Columns,
+                              //Columns =
+                              //{
+                              //      new("OUSite"),
+                              //      new("Inactive"),
+                              //      new("GroupName"),
+                              //      new("GroupCode"),
+                              //      new("VendorName"),
+                              //      new("VandorNameAlt"),
+                              //      new("VandorCode"),
+                              //      new("SSRName"),
+                              //      new("TaxRegistration"),
+                              //      new("SupplierType"),
+                              //  }, 
+                                //RowButtons =
+                                //{
+                                //    new(){ Title="Edit", Event="edit", Icon="bi-pencil"},
+                                //    new(){ Title="Delete", Event="delete", Icon="bi-trash", CssClass="btn btn-sm btn-danger"}
+                                //}
+                        }
+                    };
+                    dic["maker"] = maker;
+                    dic["vendor"] = vendor;
+                    model = new StepViewModel<TableSchema>
+                    {
+                        StepIndex = stepIndex,
+                        Title = "第一頁",
+                        Data = dic
+                    };
+
+                    break;
+                case 2:
+                    //先找CONFIG
+                    Dictionary<string, List<BaseDynamicField>> dic2 = new Dictionary<string, List<BaseDynamicField>>();
+                    string[] sections = ["Supplier Information", "Vendor Subrange", "Company Profile"];
+                    //string[] sections = ["Supplier Information"];
+                    foreach (var item in sections)
+                    {
+                        dic2[item.Replace(" ", "")] = await _supplierService.GetConfigFieldAsync(item, type);
+                    }
+                    //var userFromDb = new UserProfile { CompanyCode = "Johnny", MakerType = "Normal", RequestReason = "test@me.com" };
+                    if (!string.IsNullOrEmpty(formno))
+                    {
+                        await _supplierService.MappingFormData(dic2, formno);
+                    } 
+
+                    _dynamicFieldService.FillSchemaWithDictionary(dic2, SendData);
+
+                    model = new StepViewModel<BaseDynamicField>
+                    {
+                        StepIndex = stepIndex,
+                        Title = "第二頁",
+                        Data = dic2//SendData == null ? dic2 : await _supplierService.MappingSendData(dic2, SendData)
+                    };
+                    break;
+                case 3:
+                    Dictionary<string, List<DynamicSupplierFileField>> dic3 = new Dictionary<string, List<DynamicSupplierFileField>>();
+                    dic3["SupplierVC"] = await _supplierService.GetConfigFileListAsync(type);
+                    model = new StepViewModel<DynamicSupplierFileField>
+                    {
+                        StepIndex = stepIndex,
+                        Title = "第三頁",
+                        Data = dic3
+                    };
+                    break;
+            }
+            return model;
+        }
+
+
+        [HttpPost] 
+        public async Task<IActionResult> Draft([FromBody] SupplierSaveViewModel payload)
+        { 
+            try
+            { 
+                if (payload == null)
+                {
+                    return BadRequest(new { success = false, message = "資料格式錯誤" });
+                }
+                 
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { success = false, message = "資料欄位驗證失敗", errors = ModelState });
+                } 
+                FormInfo form = await _supplierService.SaveAsync(payload); 
+                return Ok(new { success = true, message = "暫存成功", Form = form });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "儲存供應商暫存失敗"); 
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+
+        //[HttpPost]
+        //public async Task<FormInfo> draft([FromBody] SupplierSaveViewModel payload)
+        //{
+        //    FormInfo form = new FormInfo();
+        //    try
+        //    {
+        //        if (payload == null) return BadRequest("資料格式錯誤");
+        //        // payload = JsonConvert.DeserializeObject<SupplierSaveViewModel>(data); 
+        //        form = await _supplierService.SaveAsync(payload); 
+        //    }
+        //    catch (Exception ex)
+        //    {
+
+        //    }
+        //    return Ok(new { success = true, message = "已成功接收並轉換",Form = form });
+        //}
+        [HttpPost]
+        public async Task<IActionResult> submit([FromBody] SupplierSaveViewModel payload)
+        {  
+            if (payload == null) return BadRequest("資料格式錯誤");
+           // payload = JsonConvert.DeserializeObject<SupplierSaveViewModel>(data); 
+            await _supplierService.SaveAsync(payload);
+
+            return Ok(new { success = true, message = "已成功接收並轉換" });
+        }
+        [HttpPost]
+        public async Task<IActionResult> Save([FromBody] SupplierSaveViewModel payload)
+        {
+            //if (payload == null) return BadRequest("資料格式錯誤");
+            var data = """
+
+                {
+                  "Step1": {
+                    "suppliername": "MITSUI",
+                    "suppliertype": "Vendor",
+                    "decision": {
+                      "type": {
+                        "suppliertype": "Vendor"
+                      },
+                      "value": {
+                        "EventName": "addVendor"
+                      }
+                    }
+                  },
+                  "Step2": {
+                    "company_code": "AMSCTW",
+                    "vendor_class": "VC1",
+                    "vendor_group_code": "",
+                    "technology": "",
+                    "request_reason": "yyy",
+                    "upload_ssaaf": "",
+                    "ssr_description": "yyy",
+                    "currency": "",
+                    "payment_term": "",
+                    "incoterm": "",
+                    "freight_term": "",
+                    "tax_code": "",
+                    "bank_name": "y",
+                    "bank_branch": "y",
+                    "branch_country": "yy",
+                    "account_name": "yy",
+                    "account_number": "yy",
+                    "branch_address": "y",
+                    "bank_key": "y",
+                    "routing_number": "y",
+                    "swift_code": "yy",
+                    "iban": "y",
+                    "company_english_name": "y",
+                    "company_local_name": "y",
+                    "company_owner": "y",
+                    "historical_name": "y",
+                    "country": "",
+                    "city": "y",
+                    "facility_address": "y",
+                    "latitude": 22,
+                    "longitude": 33,
+                    "postal_code": "q",
+                    "website_url": "q",
+                    "tax_identification": "q",
+                    "vat_number": "q",
+                    "duns_number": "qe",
+                    "head_duns_number": "rtr",
+                    "register_number": "t",
+                    "contact_person": "fgdsg",
+                    "position": "sfdg",
+                    "e_mail": "gfg",
+                    "window_phone_number": "gsg",
+                    "company_office_number": "sgs",
+                    "fax_number": "gsgs",
+                    "language": "sgsg",
+                    "subsidiary": "gsg",
+                    "supplier_relationship": "sgs",
+                    "edi_connection": "",
+                    "decision": {
+                      "type": {
+                        "vendor_class": "VC1"
+                      },
+                      "value": {}
+                    }
+                  },
+                  "Step3": {
+                    "vc1_ssa.score": "",
+                    "vc1_ssa.file": "",
+                    "vc1_vda63_pa_self.score": "",
+                    "vc1_vda63_pa_self.file": "",
+                    "vc1_iatf16949.expired": "",
+                    "vc1_iatf16949.file": "",
+                    "vc1_iso9001.expired": "",
+                    "vc1_iso9001.file": "",
+                    "vc1_iso14001.expired": "",
+                    "vc1_iso14001.file": "",
+                    "vc1_tisax.expired": "",
+                    "vc1_tisax.file": "",
+                    "vc1_iso27001.expired": "",
+                    "vc1_iso27001.file": "",
+                    "vc1_mpa.score": "",
+                    "vc1_mpa.file": "",
+                    "vc1_poi": "",
+                    "vc1_poi.file": "",
+                    "vc1_amsc_qrs": "",
+                    "vc1_amsc_qrs.file": "",
+                    "vc1_fss.score": "",
+                    "vc1_fss.file": "",
+                    "vc1_amsc_plg": "",
+                    "vc1_amsc_plg.file": "",
+                    "vc1_pscr": "",
+                    "vc1_pscr.file": "",
+                    "vc1_sp02_23_tp_sra.score": "",
+                    "vc1_sp02_23_tp_sra.file": "",
+                    "vc1_wa": "",
+                    "vc1_wa.file": "",
+                    "vc1_ic": "",
+                    "vc1_ic.file": "",
+                    "vc1_rba": "",
+                    "vc1_rba.file": "",
+                    "vc1_gdpr": "",
+                    "vc1_gdpr.file": "",
+                    "vc1_cr_pdf": "",
+                    "vc1_cr_pdf.file": "",
+                    "vc1_obd_pdf": "",
+                    "vc1_obd_pdf.file": "",
+                    "vc1_pi": "",
+                    "vc1_pi.file": "",
+                    "vc1_omc_agent.score": "",
+                    "vc1_omc_agent.file": "",
+                    "vc1_email_cert_nc.score": "",
+                    "vc1_email_cert_nc.file": "",
+                    "vc1_ship_rem_cn.score": "",
+                    "vc1_ship_rem_cn.file": ""
+                  }
+                }
+                """;
+            payload = JsonConvert.DeserializeObject<SupplierSaveViewModel>(data);
+
+            // 取值範例
+            //var name = payload.Step1.suppliername;
+            //var vendorClass = payload.Step2["vendor_class"]?.ToString();
+            await _supplierService.SaveAsync(payload);
+
+            return Ok(new { success = true, message = "已成功接收並轉換" });
+        }
+        //[HttpPost]
+        //public IActionResult Save([FromBody] Dictionary<string, string> finalPayload)
+        //{
+
+        //    var result = JsonConvert.SerializeObject(finalPayload);
+
+
+
+
+        //    // 檢查是否有資料
+        //    if (finalPayload == null || !finalPayload.Any())
+        //    {
+        //        return BadRequest("未收到有效的 JSON 資料");
+        //    }
+
+        //    // 1. 這裡可以直接看到您的資料結構，例如：
+        //    // var userName = finalPayload["BasicSection"]["UserName"];
+
+        //    // 2. 接著執行您之前設定好的 AutoMapper 轉換
+        //    // var userProfile = _mapper.Map<UserProfile>(finalPayload);
+
+        //    // var userProfile = _mapper.Map<UserProfile>(rawData);
+        //    //  var dbData = userProfile.ToDbParameters();
+
+        //    _supplierService.Save(finalPayload);
+        //    // 3. 執行 DB 儲存邏輯...
+
+        //    return Ok(new { success = true, message = "已成功接收並轉換" });
+        //}
+
+        [HttpGet]
+        public async Task<IActionResult> GetMakerData(string makername, string companyid)
+        {
+            if (string.IsNullOrEmpty(makername))
+            {
+                return Json(new
+                {
+                    success = true,
+                    tbMaker1 = new List<vmMakerDetail>(), // 給第一個表的資料
+                    tbMaker2 = new List<vmMakerDetail>()       // 給第二個表的資料
+                });
+            }
+
+
+            var lsvwMaker1 = await _supplierService.GetMakerDataFromGroupAsync(makername, companyid);
+
+            if (lsvwMaker1.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+            var lsvwMaker2 = await _supplierService.GetMakerDataInternalAsync(makername);
+
+            if (lsvwMaker2.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+
+
+
+            return Json(new
+            {
+                success = true,
+                tbMaker1 = lsvwMaker1,  // 這裡的 Key 就是前端 <table id="SupplierGrid">
+                tbMaker2 = lsvwMaker2     // 這裡的 Key 就是前端 <table id="OrderGrid"> 
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetVendorData(string vendorname)
+        {
+            if (string.IsNullOrEmpty(vendorname))
+            {
+                return Json(new
+                {
+                    success = true,
+                    tbVendor = new List<vmVendorDetail>(),
+                });
+            }
+
+            var lsvmVender = await _supplierService.GetVendorInfoAsync(vendorname);
+
+            if (lsvmVender.Count == 0)
+            {
+                return NotFound(new { message = "找不到供應商資料" });
+            }
+            return Json(new
+            {
+                success = true,
+                tbVendor = lsvmVender,  // 這裡的 Key 就是前端 <table id="SupplierGrid"> 
+            });
+        }
+
+        [HttpGet]
+
+        public async Task<IActionResult> GetSupplierForm()
+        {
+
+            var sectionConfigs = new Dictionary<string, List<BaseDynamicField>>();
+            //var data = await _supplierService.GetConfigFieldAsync("Vendor","");
+            sectionConfigs["Vendor"] = new List<BaseDynamicField>();//data;
+
+            //// 模擬從資料庫查詢回來的結果
+            //var fieldList = new List<DynamicField>
+            //{
+            //    // 第一列
+            //    //new DynamicField {
+            //    //    ColId = "Company", ColName = "Company", Section = "Basic",
+            //    //    EnumType = FieldType.Select2, Must = true, Order = 1,
+            //    //    attribute = "AMSCTW:AMSC Taiwan,AMSCCN:AMSC China"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "Type", ColName = "Type", Section = "Basic",
+            //    //    EnumType = FieldType.Textbox, DefaultValue = "New Vendor", Readonly = true, Order = 2
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "SupplierType", ColName = "Supplier Type", Section = "Basic",
+            //    //    EnumType = FieldType.Dropdown, Must = true, Order = 3,
+            //    //    attribute = "Trade,Manufacturer,Service"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "EffectiveDate", ColName = "Effective Date", Section = "Basic",
+            //    //    EnumType = FieldType.Date, Must = true, Order = 4, DefaultValue = "2026-03-24"
+            //    //},
+
+            //    // 第二列
+            //    //new DynamicField {
+            //    //    ColId = "GroupName", ColName = "Group Name", Section = "GroupInfo",
+            //    //    EnumType = FieldType.Textbox, Must = true, Order = 5, Placeholder = "請輸入群組名稱"
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "GroupCode", ColName = "Group Code", Section = "GroupInfo",
+            //    //    EnumType = FieldType.Textbox, Readonly = true, Order = 6
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "VendorType", ColName = "Vendor Type", Section = "GroupInfo",
+            //    //    EnumType =  FieldType.Dropdown, Must = true, Order = 7,
+            //    //    attribute = "Domestic,Overseas"
+            //    //},
+
+            //    // 地址與其他
+            //    //new DynamicField {
+            //    //    ColId = "City", ColName = "City", Section = "Address",
+            //    //   EnumType = FieldType.Textbox, Must = true, Order = 8
+            //    //},
+            //    //new DynamicField {
+            //    //    ColId = "Address", ColName = "Address", Section = "Address",
+            //    //    EnumType = FieldType.Textarea, Must = true, Order = 9, Width = 6
+            //    //}
+            //};
+
+            //// 將 List 依照 Section 分組，轉成 Dictionary<string, List<DynamicField>>
+            //var viewModel = fieldList
+            //    .OrderBy(f => f.Order)
+            //    .GroupBy(f => f.Section)
+            //    .ToDictionary(g => g.Key, g => g.ToList());
+
+            // 回傳 Partial View 並帶入 Model
+            return PartialView("Supplier/_VendorInfo", sectionConfigs);
+        }
+        [HttpPost]
+        public async Task<IActionResult> UploadSSAAF(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("請選擇檔案");
+            }
+
+            // 安全性檢查：驗證副檔名
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (ext != ".xls" && ext != ".xlsx")
+            {
+                return BadRequest("僅支援 Excel 檔案");
+            }
+            return Json(await  _supplierService.UploadSSAAF(file)); 
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetERP([FromBody] Dictionary<string, object> requestData)
+        {
+            if (!requestData.ContainsKey("methodName")) return BadRequest("Missing methodName");
+
+            string methodName = requestData["methodName"].ToString();
+            var parameters = requestData["params"]; // 這是實際要傳給 ASMX 的參數 
+            string asmxUrl = $"{_config["ExternalServices:ErpUrl"]}/{methodName}";
+
+            using (var client = _httpClientFactory.CreateClient())
+            {
+             
+                var jsonPayload = JsonConvert.SerializeObject(parameters);
+                var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                try
+                {
+                    var response = await client.PostAsync(asmxUrl, content);
+                    var result = await response.Content.ReadAsStringAsync();
+                     
+                    return Content(result, "application/json");
+                }
+                catch (Exception ex)
+                {
+                    return StatusCode(500, ex.Message);
+                }
+            } 
+        }
+
+       
+        //[HttpPost]
+        //public async Task<IActionResult> test([FromBody] AsyncValidationRequest req)
+        //{
+        //    //var json = dic["field"].ToString();
+        //    //var dict = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+        //req.Fields["Latitude"] = "12";
+        //req.Fields["Longitude"] = "12";
+        //return Json(new
+        //{
+        //    valid = true,
+        //    data = req.Fields
+        //});
+        //}
+        [HttpPost]
+        public async Task<IActionResult> GetLatLngByGoogle([FromBody] AsyncValidationRequest req)
+        { 
+            vmGeography geoObj = new vmGeography();
+            if (string.IsNullOrEmpty(req.Value.ToString()))
+            {
+                req.Fields["latitude"] = "";
+                req.Fields["longitude"] = "";
+                return Json(new
+                {
+                    valid = false,
+                    data = req.Fields
+                });
+            }
+
+            string asmxUrl = $"{_config["GoogleConfig:Url"]}";
+
+            try
+            {
+                using (var client = _httpClientFactory.CreateClient())
+                {
+
+                    client.DefaultRequestHeaders.Add("sysid", _config["GoogleConfig:SysId"]);
+                    client.DefaultRequestHeaders.Add("systoken", _config["GoogleConfig:SysToken"]);
+
+
+                    vmGeography.PostData postData = new vmGeography.PostData { addr = req.Value.ToString() };
+                    string json = JsonConvert.SerializeObject(postData);
+
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+
+                    HttpResponseMessage httpResponse = await client.PostAsync(asmxUrl, content);
+                    httpResponse.EnsureSuccessStatusCode();
+
+                    string response = await httpResponse.Content.ReadAsStringAsync();
+
+
+                    var result = JsonConvert.DeserializeObject<dynamic>(response);
+
+                    if (result.status == "OK")
+                    {
+                        geoObj.LONGITUDE = result.results[0].geometry.location.lng;
+                        geoObj.LATITUDE = result.results[0].geometry.location.lat;
+                    }
+                    else
+                    {
+
+                    }
+                }
+
+
+                req.Fields["latitude"] = geoObj.LATITUDE;
+                req.Fields["longitude"] = geoObj.LONGITUDE;
+               
+            }
+            catch (Exception ex)
+            {
+                req.Fields["latitude"] = "";
+                req.Fields["longitude"] = "";
+                return Json(new
+                {
+                    valid = false,
+                    data = req.Fields
+                });
+            }
+            return Json(new
+            {
+                valid = true,
+                data = req.Fields
+            });
+        }
+    }
+    public class AsyncValidationRequest
+    {
+        public object? Value { get; set; }
+
+        public string? StepKey { get; set; }
+
+        // trigger field
+        public string? Field { get; set; }
+
+        // map fields
+        public Dictionary<string, string>? Fields { get; set; }
+
+        // whole form data
+        public Dictionary<string, object>? Data { get; set; }
+    }
+}
+
+
+@model vmSupplierQuery
+@{
+    ViewData["Title"] = "Query Forms";
+}
+
+<div class="container-fluid mt-3">
+    <!-- 查詢條件區塊 (將原本的 Form 加上 id) -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white border-bottom py-2">
+            <h5 class="card-title mb-0 text-secondary" style="font-weight: 600;">
+                <i class="bi bi-search me-1"></i> Query Forms
+            </h5>
+        </div>
+        <div class="card-body">
+            <form id="queryForm" asp-action="Index" method="post">
+                <!-- 💡 核心：隱藏欄位用來紀錄當前被點擊的頁碼 -->
+                <input type="hidden" asp-for="PageNumber" id="currentPageNumber" />
+
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label asp-for="VendorName" class="form-label small fw-bold text-muted mb-1">Vendor Name</label>
+                        <input asp-for="VendorName" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="VendorCode" class="form-label small fw-bold text-muted mb-1">Vendor Code</label>
+                        <input asp-for="VendorCode" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="FormNo" class="form-label small fw-bold text-muted mb-1">Form No</label>
+                        <input asp-for="FormNo" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="FormStatus" class="form-label small fw-bold text-muted mb-1">Form Status</label>
+                        <select asp-for="FormStatus" class="form-select form-select-sm">
+                            <option value="">-- Select --</option>
+                            <option value="SAVED">SAVED</option>
+                            <option value="Return">Return</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="CreateDateFrom" class="form-label small fw-bold text-muted mb-1">Create Date From</label>
+                        <input asp-for="CreateDateFrom" type="date" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-md-3">
+                        <label asp-for="CreateDateTo" class="form-label small fw-bold text-muted mb-1">To</label>
+                        <input asp-for="CreateDateTo" type="date" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <!-- 查詢按鈕 (點擊查詢時，要將頁碼重設回第 1 頁) -->
+                <div class="text-center mt-4">
+                    <button type="submit" onclick="resetPage()" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm">Query</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 查詢結果區塊 -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-bottom py-2">
+            <h5 class="card-title mb-0 text-secondary" style="font-weight: 600;">Result</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped align-middle mb-0 text-center small">
+                    <thead class="table-primary text-white" style="background-color: #3182ce; border-color: #3182ce;">
+                        <tr>
+                            <th style="width: 60px; background-color: #3a8bcd;">View</th>
+                            <th style="background-color: #3a8bcd;">Form No</th>
+                            <th style="background-color: #3a8bcd;">Vendor Name</th>
+                            <th style="background-color: #3a8bcd;">Vendor Name alt</th>
+                            <th style="background-color: #3a8bcd;">Vendor Code</th>
+                            <th style="background-color: #3a8bcd;">Create Date</th>
+                            <th style="background-color: #3a8bcd;">Flower Status</th>
+                            <th style="background-color: #3a8bcd;">Apply Type</th>
+                            <th style="background-color: #3a8bcd;">Applicant</th>
+                            <th style="background-color: #3a8bcd;">Department</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Results != null && Model.Results.Any())
+                        {
+                            foreach (var item in Model.Results)
+                            {
+                                <tr>
+                                    <td>
+                                      @*   <a href="@Url.Action("Details", "Flower", new { id = item.FormNo })" class="btn btn-success btn-sm p-1 d-inline-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">
+                                            <i class="bi bi-search text-white"></i>
+
+                                            @Url.Content("~/Supplier/Index")?targetStep=2&id=@item.Id
+                                        </a> *@
+                                        <a href="@Url.Action("Index", "Supplier", new { formno = item.FormNo,targetStep = 2 })" class="btn btn-primary">
+                                            跳轉至步驟 2 (供應商資料)
+                                        </a>
+                                    </td>
+                                    <td class="fw-bold text-secondary">@item.FormNo</td>
+                                    <td class="text-start text-uppercase ps-3">@item.VendorName</td>
+                                    <td>@item.VendorNameAlt</td>
+                                    <td>@item.VendorCode</td>
+                                    <td>@item.CreateDate?.ToString("yyyy-MM-dd")</td>
+                                    <td>
+                                        @if (item.FlowerStatus == "Return")
+                                        {
+                                            <a href="#" class="text-danger text-decoration-underline fw-bold">Return</a>
+                                        }
+                                        else
+                                        {
+                                            <a href="#" class="text-primary text-decoration-underline fw-bold">@item.FlowerStatus</a>
+                                        }
+                                    </td>
+                                    <td class="text-primary fw-bold">@item.ApplyType</td>
+                                    <td>@item.Applicant</td>
+                                    <td>@item.Department</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="10" class="text-muted py-4">No data found. Please change query conditions.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 💡 新增：Bootstrap 5 分頁控制列區塊 -->
+            @if (Model.TotalPages > 1)
+            {
+                <div class="d-flex justify-content-between align-items-center p-3 border-top bg-light">
+                    <div class="small text-muted">
+                        顯示第 @(((Model.PageNumber - 1) * Model.PageSize) + 1) 至 @(Math.Min(Model.PageNumber * Model.PageSize, Model.TotalItems)) 筆，共 @Model.TotalItems 筆資料
+                    </div>
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- 上一頁 -->
+                            <li class="page-item @(Model.PageNumber == 1 ? "disabled" : "")">
+                                <button type="button" class="page-link" onclick="changePage(@(Model.PageNumber - 1))">Previous</button>
+                            </li>
+
+                            <!-- 頁碼清單 -->
+                            @for (int i = 1; i <= Model.TotalPages; i++)
+                            {
+                                <li class="page-item @(Model.PageNumber == i ? "active" : "")">
+                                    <button type="button" class="page-link" onclick="changePage(@i)">@i</button>
+                                </li>
+                            }
+
+                            <!-- 下一頁 -->
+                            <li class="page-item @(Model.PageNumber == Model.TotalPages ? "disabled" : "")">
+                                <button type="button" class="page-link" onclick="changePage(@(Model.PageNumber + 1))">Next</button>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- 💡 新增：分頁觸發 JavaScript -->
+@section Scripts {
+    <script>
+        // ⭕ 使用標準的 function 定義，使其暴露於全域，讓 HTML 的 onclick 可以順利呼叫
+        function changePage(pageIndex) {
+            document.getElementById("currentPageNumber").value = pageIndex;
+            document.getElementById("queryForm").submit();
+        }
+
+        // ⭕ 同理，修正為標準全域函式
+        function resetPage() {
+            document.getElementById("currentPageNumber").value = 1;
+        }
+
+
+
+             
+
+
+    </script>
+}
+
+
+
+    public class SupplierSaveViewModel
+    {
+        public FormInfo FormInfo { get; set; }
+        public Step1Data Step1 { get; set; }
+        public Step2Data Step2 { get; set; }
+        public Dictionary<string, string> Step3 { get; set; } // Step3 欄位極多且多為字串，建議用字典
+        public string mode { get; set; }
+        public bool hasError { get; set; }
+    }
+
+    public class Step1Data
+    {
+        public string suppliername { get; set; }
+        public string suppliertype { get; set; }
+        public DecisionData decision { get; set; }
+    }
+
+    public class Step2Data : Dictionary<string, object>
+    {
+        // Step2 欄位太多（company_code, vendor_class...），
+        // 繼承 Dictionary 可以讓你直接用 payload.Step2["company_code"] 取值，
+        // 同時也能定義常用的強型別屬性。
+        public DecisionData decision { get; set; }
+    }
+
+    public class DecisionData
+    {
+        public object type { get; set; }
+        public object value { get; set; }
+    }
+    public class StepPayload
+    {
+        public Dictionary<string, object>? Type { get; set; }
+
+        public Dictionary<string, object>? Data { get; set; }
+    }
+    public class StepRequest
+    {
+        public int StepIndex { get; set; }
+
+        public string formno { get; set; }
+        public Dictionary<string, StepPayload>? FlowData { get; set; }
+    }
+
