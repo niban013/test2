@@ -1,0 +1,3858 @@
+ 
+function getUploadKey(file) {
+    return file.clientId ?? file.id;
+}
+window.PreviewModule = (() => { 
+    function initTooltips() {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+            if (el._tooltip) return;
+
+            el._tooltip = new bootstrap.Tooltip(el, {
+                html: true,
+                container: 'body'
+            });
+        });
+    }
+    function isPreviewOpen() {
+
+        return $(".drive-right")
+            .hasClass("preview-open");
+    }
+    function togglePreview() {
+
+        const next = !isPreviewOpen();
+
+        setPreviewLayout(next);
+
+        if (!next) {
+
+            flushPreview();
+
+            $(".drive-item")
+                .removeClass("active");
+        }
+
+        return next;
+    }
+    function setPreviewLayout(open, forceFull = false) {
+
+        $(".drive-left")
+            .toggleClass("preview-open", open);
+
+        $(".drive-right")
+            .toggleClass("preview-open", open).toggleClass("force-full", forceFull);
+    }
+   
+    // =========================
+    // STATE（原封不動）
+    // =========================
+    let PreviewState = {
+        version: 0,
+        type: null,
+        payload: null
+    };
+
+    const $panel = () => $("#previewPanel");
+
+    // =========================
+    // 原 function（全部保留簽名）
+    // =========================
+
+    
+    function flushPreview(type = null, payload = null) {
+
+        const $p = $panel();
+
+        // =========================
+        // cleanup old iframe
+        // =========================
+
+        const prevIframe = $p.find("iframe");
+
+        if (prevIframe.length) {
+
+            prevIframe.attr("src", "about:blank");
+            prevIframe.remove();
+        }
+
+        // =========================
+        // revoke old pdf url
+        // =========================
+
+        if (
+            PreviewState.type === "pdf" &&
+            PreviewState.payload &&
+            PreviewState.payload !== payload
+        ) {
+            URL.revokeObjectURL(PreviewState.payload);
+        }
+
+        $p.empty();
+
+        // =========================
+        // update state
+        // =========================
+
+        PreviewState.type = type;
+        PreviewState.payload = payload;
+
+        // =========================
+        // empty
+        // =========================
+
+        if (!type) {
+
+            $p.removeData("file-name");
+
+            $p.html(`
+            <div class="empty">
+                Select file
+            </div>
+        `);
+
+            PreviewWorker.destroy();
+
+            return;
+        }
+
+        // =========================
+        // pdf
+        // =========================
+
+        if (type === "pdf") {
+
+            const iframe = document.createElement("iframe");
+
+            iframe.src = payload;
+
+            iframe.style.cssText =
+                "width:100%;height:100%;border:0;";
+
+            $p.append(iframe);
+
+            return;
+        }
+
+        // =========================
+        // image
+        // =========================
+
+        if (type === "image") {
+
+            const bitmap = payload;
+
+            const canvas = document.createElement("canvas");
+
+            const ctx = canvas.getContext("2d");
+
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+
+            ctx.drawImage(bitmap, 0, 0);
+
+            canvas.style.cssText =
+                "max-width:100%;max-height:100%;object-fit:contain;";
+
+            $p.append(canvas);
+
+            bitmap.close?.();
+
+            return;
+        }
+
+        // =========================
+        // error
+        // =========================
+
+        if (type === "error") {
+
+            $p.html(payload);
+        }
+    }
+
+    function renderImage(bitmap, version) {
+
+        if (version !== PreviewState.version) {
+
+            bitmap.close?.();
+            return;
+        }
+
+        flushPreview("image", bitmap);
+    }
+
+    function renderPdf(url, version) {
+
+        if (version !== PreviewState.version) {
+
+            URL.revokeObjectURL(url);
+            return;
+        }
+
+        flushPreview("pdf", url);
+    }
+
+    function forceDownload(blob, fileName) {
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName || "download";
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    function showUnsupported(blob, message = "", fileName = "download", version) {
+
+        if (version !== PreviewState.version) return;
+
+        const html = `
+            <div class="empty text-center">
+                ⚠ 無法預覽此檔案<br>
+                ${message ? `<small>${message}</small><br>` : ""}
+                ${blob
+                        ? `<button class="btn-download">下載</button>`
+                        : `<div>無法下載</div>`
+                    }
+            </div>
+        `;
+
+        flushPreview("error", html);
+
+        if (blob) {
+            $(".btn-download").off("click").on("click", () => {
+                forceDownload(blob, fileName);
+            });
+        }
+    }
+
+    async function removeFile(stepKey, key, clientId) {
+
+        const store = FileRuntime.getStore();
+        const current = store.get(stepKey, key) || [];
+
+        const file = current.find(f => f.clientId === clientId);
+
+        if (!file) return;
+
+        // =========================
+        // server delete only if exists
+        // =========================
+        if (file.status === "success" && file.id) {
+            try {
+                await fetch(`/api/file/${file.id}`, {
+                    method: "DELETE"
+                });
+            } catch (err) {
+                console.error("server delete failed", err);
+            }
+        }
+
+        // =========================
+        // local remove (ONLY by clientId)
+        // =========================
+        const next = current.filter(f =>
+            f.clientId !== clientId
+        );
+
+        store.safeSet(stepKey, key, next);
+        GraphV2.notify(stepKey, key, next);
+
+        const previewId = file.clientId || file.id;
+        const currentfileId = $("#previewPanel").data("file-id");
+
+        if (previewId === currentfileId) {
+            PreviewModule.resetPreview();
+        }
+    }
+    // =========================
+    // Worker（不變）
+    // =========================
+    const PreviewWorker = (() => {
+
+        let worker = null;
+        let url = null;
+
+        function getWorker() {
+
+            if (worker) return worker;
+
+            const code = `
+                self.onmessage = async function (e) {
+                    const { blob, type } = e.data;
+                    try {
+                        if (type.startsWith("image/")) {
+                            const bitmap = await createImageBitmap(blob);
+                            self.postMessage({ bitmap });
+                        } else {
+                            self.postMessage({ blob });
+                        }
+                    } catch (err) {
+                        self.postMessage({ error: err.message });
+                    }
+                };
+            `;
+
+            const blob = new Blob([code], { type: "application/javascript" });
+            url = URL.createObjectURL(blob);
+
+            worker = new Worker(url);
+            return worker;
+        }
+
+        function destroy() {
+            if (worker) worker.terminate();
+            if (url) URL.revokeObjectURL(url);
+            worker = null;
+            url = null;
+        }
+
+        return { getWorker, destroy };
+
+    })();
+
+    // =========================
+    // PreviewService（不變但私有）
+    // =========================
+    const PreviewService = {
+
+        open: async function (stepKey, key, file) {
+
+            const $p = $panel();
+
+            $p.data("file-name", file.name);
+            $p.html(`<div class="empty">⏳ 載入中...</div>`);
+
+            const version = ++PreviewState.version;
+
+            let realFile;
+
+            try {
+                realFile = await FileRuntime.ensureFileObject(file, stepKey, key);
+            } catch {
+                if (version !== PreviewState.version) return;
+                showUnsupported(null, "載入失敗", file.name, version);
+                return;
+            }
+
+            const blob = realFile instanceof File ? realFile : realFile?.file;
+
+            if (!blob) {
+                showUnsupported(null, "無內容", file.name, version);
+                return;
+            }
+
+            let handled = false;
+
+            const worker = PreviewWorker.getWorker();
+
+            const handler = (e) => {
+                handled = true;
+
+                if (version !== PreviewState.version) return;
+
+                if (e.data.error) {
+                    showUnsupported(blob, "預覽失敗", file.name, version);
+                    return;
+                }
+
+                const type = (file.type || blob.type || "").toLowerCase();
+
+                if (e.data.bitmap && type.startsWith("image/")) {
+                    renderImage(e.data.bitmap, version); 
+                    return;
+                }
+
+                if (type === "application/pdf") {
+                    const url = URL.createObjectURL(blob);
+                    renderPdf(url, version);
+                    return;
+                }
+
+                showUnsupported(blob, "不支援預覽", file.name, version);
+            };
+            worker.addEventListener(
+                "message",
+                handler,
+                { once: true }
+            );
+            worker.onerror = () => {
+                showUnsupported(blob, "worker error", file.name, version);
+            };
+
+            worker.postMessage({ blob, type: file.type || blob.type || "" });
+
+            setTimeout(() => {
+                if (!handled && version === PreviewState.version) {
+                    showUnsupported(blob, "逾時", file.name, version);
+                }
+            }, 5000);
+        }
+    };
+
+    // =========================
+    // PUBLIC API（只開這些）
+    // =========================
+
+    function resetPreview() {
+
+        PreviewState.version++;
+
+        flushPreview();
+
+        setPreviewLayout(false);
+    }
+    function setUploadMode(mode) {
+
+        const isSingle = mode === "single";
+
+        // 左側清單（multi only）
+        $(".multi-only").toggleClass("d-none", isSingle);
+
+        // 右側 preview panel（single / multi 都要）
+        $(".single-only").toggleClass("d-none", !isSingle);
+
+        // optional：可以加 class 控制 layout
+        $("#uploadModal").toggleClass("single-mode", isSingle);
+    }
+    function buildTooltip(file, extra = "") {
+
+        const sizeKB = file.size ? Math.round(file.size / 1024) : 0;
+        const time = file.lastModified
+            ? new Date(file.lastModified).toLocaleString()
+            : (file.uploadTime || "");
+
+        return `
+        <div style="text-align:left">
+            <b>${file.name || "unknown"}</b><br>
+            Size: ${sizeKB} KB<br>
+            Time: ${time}
+            ${extra ? `<br><span style="color:#dc3545">${extra}</span>` : ""}
+        </div>
+    `;
+    }
+    function getFileIcon(file) {
+        if (file.status === "error") {
+            return "❌";
+        }
+        const type = (file.type || "").toLowerCase();
+        const name = (file.name || "").toLowerCase();
+
+        // =========================
+        // 圖片
+        // =========================
+        if (type.startsWith("image/")) {
+            return "🖼️";
+        }
+
+        // =========================
+        // PDF
+        // =========================
+        if (type === "application/pdf" || name.endsWith(".pdf")) {
+            return "📕";
+        }
+
+        // =========================
+        // Excel
+        // =========================
+        if (
+            type.includes("spreadsheet") ||
+            name.endsWith(".xls") ||
+            name.endsWith(".xlsx")
+        ) {
+            return "📊";
+        }
+
+        // =========================
+        // Word
+        // =========================
+        if (
+            type.includes("word") ||
+            name.endsWith(".doc") ||
+            name.endsWith(".docx")
+        ) {
+            return "📄";
+        }
+
+        // =========================
+        // 壓縮檔
+        // =========================
+        if (
+            name.endsWith(".zip") ||
+            name.endsWith(".rar") ||
+            name.endsWith(".7z")
+        ) {
+            return "🗜️";
+        }
+
+        // =========================
+        // 可執行 / DLL
+        // =========================
+        if (
+            name.endsWith(".exe") ||
+            name.endsWith(".dll")
+        ) {
+            return "⚙️";
+        }
+
+        // =========================
+        // 預設
+        // =========================
+        return "📎";
+    }
+    function render(stepKey, key, files) {
+
+        const $list = $("#uploadList");
+
+        $list.empty();
+
+        const failCount =
+            files.filter(x => x.status === "error").length;
+
+        $("#uploadSummary").html(
+
+            failCount
+                ? `
+            <div class="alert alert-danger py-1 px-2 mb-2">
+                ⚠ ${failCount} 個檔案上傳失敗
+            </div>
+        `
+                : ""
+        );
+
+        files.forEach(file => {
+            const isError =
+                file.status === "error";
+             
+            const icon = isError
+                ? "❌"
+                : getFileIcon(file);
+
+            const tooltip = buildTooltip(
+                file,
+                file.error
+            );
+
+            const percent = file.progress || 0;
+
+            const isUploading =
+                file.status === "uploading";
+
+            const isPending =
+                file.status === "pending";
+
+            const isSuccess =
+                file.status === "success";
+            const disableView =
+                isUploading || isPending;
+            const statusText =
+                isUploading
+                    ? `Uploading ${percent}%`
+                    : isPending
+                        ? "Waiting..."
+                        : isError
+                            ? "Failed"
+                            : "Completed";
+
+            const $item = $(`
+
+<li
+    class="drive-item ${isError ? "file-error" : ""}"
+    data-client-id="${file.clientId || file.id}">
+
+    <div class="drive-name"
+
+         data-bs-toggle="tooltip"
+         data-bs-html="true"
+         title='${tooltip}'>
+
+        <span class="drive-icon">
+            ${icon}
+        </span>
+
+        <div class="flex-grow-1 overflow-hidden">
+
+            <div>
+
+    <span class="drive-scroll">
+
+        <span class="drive-text">
+            ${file.name}
+        </span>
+
+    </span>
+
+</div>
+
+            ${(isUploading || isPending) ? `
+
+                <div class="progress mt-1" style="height:18px;">
+
+    <div class="
+        progress-bar
+        upload-progress
+        progress-bar-striped
+        ${isUploading ? "progress-bar-animated" : ""}
+    "
+
+        role="progressbar"
+        style="width:${percent}%">
+
+        ${percent}%
+
+    </div>
+
+</div>
+
+            ` : ""}
+
+        </div>
+
+    </div>
+
+    <div class="drive-actions">
+
+        <button
+    class="btn btn-sm btn-outline-primary btn-view"
+    ${disableView ? "disabled" : ""}>
+
+    ${isError ? "Retry" : "View"}
+
+</button>
+
+        <button class="btn btn-sm btn-outline-danger btn-del">
+            Del
+        </button>
+
+    </div>
+
+</li>
+`);
+
+            // =========================
+            // preview
+            // =========================
+
+            const $viewBtn = $item.find(".btn-view");
+            const $name = $item.find(".drive-name");
+
+            $viewBtn
+                .off("click")
+                .on("click", async (e) => {
+
+                    e.stopPropagation();
+
+                    $(".drive-item").removeClass("active");
+                    $item.addClass("active");
+
+                    // =========================
+                    // ERROR → RETRY
+                    // =========================
+                    if (file.status === "error") {
+
+                        const controller = PreviewModule._uploadController;
+                        const ctx = PreviewModule._ctx;
+
+                        file.status = "pending";
+                        file.error = null;
+                        file.progress = 0;
+
+                        PreviewModule.refreshList(stepKey, key, files);
+                        //const ctx = {
+                        //    stepKey,
+                        //    key
+                        //};
+                        await controller.uploadSingleFile(
+                            ctx,
+                            key,
+                            file,
+                            files
+                        );
+
+                        return;
+                    }
+
+                    // =========================
+                    // NORMAL → PREVIEW
+                    // =========================
+                    setPreviewLayout(true);
+
+                    await PreviewService.open(stepKey, key, file);
+                });
+                $name
+                .off("click")
+                    .on("click", async () => {
+                       if (togglePreview())
+                          $viewBtn.trigger("click");
+                });
+
+            // =========================
+            // delete
+            // =========================
+
+            $item.find(".btn-del")
+                .off("click")
+                .on("click", async (e) => {
+
+                    e.stopPropagation();
+
+                    await removeFile(stepKey, key,file.clientId);
+
+                    const store = FileRuntime.getStore();
+                    const updated = store.get(stepKey, key) || [];
+
+                    // ⭐ 只做一件事：統一刷新 UI
+                    PreviewModule.refreshList(stepKey, key, updated);
+
+                    const previewName =
+                        $("#previewPanel").data("file-name");
+
+                    if (previewName === file.name) {
+                        resetPreview();
+                    }
+                });
+
+            $list.append($item);
+        }); 
+        initTooltips();
+    }
+    function updateFileRow(file) {
+        const uploadKey = getUploadKey(file); 
+
+        const $row = $(`.drive-item[data-client-id="${uploadKey}"]`);
+
+        if (!$row || !$row.length) return;
+
+        const percent =
+            file.progress || 0;
+
+        const isUploading =
+            file.status === "uploading";
+
+        const isPending =
+            file.status === "pending";
+
+        const isError =
+            file.status === "error";
+
+        const statusText =
+            isUploading
+                ? `Uploading ${percent}%`
+                : isPending
+                    ? "Waiting..."
+                    : isError
+                        ? "Failed"
+                        : "Completed";
+
+        // =========================
+        // status text
+        // =========================
+
+         
+
+        // =========================
+        // progress
+        // =========================
+
+        const $bar =
+            $row.find(".upload-progress");
+
+        if ($bar.length) {
+
+            $bar
+                .css("width", `${percent}%`)
+                .text(`${percent}%`);
+
+            if (!isUploading && !isPending) {
+                $bar
+                    .closest(".progress")
+                    .remove();
+            }
+        }
+    }
+    function refreshList(stepKey, key, files) {
+        render(stepKey, key, files);
+    }
+    async function loadFiles(ctx) {
+
+        const store = FileRuntime.getStore();
+
+        // =========================
+        // 1. 從後端拿 metadata list
+        // =========================
+        let files = await fetch(
+            `/api/file/list?stepKey=${ctx.stepKey}&key=${ctx.key}`
+        ).then(r => r.json());
+
+        // =========================
+        // 2. normalize（只放 metadata，不下載）
+        // =========================
+        files = (files || []).map(f => ({
+            id: f.id,              // serverId
+            name: f.name,
+            size: f.size,
+            type: f.type,
+
+            lazy: true,            // ⭐ 重點：還沒下載 blob
+            file: null,           // ⭐ 不放 File object
+
+            status: "success",
+            error: null,
+
+            progress: 100
+        }));
+
+        store.safeSet(ctx.stepKey, ctx.key, files);
+
+        render(ctx.stepKey, ctx.key, files);
+    }
+    function openUploadModal(ctx) {
+
+        let controller = new UploadController(ctx);
+        PreviewModule._uploadController = controller; // ⭐ 加這行
+        PreviewModule._ctx = ctx;
+
+        resetPreview();
+
+        const store = window.FileRuntime.getStore();
+        const file = store.get(ctx.stepKey, ctx.key);
+
+        //UploadContext.open(ctx);
+
+        const isMulti = ctx.mode == 'single' ? false : true;
+        setUploadMode(ctx.mode);
+       
+        $("#uploadModal").modal("show");
+
+        $("#uploadModal").one("shown.bs.modal", async () => {
+
+            if (isMulti) {
+                setPreviewLayout(false);
+                loadFiles(ctx);
+                $panel().html(`<div class="empty">Select file</div>`);
+
+            } else if (file) {
+
+                $("#uploadList").empty();
+                setPreviewLayout(true,true);
+                await PreviewService.open(ctx.stepKey, ctx.key, file);
+            }
+        });
+    }
+
+    // =========================
+    // 外部只拿這些
+    // =========================
+    return {
+        openUploadModal,
+        setPreviewLayout,
+        resetPreview,
+        refreshList,
+        updateFileRow,
+        init: function () {  
+            $(document).off("click").on("click", ".uploadBtn, .btn-upload", function () {
+                const $btn = $(this);
+                const stepKey = $btn.data("step");
+                const field = $btn.data("field");
+                const col = $btn.data("col") || "";
+                const fullKey = col !== "" ? `${field}.${col}` : field;
+                const fieldName = $btn.data("fieldName");
+                const headerid = $btn.data("headerid");
+                const formno = $btn.data("formno");
+                const $row = $btn.closest("tr");
+
+
+                if ($btn.hasClass("uploadBtn")) {
+                    //registerEffects({
+                    //    stepKey: stepKey,
+                    //    fullKey: fullKey,
+                    //    $row: $row
+                    //});
+                }
+
+                // 不論是哪種按鈕，最後都開啟上傳 Modal
+                window.PreviewModule.openUploadModal({
+                    stepKey: stepKey,
+                    key: fullKey,
+                    $row: $row,
+                    mode: $btn.hasClass("uploadBtn") ? 'multi' : 'single'
+                });
+            });
+
+
+            $(document).on("hidden.bs.modal", "#uploadModal", function () {
+
+                PreviewModule.resetPreview();
+
+                const controller =
+                    PreviewModule._uploadController;
+
+                controller?.abortAll?.();
+            });
+            $(document).on("hide.bs.modal", "#uploadModal", function (e) {
+
+                const controller =
+                    PreviewModule._uploadController;
+
+                const hasUploading =
+                    controller?.hasActiveUploads?.();
+
+                if (!hasUploading)
+                    return;
+
+                e.preventDefault();
+
+                alert("檔案上傳中，請稍候完成");
+            });
+        },
+};
+
+})();
+
+
+class UploadController {
+
+    constructor(ctxProvider) {
+
+        this.ctxProvider = ctxProvider;
+        this.uploadPool = new Map(); // key → xhr
+        this.$modal = $("#uploadModal");
+
+        this.$fileInput = $("<input type='file' multiple style='display:none'>");
+        $("body").append(this.$fileInput);
+
+        this.bind();
+    }
+    hasActiveUploads() {
+        return this.uploadPool.size > 0;
+    }
+    abortAll() {
+
+        for (const [, xhr] of this.uploadPool) {
+            try {
+                xhr.abort();
+            } catch { }
+        }
+
+        this.uploadPool.clear();
+    }
+    async retryFile(stepKey, key, fileModel) {
+
+        const store = FileRuntime.getStore();
+
+        const merged =
+            store.get(stepKey, key) || [];
+
+        try {
+            const uploadKey = getUploadKey(fileModel);
+            fileModel.status = "uploading";
+            fileModel.progress = 0;
+            fileModel.error = null;
+
+            PreviewModule.refreshList(stepKey, key, merged);
+
+            const fd = new FormData();
+            fd.append("file", fileModel.file);
+
+            const result =
+                await this.uploadWithProgress(
+                    "/api/file/upload",
+                    fd,
+                    percent => {
+
+                        fileModel.progress = percent;
+
+                        PreviewModule.updateFileRow(fileModel);
+                    },
+                    uploadKey
+                );
+
+            fileModel.status = "success";
+            fileModel.progress = 100;
+            fileModel.id = result.id;
+            fileModel.file = null;
+            fileModel.lazy = true;
+            fileModel.uploadTime = new Date().toISOString();
+
+        } catch (err) {
+
+            fileModel.status = "error";
+            fileModel.error = err.message || "retry failed";
+        }
+
+        store.safeSet(stepKey, key, merged);
+        GraphV2.notify(stepKey, key, merged);
+        PreviewModule.refreshList(stepKey, key, merged);
+    }
+    bind() {
+        this.$modal.off("click.Upload");
+        this.$modal.on("click.Upload", "#btnSelectFile", () => {
+            this.$fileInput.trigger("click");
+        });
+        this.$modal.off("change.Upload"); 
+        this.$fileInput.on("change", async(e) => {
+
+            await this.handleFiles(e.target.files);
+
+            e.target.value = "";
+        });
+        this.$modal.off("dragover.Upload"); 
+        this.$modal.on("dragover", e => e.preventDefault());
+        this.$modal.off("drop.Upload");  
+        this.$modal.on("drop", async (e) => {
+
+            e.preventDefault();
+
+            await this.handleFiles(
+                e.originalEvent.dataTransfer.files
+            );
+        });
+    }
+
+    validateFile(file) {
+
+        const ext = file.name
+            .split(".")
+            .pop()
+            .toLowerCase();
+
+        const deny = ["exe", "dll"];
+
+        if (deny.includes(ext)) {
+            return "不允許的檔案格式";
+        }
+        const config = window.appConfig; 
+        if (file.size > 20 * 1024 * 1024) {
+            //return "檔案超過 20MB";
+        }
+
+        return null;
+    }
+
+    createFileModel(file) {
+
+        const error = this.validateFile(file);
+
+        return {
+
+            id: crypto.randomUUID(),
+
+            file: error ? null : file,
+
+            name: file.name,
+            type: file.type,
+            size: file.size,
+
+            status: error ? "error" : "success",
+            error,
+
+            lazy: false,
+            isNew: true
+        };
+    }
+    async uploadSingleFile(
+        ctx,
+        key,
+        fileModel,
+        merged
+    ) {
+
+        const store = FileRuntime.getStore();
+
+        try {
+
+            // =========================
+            // uploading
+            // =========================
+            const uploadKey = getUploadKey(fileModel);
+            fileModel.status = "uploading";
+            fileModel.error = null;
+
+            PreviewModule.refreshList(
+                ctx.stepKey,
+                key,
+                merged
+            );
+
+            // =========================
+            // formdata
+            // =========================
+
+            const fd = new FormData();
+
+            fd.append(
+                "file",
+                fileModel.file
+            );
+
+            // =========================
+            // upload
+            // =========================
+
+            const result =
+                await this.uploadWithProgress(
+                    "/api/file/upload",
+                    fd,
+                    percent => {
+
+                        fileModel.progress = percent;
+                        PreviewModule.updateFileRow(fileModel);
+                        //PreviewModule.refreshList(
+                        //    ctx.stepKey,
+                        //    key,
+                        //    merged
+                        //);
+                    },
+                    uploadKey
+                );
+
+            // =========================
+            // success
+            // =========================
+
+            fileModel.status = "success";
+
+            fileModel.progress = 100;
+
+            fileModel.uploadTime =
+                new Date().toISOString();
+
+            // backend id
+            fileModel.id = result.id;
+
+            // lazy mode
+            fileModel.file = null;
+            fileModel.lazy = true;
+            fileModel.status = "success";
+            fileModel.error = null;
+        } catch (err) {
+
+            console.error(err);
+
+            // =========================
+            // abort case（關閉 modal / cancel upload）
+            // =========================
+            if (
+                err.message === "upload aborted" ||
+                err.name === "AbortError"
+            ) {
+
+                fileModel.status = "pending";
+                fileModel.progress = 0;
+                fileModel.error = null;
+
+                // ⚠️ 不要當成失敗
+                return;
+            }
+
+            // =========================
+            // real error
+            // =========================
+            fileModel.status = "error";
+            fileModel.error =
+                err.message || "upload failed";
+        }
+
+        store.safeSet(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        GraphV2.notify(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        PreviewModule.refreshList(
+            ctx.stepKey,
+            key,
+            merged
+        );
+    }
+    uploadWithProgress(url, formData, onProgress, uploadKey) {
+
+        return new Promise((resolve, reject) => {
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.open("POST", url);
+
+            // =========================
+            // register pool
+            // =========================
+            if (uploadKey) {
+                this.uploadPool.set(uploadKey, xhr);
+            }
+
+            xhr.upload.onprogress = e => {
+
+                if (!e.lengthComputable) return;
+
+                const percent =
+                    Math.round((e.loaded / e.total) * 100);
+
+                onProgress(percent);
+            };
+
+            xhr.onload = () => {
+
+                this.uploadPool.delete(uploadKey);
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch {
+                        resolve({});
+                    }
+
+                } else {
+                    reject(new Error(`Upload failed (${xhr.status})`));
+                }
+            };
+
+            xhr.onerror = () => {
+
+                this.uploadPool.delete(uploadKey);
+                reject(new Error("network error"));
+            };
+
+            xhr.onabort = () => {
+
+                this.uploadPool.delete(uploadKey);
+                reject(new Error("upload aborted"));
+            };
+
+            xhr.ontimeout = () => {
+
+                this.uploadPool.delete(uploadKey);
+                reject(new Error("upload timeout"));
+            };
+
+            xhr.send(formData);
+        });
+    }
+    async handleFiles(files) {
+
+        const ctx = this.ctxProvider;
+        const key = ctx.key;
+
+        const store = FileRuntime.getStore();
+
+        const current =
+            store.get(ctx.stepKey, key) || [];
+
+        const merged = [...current];
+
+        // =========================
+        // create file models
+        // =========================
+
+        const newItems = [];
+
+        Array.from(files).forEach(f => {
+
+            // duplicate
+            if (merged.some(x => x.name === f.name)) {
+                return;
+            }
+
+            // validate
+            const validateError =
+                this.validateFile(f);
+
+            const model = {
+
+                // backend file id
+                id: null,
+
+                // temp client id
+                clientId: crypto.randomUUID(),
+
+                // meta
+                name: f.name,
+                size: f.size,
+                type: f.type,
+
+                // actual file
+                file: f,
+
+                // upload state
+                status:
+                    validateError
+                        ? "error"
+                        : "pending",
+
+                error: validateError || null,
+
+                // %
+                progress: 0,
+
+                // server lazy mode
+                lazy: false,
+
+                // UI state
+                isNew: true,
+
+                uploadTime: null
+            };
+
+            merged.push(model);
+            newItems.push(model);
+        });
+
+        // =========================
+        // render immediately
+        // =========================
+
+        store.safeSet(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        GraphV2.notify(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        PreviewModule.refreshList(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        // =========================
+        // upload queue
+        // =========================
+
+        const uploadables =
+            newItems.filter(x =>
+                x.status === "pending"
+            );
+
+        // parallel uploads
+        await Promise.allSettled(
+            uploadables.map(file =>
+                this.uploadSingleFile(
+                    ctx,
+                    key,
+                    file,
+                    merged
+                )
+            )
+        );
+
+        // final refresh
+        store.safeSet(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        GraphV2.notify(
+            ctx.stepKey,
+            key,
+            merged
+        );
+
+        PreviewModule.refreshList(
+            ctx.stepKey,
+            key,
+            merged
+        );
+    }
+}
+
+
+window.FileRuntime = (() => {
+
+    const inflightMap = new Map();
+    // =========================
+    // ⭐ LRU Cache (File Object)
+    // =========================
+    const fileCache = new Map(); // file.id → File
+    const MAX_CACHE = 30;
+
+    function touchCache(fileId, fileObj) {
+
+        if (fileCache.has(fileId)) {
+            fileCache.delete(fileId);
+        }
+
+        fileCache.set(fileId, {
+            file: fileObj,
+            ts: Date.now()
+        });
+
+        // LRU cleanup
+        if (fileCache.size > MAX_CACHE) {
+
+            const oldest = [...fileCache.entries()]
+                .sort((a, b) => a[1].ts - b[1].ts)[0];
+
+            if (oldest) {
+                fileCache.delete(oldest[0]);
+            }
+        }
+    }
+
+    function getCache(fileId) {
+        const hit = fileCache.get(fileId);
+        if (!hit) return null;
+
+        hit.ts = Date.now(); // refresh
+        return hit.file;
+    }
+    function getStore() {
+        return AppBootstrap.get("FlowStore"); //AppBootstrap.get("FormStore");
+    }
+
+    //function buildKey(stepKey, field, col) {
+    //    return col ? `${field}.${col}` : field;
+    //}
+
+    // =========================
+    // ⭐ 共用下載（in-flight + cache + abort）
+    // =========================
+    async function ensureFileObject(file, stepKey, key) {
+
+        if (file instanceof File) return file;
+
+        if (file.file instanceof File)
+            return file.file;
+
+        if (file.status === "error") {
+            throw new Error(file.error || "檔案錯誤");
+        }
+        if (!file.lazy) return file;
+
+        const cached = getCache(file.id);
+        if (cached) return cached;
+
+        if (inflightMap.has(file.id)) {
+            const prev = inflightMap.get(file.id);
+            prev.controller.abort();
+            inflightMap.delete(file.id);
+        }
+
+        const controller = new AbortController();
+
+        const promise = (async () => {
+            try {
+
+                const res = await fetch(`/api/file/${file.name}`, {
+                    signal: controller.signal
+                });
+
+                if (!res.ok) throw new Error(`下載失敗: ${res.status}`);
+
+                const blob = await res.blob();
+                if (!blob || blob.size === 0) throw new Error("空檔案");
+
+                const realFile = new File(
+                    [blob],
+                    file.name,
+                    { type: blob.type || "application/octet-stream" }
+                );
+
+                file.file = realFile;
+                file.lazy = false;
+                // 👉 ⭐ 放這裡
+                touchCache(file.id, realFile);
+                const store = getStore();
+                const current = store.get(stepKey, key) || [];
+
+                const target = current.find(f => f.id === file.id);
+                if (target) {
+                    target.lazy = false;
+                    target.file = realFile;
+                }
+
+                return realFile;
+
+            } catch (err) {
+
+                if (err.name === "AbortError") return;
+
+                console.error(err);
+
+                file.lazy = true;
+                throw err;
+
+            } finally {
+                inflightMap.delete(file.id);
+            }
+        })();
+
+        inflightMap.set(file.id, { controller, promise });
+
+        return promise;
+    }
+
+    return {
+        ensureFileObject,
+        //buildKey,
+        getStore
+    };
+
+})();
+
+ 
+window.FilePlugin = {
+    setFileUI(wrapper, file) {
+        const input = wrapper.querySelector(".file-input");
+        const nameEl = wrapper.querySelector(".file-name");
+        const actions = wrapper.querySelector(".file-actions");
+
+        const hasFile = !!file;
+
+        if (hasFile) {
+
+            // input 隱藏
+            input.classList.add("d-none");
+
+            // 顯示檔名
+            nameEl.classList.remove("d-none");
+            nameEl.textContent = file.name;
+
+            // 顯示操作
+            actions.classList.remove("d-none");
+
+            const lineEl = wrapper.querySelector(".file-line");
+            const nameValue = Array.isArray(file)
+                ? file[0]?.name
+                : file?.name;
+
+            if (lineEl && nameValue) {
+                lineEl.dataset.title = nameValue;
+            }
+
+        } else {
+
+            // input 顯示
+            input.classList.remove("d-none");
+
+            // 清空 + 隱藏 name
+            nameEl.textContent = "";
+            nameEl.classList.add("d-none");
+
+            // 隱藏 actions
+            actions.classList.add("d-none");
+        }
+    },
+    init(el, ctx) {
+
+        const setFileUI = FilePlugin.setFileUI;
+
+        if (!(el instanceof HTMLInputElement) || el.type !== "file") {
+            return;
+        }
+
+        const wrapper = el.closest(".file-wrapper");
+        if (!wrapper) return;
+
+        const store = FileRuntime.getStore();
+
+        // =========================
+        // 🔥 ONLY READ STORE (NO DOM FALLBACK)
+        // =========================
+        const state = store.get(ctx.stepKey, ctx.key);
+
+        // =========================
+        // UI render
+        // =========================
+        setFileUI(wrapper, state);
+
+        // =========================
+        // upload change
+        // =========================
+        el.addEventListener("change", () => {
+
+            const rawFiles = el.multiple
+                ? Array.from(el.files || [])
+                : el.files?.[0] || null;
+
+            let files = null;
+
+            if (Array.isArray(rawFiles)) {
+
+                files = rawFiles.map(f => ({
+                    id: crypto.randomUUID(),
+                    clientId: crypto.randomUUID(), 
+                    name: f.name,
+                    size: f.size,
+                    type: f.type,
+                    file: f,
+                    status: "success",
+                    lazy: false,
+                    isNew: true,
+                    server: false
+                }));
+
+            } else if (rawFiles) {
+
+                files = {
+                    id: crypto.randomUUID(),
+                    clientId: crypto.randomUUID(), 
+                    name: rawFiles.name,
+                    size: rawFiles.size,
+                    type: rawFiles.type,
+                    file: rawFiles,
+                    status: "success",
+                    lazy: false,
+                    isNew: true,
+                    server: false
+                };
+            }
+
+            store.safeSet(ctx.stepKey, ctx.key, files);
+            GraphV2.notify(ctx.stepKey, ctx.key, files);
+
+            setFileUI(wrapper, files);
+        });
+
+        // =========================
+        // click handler
+        // =========================
+        wrapper.addEventListener("click", async (e) => {
+
+            if (e.target.closest(".file-preview-btn")) {
+
+                PreviewModule.openUploadModal({
+                    stepKey: ctx.stepKey,
+                    key: ctx.key,
+                    mode: "single",
+                    file: store.get(ctx.stepKey, ctx.key)
+                });
+
+                return;
+            }
+
+            if (e.target.closest(".file-remove")) {
+
+                el.value = "";
+
+                store.safeSet(ctx.stepKey, ctx.key, null);
+                GraphV2.notify(ctx.stepKey, ctx.key, null);
+
+                setFileUI(wrapper, null);
+            }
+        });
+    },
+    render(wrapper, files) {
+
+        const actions = wrapper.querySelector(".file-actions");
+        const name = wrapper.querySelector(".file-name");
+        const lineEl = wrapper.querySelector(".file-line");
+        if (lineEl)
+            lineEl.dataset.title = file.name;
+        const hasFile = files && (Array.isArray(files) ? files.length > 0 : true);
+
+        // =========================
+        // ⭐ 控制顯示/隱藏
+        // =========================
+        if (actions) {
+            actions.classList.toggle("d-none", !hasFile);
+        }
+
+        if (name) {
+            name.textContent = hasFile
+                ? (Array.isArray(files) ? files[0].name : files.name)
+                : "";
+        }
+    }
+
+}; 
+$(() => {
+    window.PreviewModule.init();
+}); 
+
+ 
+
+window.ValidationRules = {
+
+	required: (val) => {
+
+		if (val instanceof File)
+			return val ? true : "必填";
+
+		if (Array.isArray(val))
+			return val.length > 0 || "必填";
+
+		return (val === null || val === undefined || val === "")
+			? "必填"
+			: true;
+	},
+
+	min: (val, ctx) => {
+		if (val == null || val === "") return true;
+		return parseFloat(val) >= parseFloat(ctx.arg) || `不可小於${ctx.arg}`;
+	},
+
+	max: (val, ctx) => {
+		if (val == null || val === "") return true;
+		return parseFloat(val) <= parseFloat(ctx.arg) || `不可大於${ctx.arg}`;
+	},
+
+	// =========================
+	// ⭐ NEW: file validators
+	// =========================
+	accept: (file, ctx) => {
+		if (!file) return true;
+
+		const types = ctx.arg.split(",");
+		return types.some(t => file.type.includes(t))
+			|| `檔案格式需為 ${ctx.arg}`;
+	},
+
+	maxsize: (file, ctx) => {
+		if (!file) return true;
+
+		const maxMB = parseFloat(ctx.arg);
+		return file.size <= maxMB * 1024 * 1024
+			|| `檔案不可超過 ${maxMB}MB`;
+	},
+	// =========================
+	// 🔥 async validator（統一版本）
+	// =========================
+	// =========================
+	// 🔥 async validator（升級版）
+	// =========================
+	async: async (val, ctx) => {
+
+		if (val === undefined) return;
+
+		let res;
+
+		// =========================
+		// ⭐ FILE MODE
+		// =========================
+		if (val instanceof File) {
+
+			const formData = new FormData();
+			formData.append("file", val);
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				body: formData,
+				signal: ctx.signal
+			});
+
+		}
+		// =========================
+		// ⭐ MULTIPLE FILE
+		// =========================
+		else if (Array.isArray(val) && val[0] instanceof File) {
+
+			const formData = new FormData();
+
+			val.forEach((f, i) => {
+				formData.append(`files[${i}]`, f);
+			});
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				body: formData,
+				signal: ctx.signal
+			});
+		}
+		// =========================
+		// ⭐ NORMAL VALUE（原本邏輯）
+		// =========================
+		else {
+
+			res = await fetch(ctx.url, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					value: val,
+					stepKey: ctx.stepKey,
+					field: ctx.field,
+					fields: ctx.fields,
+					data: ctx.data
+				}),
+				signal: ctx.signal
+			});
+		}
+
+		const data = await res.json();
+
+		if (data.valid === false) {
+			return data.message || "驗證失敗";
+		}
+
+		return {
+			valid: true,
+			data: data.data || {},
+			message: data.message || ""
+		};
+	}
+};
+
+window.FieldAdapters = (() => {
+
+	function triggerSelect2(el) {
+
+		if (
+			window.jQuery &&
+			jQuery(el).data("select2")
+		) {
+			jQuery(el).trigger("change");
+		}
+	}
+
+	// =========================
+	// helpers
+	// =========================
+	function same(el, value) {
+
+		return el.value === String(value ?? "");
+	}
+
+	function safeSet(el, next) {
+
+		if (same(el, next)) return;
+
+		el.value = next;
+	}
+
+	function defaultFocus(el) {
+		el.focus();
+	}
+
+	function defaultValidate() {
+		return true;
+	}
+
+	function defaultDestroy(el) {
+
+		const $el =
+			window.jQuery
+				? jQuery(el)
+				: null;
+
+		// =========================
+		// select2
+		// =========================
+		if ($el?.data("select2")) {
+
+			$el.off(".fieldbinder");
+
+			$el.select2("destroy");
+
+			// 🔥 強制清 DOM（Select2 bug 必備）
+			$el.removeData("select2");
+
+			// 有些版本需要
+			$el.next(".select2-container").remove();
+		}
+		else {
+
+			// =========================
+			// native event
+			// =========================
+			if (el.__handler) {
+
+				el.removeEventListener(
+					el.__eventType || "input",
+					el.__handler
+				);
+			}
+		}
+
+		// =========================
+		// blur
+		// =========================
+		if (el.__blurHandler) {
+
+			el.removeEventListener(
+				"blur",
+				el.__blurHandler
+			);
+		}
+
+		// =========================
+		// cleanup
+		// =========================
+		delete el.__handler;
+		delete el.__blurHandler;
+		delete el.__eventType;
+	}
+
+	function defaultDisable(el, disabled) {
+
+		if (
+			el.tagName === "SELECT" ||
+			el.type === "checkbox" ||
+			el.type === "radio"
+		) {
+			el.disabled = disabled;
+		}
+		else {
+			el.readOnly = disabled;
+		}
+
+		el.classList.toggle(
+			"readonly",
+			disabled
+		);
+	}
+
+	function defaultClear(el) {
+
+		if ("value" in el) el.value = "";
+
+		if ("checked" in el) el.checked = false;
+	}
+
+	// =========================
+	// adapters
+	// =========================
+	function createInputAdapter({
+
+		getValue,
+		setValue,
+
+		event = "input",
+
+		clear,
+
+		focus = defaultFocus,
+		disable = defaultDisable,
+		validate = defaultValidate,
+		destroy = defaultDestroy
+	}) {
+
+		return {
+
+			getValue,
+
+			setValue,
+
+			bind(el, update) {
+
+				el.__handler = update;
+				el.__eventType = event;
+
+				el.addEventListener(
+					event,
+					update
+				);
+			},
+
+			clear,
+
+			focus,
+			disable,
+			validate,
+			destroy
+		};
+	}
+
+	const adapters = {
+
+		// =========================
+		// text
+		// =========================
+		text: createInputAdapter({
+
+			getValue: el => el.value,
+
+			setValue(el, value) {
+
+				safeSet(
+					el,
+					value == null
+						? ""
+						: String(value)
+				);
+			},
+
+			clear(el) {
+				el.value = "";
+			}
+		}),
+
+		// =========================
+		// number
+		// =========================
+		number: createInputAdapter({
+
+			getValue(el) {
+
+				return el.value === ""
+					? null
+					: Number(el.value);
+			},
+
+			setValue(el, value) {
+
+				safeSet(
+					el,
+					value == null
+						? ""
+						: String(value)
+				);
+			},
+
+			clear(el) {
+				el.value = "";
+			}
+		}),
+
+		// =========================
+		// checkbox
+		// =========================
+		checkbox: createInputAdapter({
+
+			event: "change",
+
+			getValue: el => el.checked,
+
+			setValue(el, value) {
+
+				const checked = !!value;
+
+				if (el.checked === checked)
+					return;
+
+				el.checked = checked;
+			},
+
+			clear(el) {
+				el.checked = false;
+			}
+		}),
+
+		// =========================
+		// radio
+		// =========================
+		radio: createInputAdapter({
+
+			event: "change",
+
+			getValue(el, container) {
+
+				const field =
+					el.dataset.field;
+
+				const col =
+					el.dataset.col;
+
+				const selector = col
+					? `input[data-field='${field}'][data-col='${col}']:checked`
+					: `input[data-field='${field}']:checked`;
+
+				const checked =
+					container.querySelector(selector);
+
+				return checked
+					? checked.value
+					: null;
+			},
+
+			setValue(el, value) {
+
+				const checked =
+					String(el.value) ===
+					String(value);
+
+				if (el.checked === checked)
+					return;
+
+				el.checked = checked;
+			},
+
+			clear(el) {
+				el.checked = false;
+			}
+		}),
+
+		// =========================
+		// file
+		// =========================
+		file: {
+
+			getValue(el) {
+
+				return el.multiple
+					? Array.from(el.files || [])
+					: el.files?.[0] || null;
+			},
+
+			setValue(el, value) {
+
+				const wrapper =
+					el.closest(".file-wrapper");
+
+				if (!wrapper)
+					return;
+
+				const nameEl =
+					wrapper.querySelector(".file-name");
+
+				const actionsEl =
+					wrapper.querySelector(".file-actions");
+
+				const lineEl =
+					wrapper.querySelector(".file-line");
+
+				if (!nameEl)
+					return;
+
+				let nextText = "";
+
+				// =========================
+				// single file
+				// =========================
+				if (value instanceof File) {
+
+					nextText = value.name;
+				}
+
+				// =========================
+				// multi file
+				// =========================
+				else if (Array.isArray(value)) {
+
+					nextText = value.length
+						? value.map(f =>
+							f instanceof File
+								? f.name
+								: String(f)
+						).join(", ")
+						: "";
+				}
+
+				// =========================
+				// ⭐ DB filename
+				// aa.xls
+				// =========================
+				else if (typeof value === "string") {
+
+					nextText = value;
+				}
+
+				// =========================
+				// same skip
+				// =========================
+				if (nameEl.textContent === nextText)
+					return;
+
+				// =========================
+				// UI
+				// =========================
+				nameEl.textContent = nextText;
+
+				lineEl.dataset.title = nextText || "";
+
+				nameEl.classList.toggle(
+					"d-none",
+					!nextText
+				);
+
+				actionsEl?.classList.toggle(
+					"d-none",
+					!nextText
+				);
+			},
+
+			bind(el, update) {
+
+				el.__handler = update;
+				el.__eventType = "change";
+
+				el.addEventListener(
+					"change",
+					update
+				);
+			},
+
+			clear(el) {
+
+				el.value = "";
+
+				const wrapper =
+					el.closest(".file-wrapper");
+
+				if (!wrapper)
+					return;
+
+				const nameEl =
+					wrapper.querySelector(
+						".file-name"
+					);
+
+				if (nameEl) {
+
+					nameEl.textContent = "";
+
+					nameEl.classList.add("d-none");
+				}
+
+				const actionsEl =
+					wrapper.querySelector(".file-actions");
+
+				actionsEl?.classList.add("d-none");
+			},
+
+			focus: defaultFocus,
+
+			disable: defaultDisable,
+
+			validate: defaultValidate,
+
+			destroy: defaultDestroy
+		},
+
+		// =========================
+		// select
+		// =========================
+		select: {
+
+			getValue(el) {
+
+				if (
+					el.classList.contains(
+						"dropdownColor"
+					)
+				) {
+
+					const color =
+						el.selectedOptions[0]
+							?.dataset.color;
+
+					el.style.backgroundColor =
+						color || "";
+				}
+
+				return el.value;
+			},
+
+			setValue(el, value) {
+
+				const next =
+					value == null
+						? ""
+						: String(value);
+
+				if (el.value === next)
+					return;
+
+				el.value = next;
+
+				if (
+					el.classList.contains(
+						"dropdownColor"
+					)
+				) {
+
+					const color =
+						el.selectedOptions[0]
+							?.dataset.color;
+
+					el.style.backgroundColor =
+						color || "";
+				}
+
+				triggerSelect2(el);
+			},
+
+			bind(el, update) {
+
+				const $el = $(el);
+
+				// =========================
+				// select2
+				// =========================
+				if ($el.data("select2")) {
+
+					const handler =
+						() => update({ target: el });
+
+					el.__handler = handler;
+
+					$el.on(
+						"select2:select.fieldbinder " +
+						"select2:clear.fieldbinder " +
+						"change.fieldbinder",
+						handler
+					);
+
+					return;
+				}
+
+				// =========================
+				// native select
+				// =========================
+				el.__handler = update;
+				el.__eventType = "change";
+
+				el.addEventListener(
+					"change",
+					update
+				);
+			},
+
+			clear(el) {
+
+				el.value = "";
+
+				triggerSelect2(el);
+			},
+
+			focus: defaultFocus,
+
+			disable(el, disabled) {
+
+				el.disabled = disabled;
+
+				triggerSelect2(el);
+			},
+
+			validate: defaultValidate,
+
+			destroy: defaultDestroy
+		}
+	};
+
+	// =========================
+	// resolver
+	// =========================
+	function resolve(el) {
+
+		if (el.type === "checkbox") return adapters.checkbox;
+		if (el.type === "radio") return adapters.radio;
+		if (el.type === "file") return adapters.file;
+		if (el.type === "number") return adapters.number;
+		if (el.tagName === "SELECT") return adapters.select;
+
+		return adapters.text;
+	}
+
+	return {
+		resolve
+	};
+
+})();
+
+// =========================
+// ✅ FieldBinder（初始化✔ + UX 正確）
+// =========================
+window.FieldBinder = (() => {
+	 
+	async function handleSSAAFUpload(
+		val,
+		container,
+		stepKey
+	) {
+		const formData = new FormData();
+
+		formData.append("file", val);
+
+		$.ajax({
+			url: '/Supplier/UploadSSAAF', // 你的路徑
+			type: 'POST',
+			data: formData,
+			processData: false,
+			contentType: false,
+			success: function (response) {
+				console.log("收到後端資料：", response);
+				for (let mapkey in response) {
+					container
+						.querySelectorAll("input[data-field], select[data-field], textarea[data-field]")
+						.forEach(el => {
+							const key = getKey(el)
+							if (mapkey == key) {
+
+								if (el.type === "checkbox") {
+									el.checked = response[key];
+
+								} else if (el.type === "radio") {
+									el.checked = (el.value === response[key]);
+								}
+								else {
+									el.value = response[key];
+								}
+								GraphV2.notify(stepKey, key, isEmpty(response[key]) ? "" : response[key]);
+								store.setTouched(stepKey, key);
+							}
+						});
+
+					//console.log("欄位：" + key + "，值：" + response[key]);
+				}
+			},
+			error: function (xhr, status, error) {
+				console.error("出錯了：", error);
+				alert("上傳或讀取失敗");
+			}
+		}); 
+	   
+	}
+	 
+	function bindFields(container, stepKey) {
+		const plugins = AppBootstrap.get("FilePlugin");
+		//const store = AppBootstrap.get("FormStore");
+		const store = AppBootstrap.get("FlowStore");
+
+		container.querySelectorAll("[data-field]").forEach(el => {
+
+			if (el.dataset.bound) return;
+			el.dataset.bound = "1"; 
+			const key = getKey(el) 
+			// ⭐ 修正：傳 el 進去讓 rules 用 key
+			registerValidationRules(el, stepKey);
+
+			// =========================
+			// INIT
+			// =========================
+			let initVal = store.get(stepKey, key);
+
+			if (isEmpty(initVal)) {
+
+				// ⭐ 從 DOM 抓預設值
+				if (el.dataset.type === "label" || el.type === "hidden") {
+					initVal = el.dataset.value ?? el.textContent.trim() ?? null;
+				}
+				else if (el.type === "checkbox") {
+					initVal = el.checked;
+				}
+				else if (el.type === "radio") {
+					initVal = el.checked ? el.value : null;
+				}
+				else if (el.tagName === "SELECT") {
+					initVal = el.value;
+				}
+				if (el.type === "file") {
+
+					const wrapper = el.closest(".file-wrapper");
+					const lineEl = wrapper?.querySelector(".file-line");
+
+					const fileName = lineEl?.dataset.title || null;
+
+					let fileState = store.get(stepKey, key);
+
+					if (isEmpty(fileState) && fileName) {
+
+						fileState = {
+							name: fileName,
+							lazy: true,
+							server: true,
+							file: null
+						};
+
+						store.safeSet(stepKey, key, fileState);
+						GraphV2.notify(stepKey, key, fileState);
+					}
+
+					plugins.init(el, { stepKey, key, store, graph: GraphV2 });
+
+					return;
+				}
+				else {
+					initVal = el.value;
+				}
+
+				// ⭐ 塞進 store（關鍵）
+				if (!isEmpty(initVal)){// !== undefined) {
+					GraphV2.notify(stepKey, key, typeof initVal === "string"
+						? initVal.trim()
+						: initVal);
+				}
+
+			} else {
+				// store 已有 → 直接同步 UI
+			 
+				GraphV2.notify(stepKey, key, typeof initVal === "string"
+					? initVal.trim()
+					: initVal);
+			}
+			//FieldBinder.refreshUI(
+			//	stepKey,
+			//	key,
+			//	initVal
+			//);
+			// =========================
+			// plugin
+			// =========================
+			
+
+			// =========================
+			// input handler
+			// =========================
+			const update = (e) => {
+
+				const target = e?.target || el;
+
+				store.setTouched(stepKey, key);
+				 
+				const adapter = FieldAdapters.resolve(target); 
+				const val = adapter.getValue(target, container);
+				if ( target.type === "file" && e.currentTarget.id === "upload_ssaaf") {
+					//handleSSAAFUpload(val, container, stepKey);
+				}
+
+				GraphV2.notify(stepKey, key, val);
+			};
+
+		 
+			const adapter = FieldAdapters.resolve(el); 
+			adapter.bind(el, update);
+
+			const blurHandler = () => {
+				store.setTouched(stepKey, key);
+			};
+
+			el.__blurHandler = blurHandler;
+			el.addEventListener("blur", blurHandler); 
+
+			// =========================
+			// UI watch
+			// =========================
+			//const stop =Vue.watch(
+			//	() => ({
+			//		error:
+			//			store.getError(stepKey, key),
+
+			//		status:
+			//			store.getStatus(stepKey, key),
+
+			//		touched:
+			//			store.isTouched(stepKey, key),
+
+			//		submitted:
+			//			store.isStepSubmitted(stepKey),
+
+			//		val:
+			//			store.get(stepKey, key)
+			//	}),
+
+			//	(state) => {
+
+			//		// =========================
+			//		// UI value sync
+			//		// =========================
+
+			//		applyValue(el, state.val);
+
+			//		// =========================
+			//		// UI status sync
+			//		// =========================
+
+			//		const ui =
+			//			resolveFieldState({
+			//				error:
+			//					state.error,
+
+			//				status:
+			//					state.status,
+
+			//				touched:
+			//					state.touched,
+
+			//				submitted:
+			//					state.submitted,
+
+			//				val:
+			//					state.val,
+
+			//				required:
+			//					el.dataset.rule?.includes(
+			//						"required"
+			//					)
+			//			});
+			//		console.log("WATCH", key, ui.state);
+			//		if (!ui.state) {
+
+			//			FieldStatus.clear(el);
+
+			//			return;
+			//		}
+
+			//		FieldStatus.set(
+			//			el,
+			//			ui.state,
+			//			ui.message
+			//		);
+			//	},
+
+			//	{
+			//		immediate: true
+			//	}
+			//);
+			//el.__vueStop = stop;
+		});
+	}
+	function resolveFieldState({
+		error,
+		status,
+		touched,
+		submitted,
+		val,
+		required
+	}) {
+
+		const show = touched || submitted;
+
+		const isEmptyval =
+			val === null ||
+			val === undefined ||
+			val === "" ||
+			(Array.isArray(val) && val.length === 0) ||
+			(val instanceof File && !val);
+
+		// required
+		if (show && isEmptyval && required) {
+
+			return {
+				state: "error",
+				message: "必填"
+			};
+		}
+		if (!show && !isEmptyval && isEmpty(error) && !required) {
+
+			return {
+				state: "success",
+				message: ""
+			};
+		}
+		 
+		 
+		// untouched empty
+		if (!show && isEmptyval) { 
+			return {
+				state: null,
+				message: ""
+			};
+		}
+
+		// processing
+		if (status === "processing") {
+
+			// 空值不顯示 spinner
+			if (isEmptyval) {
+
+				return {
+					state: null,
+					message: ""
+				};
+			}
+
+			return {
+				state: "processing",
+				message: ""
+			};
+		}
+
+		// error
+		if (status === "error") {
+
+			return {
+				state: "error",
+				message: error || ""
+			};
+		}
+		// valid
+		if (show && !isEmptyval && isEmpty(error)) {
+
+			return {
+				state: "success",
+				message: ""
+			};
+		}
+		if (status === "success" && !required) { 
+			return {
+				state: null,
+				message: ""
+			};
+		}
+		// success
+		if (status === "success") {
+
+			return {
+				state: "success",
+				message: ""
+			};
+		}
+
+		return {
+			state: null,
+			message: ""
+		};
+	}
+	function setReadonly(stepKey, field, readonly) {
+		const el =
+			document.querySelector(
+				`[data-field='${field}']`
+			);
+		//const el =
+		//	getField(stepKey, field);
+
+		if (!el)
+			return;
+
+		const type =
+			(el.type || "").toLowerCase();
+
+		if (
+			el.tagName === "SELECT" ||
+			type === "checkbox" ||
+			type === "radio"
+		) {
+
+			el.disabled = readonly;
+
+		} else {
+
+			el.readOnly = readonly;
+		}
+
+		el.classList.toggle(
+			"readonly",
+			readonly
+		);
+	}
+	function findField(stepKey, field) {
+
+		return document.querySelector(
+			`[data-field='${field}']`
+		);
+	}
+	function refreshUI(stepKey, field, value) {
+
+		const store =
+			AppBootstrap.get("FlowStore");
+
+		const el =
+			findField(stepKey, field);
+
+		if (!el)
+			return;
+
+		// =========================
+		// value sync
+		// =========================
+		applyValue(el, value);
+
+		// =========================
+		// state sync
+		// =========================
+		const ui =
+			resolveFieldState({
+
+				error:
+					store.getError(stepKey, field),
+
+				status:
+					store.getStatus(stepKey, field),
+
+				touched:
+					store.isTouched(stepKey, field),
+
+				submitted:
+					store.isStepSubmitted(stepKey),
+
+				val:
+					value,
+
+				required:
+					el.dataset.rule?.includes(
+						"required"
+					)
+			});
+
+		if (!ui.state) {
+
+			FieldStatus.clear(el);
+
+			return;
+		}
+
+		FieldStatus.set(
+			el,
+			ui.state,
+			ui.message
+		);
+	}
+	function applyValue(el, value) { 
+		const adapter = FieldAdapters.resolve(el);
+
+		adapter.setValue(el, value);
+	}
+	function unbindAll(container) {
+
+		container
+			.querySelectorAll("[data-field]")
+			.forEach(el => {
+
+				const adapter =
+					FieldAdapters.resolve(el);
+
+				adapter.destroy(el);
+
+				delete el.dataset.bound;
+			});
+	}
+	function setOptions(stepKey, key, list) {
+		// 1. 取得 Store
+		const store = AppBootstrap.get("FlowStore");
+
+		// 2. 格式化資料 (將 TAX_ID / NAME 轉為標準的 value / text)
+		// 這樣 UI 元件才能用統一的 Key 來跑迴圈
+		//const formattedOptions = list.map(item => ({
+		//	value: item.value,
+		//	text: item.text
+		//}));
+
+		const el =
+			document.querySelector(
+				`[data-field='${key}']`
+			);
+		if (!el)
+			return;
+
+		if (el.tagName === "SELECT") {
+			// 1. 準備新的選項 HTML (假設保留第一項為「請選擇」)
+			let optionsHtml = '<option value="">-- 請選擇 --</option>';
+
+			let dataList = list;
+			if (typeof list === "string") {
+				try {
+					dataList = JSON.parse(list);
+				} catch (e) {
+					console.error("解析 JSON 失敗", e);
+					return;
+				}
+			}
+
+			if (Array.isArray(dataList)) {
+				dataList.forEach(item => {
+					const val = item.value;
+					const txt = item.text;
+					optionsHtml += `<option value="${val}">${txt}</option>`;
+				});
+			}
+
+			// 3. 填入原生 SELECT
+			el.innerHTML = optionsHtml;
+
+			// 4. 如果是 Select2，必須通知它「清單已更新」並重新渲染
+			//if (window.jQuery) {
+			//	const $el = jQuery(el);
+			//	if ($el.data('select2') || el.classList.contains("select2-hidden-accessible")) {
+			//		// .trigger('change') 會讓 Select2 重新抓取 innerHTML 裡的內容
+			//		$el.trigger('change');
+			//	}
+			//}
+
+			let val = store.get(stepKey, key);
+			GraphV2.notify(stepKey, key, val);
+		}
+		// 3. 寫入 Store
+		//if (store.setFieldOptions) {
+		//	store.setFieldOptions(stepKey, field, formattedOptions);
+		//} else {
+		//	// 如果 Store 沒有專屬方法，通常是存入一個約定好的 metadata 欄位
+		//	store.safeSet(stepKey, `_options_${field}`, formattedOptions);
+		//}
+
+		//// 4. (選用) 如果是純 JS 操控 DOM，這裡要直接操作 Select 元件
+		//const selectEl = document.querySelector(`[data-step="${stepKey}"][name="${field}"]`);
+		//if (selectEl && selectEl.tagName === 'SELECT') {
+		//	selectEl.innerHTML = formattedOptions
+		//		.map(opt => `<option value="${opt.value}">${opt.text}</option>`)
+		//		.join('');
+		//}
+	}
+	return { bindFields, setReadonly, setOptions, refreshUI, unbindAll };
+
+})();
+
+window.FieldStatus = (() => {
+
+	const icons = {
+		success: '<i class="bi bi-check-circle text-success"></i>',
+		error: '<i class="bi bi-x-circle text-danger"></i>',
+		processing: '<i class="bi bi-arrow-repeat rotate text-primary"></i>'
+	};
+
+	return {
+
+		set(el, state, msg = "") {
+
+			const field = el.closest(".field");
+			if (!field) return;
+
+			const icon = field.querySelector(".field-icon");
+			const msgEl = field.querySelector(".field-msg");
+
+			if (msgEl) msgEl.textContent = msg || "";
+
+			el.classList.remove("is-valid", "is-invalid");
+
+			if (!state) {
+				field.classList.remove("has-icon");
+				if (icon) icon.innerHTML = "";
+				return;
+			}
+
+			field.classList.add("has-icon");
+
+			if (state === "error") el.classList.add("is-invalid");
+			if (state === "success") el.classList.add("is-valid");
+			//console.log("FIELD CLASS:", field.className); console.log(el.closest(".field"));
+			if (icon) icon.innerHTML = icons[state] || "";
+		},
+
+		clear(el) {
+
+			const field = el.closest(".field");
+			if (!field) return;
+
+			const icon = field.querySelector(".field-icon");
+			const msgEl = field.querySelector(".field-msg");
+
+		if (msgEl) msgEl.textContent = "";
+
+			el.classList.remove("is-valid", "is-invalid");
+
+			field.classList.remove("has-icon");
+
+			if (icon) {
+				icon.innerHTML = "";
+				//icon.style.setProperty(
+				//	"opacity",
+				//	"0" 
+				//);
+			}
+		}
+	};
+})();
+ 
+window.GraphV2 = (() => {
+
+	let nodes = [];
+	const depIndex = new Map();
+	const nodeMap = new Map();
+
+	const versionMap = new Map();
+	const asyncCache = new Map();
+	const computedCache = new Map();
+
+	let queue = [];
+	let scheduled = false;
+
+	const runningNodes = new Map();
+	function has(id) {
+		return nodeMap.has(id);
+	}
+	// =========================================================
+	// register
+	// =========================================================
+	function register(node) {
+
+		nodes.push(node);
+		nodeMap.set(node.id, node);
+
+		for (const dep of node.deps || []) {
+			if (!depIndex.has(dep)) depIndex.set(dep, []);
+			depIndex.get(dep).push(node);
+		}
+	}
+
+	// =========================================================
+	// version
+	// =========================================================
+	const key = (s, f) => `${s}.${f}`;
+
+	function getVersion(stepKey, field) {
+		return versionMap.get(key(stepKey, field)) || 0;
+	}
+
+	function bumpVersion(stepKey, field) {
+		const k = key(stepKey, field);
+		const v = (versionMap.get(k) || 0) + 1;
+		versionMap.set(k, v);
+		return v;
+	}
+
+	// =========================================================
+	// dep hash
+	// =========================================================
+	function depHash(stepKey, node) {
+		return (node.deps || [])
+			.map(d => getVersion(stepKey, d))
+			.join("|");
+	}
+
+	// =========================================================
+	// topo (FIXED SAFE)
+	// =========================================================
+	function topo(startField, stepKey) {
+
+		const result = [];
+		const visiting = new Set();
+		const visited = new Set();
+		const visitedNodes = new Set();
+		function dfs(field, path = []) {
+
+			const k = `${stepKey}.${field}`;
+
+			if (visiting.has(k)) {
+				throw new Error(`Cycle detected: ${[...path, field].join(" -> ")}`);
+			}
+
+			if (visited.has(k)) return;
+
+			visiting.add(k);
+
+			const list = depIndex.get(field) || [];
+
+			for (const n of list) {
+
+				if (n.stepKey !== stepKey) continue;
+				if (visitedNodes.has(n.id)) {
+					continue;
+				}
+
+				visitedNodes.add(n.id);
+				if (n.type === "computed" && n.target) {
+					dfs(n.target, [...path, field]);
+				}
+
+				result.push(n);
+			}
+
+			visiting.delete(k);
+			visited.add(k);
+		}
+
+		dfs(startField);
+
+		return result;
+	}
+
+	// =========================================================
+	// scheduler
+	// =========================================================
+	function scheduleRun(stepKey, field) {
+
+		queue.push({ stepKey, field });
+
+		if (scheduled) return;
+
+		scheduled = true;
+
+		queueMicrotask(() => {
+
+			const tasks = queue;
+			queue = [];
+			scheduled = false;
+
+			for (const t of tasks) {
+				exec(t.stepKey, t.field);
+			}
+		});
+	}
+
+	// =========================================================
+	// notify
+	// =========================================================
+	function notify(stepKey, field, value) {
+
+		const store = AppBootstrap.get("FlowStore");
+
+		const prev = store.get(stepKey, field);
+		if (Object.is(prev, value)) return;
+
+		store.safeSet(stepKey, field, value);
+		FieldBinder.refreshUI(
+			stepKey,
+			field,
+			value
+		);
+		bumpVersion(stepKey, field);
+
+		scheduleRun(stepKey, field);
+	}
+
+	function batchNotify(stepKey, patch) {
+
+		const store = AppBootstrap.get("FlowStore");
+
+		const changedFields = [];
+
+		for (const [f, v] of Object.entries(patch)) {
+
+			const prev = store.get(stepKey, f);
+
+			if (Object.is(prev, v))
+				continue;
+
+			store.safeSet(stepKey, f, v);
+			FieldBinder.refreshUI(
+				stepKey,
+				f,
+				v
+			);
+			bumpVersion(stepKey, f);
+
+			changedFields.push(f);
+		}
+
+		for (const field of changedFields) {
+			scheduleRun(stepKey, field);
+		}
+	}
+
+	// =========================================================
+	// executor
+	// =========================================================
+	async function exec(stepKey, field) {
+
+		const store = AppBootstrap.get("FlowStore"); 
+
+		const list = topo(field, stepKey);
+
+		for (const n of list) {
+
+			const nodeKey = `${n.id}`;
+
+			try {
+
+				const localVersion = getVersion(stepKey, field);
+
+				// =========================
+				// validation abort control
+				// =========================
+				const prev = runningNodes.get(nodeKey);
+
+				if (prev?.abort) prev.abort.abort();
+
+				const abort = new AbortController();
+
+				runningNodes.set(nodeKey, {
+					version: localVersion,
+					abort
+				});
+				// stale guard
+				//if (
+				//	(n.type === "validation" || n.type === "effect")  
+				//) {
+				//	continue;
+				//}
+
+				// =========================================================
+				// VALIDATION (FIXED)
+				// =========================================================
+				if (n.type === "validation") {
+					const target =
+						n.target ||
+						n.deps?.[0];
+
+					if (!target) continue;
+					if (n.id.endsWith(".async")) {
+
+						store.setStatus(
+							stepKey,
+							target,
+							"processing"
+						);
+
+						FieldBinder.refreshUI(
+							stepKey,
+							target,
+							store.get(stepKey, target)
+						);
+					}
+					const localVersion =
+						getVersion(stepKey, target);
+
+					const cacheKey = `${n.id}`;
+
+					let cached = asyncCache.get(cacheKey);
+					let promise;
+
+					if (cached && cached.version === localVersion) {
+
+						promise = cached.promise;
+
+					} else {
+
+						promise = n.run({
+							data: store.getStep(stepKey),
+							stepKey,
+							signal: abort.signal
+						});
+
+						asyncCache.set(cacheKey, {
+							version: localVersion,
+							promise
+						});
+					}
+
+					if (abort.signal.aborted) return;
+
+					const result = await promise;
+
+					const current = asyncCache.get(cacheKey);
+
+					if (current?.promise === promise) {
+						asyncCache.delete(cacheKey);
+					}
+
+					if (abort.signal.aborted) return;
+
+					if (
+						localVersion !==
+						getVersion(stepKey, target)
+					) {
+						continue;
+					}
+
+					if (result !== true && result?.valid !== true) {
+
+						store.setError(
+							stepKey,
+							target,
+							result.message || result
+						);
+
+						store.setStatus(
+							stepKey,
+							target,
+							"error"
+						);
+
+						FieldBinder.refreshUI(
+							stepKey,
+							target,
+							store.get(stepKey, target)
+						);
+						break;
+					}
+
+					store.clearError(stepKey, target);
+
+					store.setStatus(
+						stepKey,
+						target,
+						"success"
+					);
+
+					FieldBinder.refreshUI(
+						stepKey,
+						target,
+						store.get(stepKey, target)
+					);
+				}
+
+				// =========================================================
+				// COMPUTED (FIXED SAFE)
+				// =========================================================
+				else if (n.type === "computed") {
+
+					const nodeAbort =
+						runningNodes.get(nodeKey)?.abort;
+
+					// =========================
+					// dep snapshot
+					// =========================
+					const localHash =
+						depHash(stepKey, n);
+
+					const cacheKey =
+						`${stepKey}.${n.id}`;
+
+					const cached =
+						computedCache.get(cacheKey);
+
+					// lazy cache
+					if (cached?.hash === localHash) {
+						continue;
+					}
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					// =========================
+					// compute
+					// =========================
+					const value = await n.run({
+						data: store.getStep(stepKey),
+						stepKey,
+						signal: nodeAbort?.signal
+					});
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					// =========================
+					// stale deps guard
+					// IMPORTANT
+					// =========================
+					const latestHash =
+						depHash(stepKey, n);
+
+					if (localHash !== latestHash) {
+						continue;
+					}
+
+					// =========================
+					// cache update
+					// =========================
+					computedCache.set(
+						cacheKey,
+						{
+							hash: latestHash,
+							value
+						}
+					);
+
+					// =========================
+					// same value skip
+					// =========================
+					const prev =
+						store.get(stepKey, n.target);
+
+					if (Object.is(prev, value)) {
+						continue;
+					}
+
+					// =========================
+					// write
+					// =========================
+					store.safeSet(
+						stepKey,
+						n.target,
+						value
+					);
+					FieldBinder.refreshUI(
+						stepKey,
+						n.target,
+						value
+					);
+					bumpVersion(
+						stepKey,
+						n.target
+					);
+
+					 
+				}
+
+				// =========================================================
+				// EFFECT
+				// =========================================================
+				else if (n.type === "effect") {
+
+					const localVersion =
+						getVersion(stepKey, n.target);
+
+					const nodeAbort =
+						runningNodes.get(nodeKey)?.abort;
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					const result = await n.run({
+						data: store.getStep(stepKey),
+						stepKey,
+						signal: nodeAbort?.signal
+					});
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					// stale guard
+					if (
+						localVersion !==
+						getVersion(stepKey, n.target)
+					) {
+						continue;
+					}
+
+					if (result?.patch) {
+
+						batchNotify(
+							stepKey,
+							result.patch
+						);
+					}
+				}
+
+				// =========================================================
+				// UI
+				// =========================================================
+				else if (n.type === "ui") {
+
+					const nodeAbort =
+						runningNodes.get(nodeKey)?.abort;
+
+					// =========================
+					// dependency snapshot
+					// =========================
+					const localHash =
+						depHash(stepKey, n);
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					const result = await n.run({
+						data: store.getStep(stepKey),
+						stepKey,
+						signal: nodeAbort?.signal
+					});
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					// =========================
+					// stale guard
+					// deps changed while awaiting
+					// =========================
+					const latestHash =
+						depHash(stepKey, n);
+
+					if (localHash !== latestHash) {
+						continue;
+					}
+
+					// =========================
+					// optional patch
+					// =========================
+					if (result?.patch) {
+
+						batchNotify(
+							stepKey,
+							result.patch
+						);
+					}
+				}
+
+
+				// =========================================================
+				// BIND
+				// =========================================================
+				else if (n.type === "bind") {
+
+					const nodeAbort =
+						runningNodes.get(nodeKey)?.abort;
+
+					// =========================
+					// dependency snapshot
+					// =========================
+					const localHash =
+						depHash(stepKey, n);
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					const result = await n.run({
+						data: store.getStep(stepKey),
+						stepKey,
+						signal: nodeAbort?.signal
+					});
+
+					if (nodeAbort?.signal.aborted) {
+						continue;
+					}
+
+					// =========================
+					// stale guard
+					// deps changed while awaiting
+					// =========================
+					const latestHash =
+						depHash(stepKey, n);
+
+					if (localHash !== latestHash) {
+						continue;
+					}
+
+					// =========================
+					// bind patch support
+					// =========================
+					if (result?.patch) {
+
+						batchNotify(
+							stepKey,
+							result.patch
+						);
+					}
+				} 
+			} catch (e) {
+
+				if (e?.name === "AbortError") {
+					return;
+				} 
+				console.error("Graph error:", e);
+			}
+			finally {
+
+				runningNodes.delete(nodeKey);
+			}
+		}
+	}
+	function clearStep(stepKey) {
+
+		// computed cache
+		for (const k of computedCache.keys()) {
+
+			if (k.startsWith(stepKey + ".")) {
+				computedCache.delete(k);
+			}
+		}
+
+		// async cache
+		for (const k of asyncCache.keys()) {
+
+			if (k.startsWith(stepKey + ".")) {
+				asyncCache.delete(k);
+			}
+		}
+
+		// running nodes
+		for (const [k, v] of runningNodes.entries()) {
+
+			if (k.startsWith(stepKey + ".")) {
+
+				v.abort?.abort();
+
+				runningNodes.delete(k);
+			}
+		}
+	}
+	// =========================
+	// validate step
+	// =========================
+	async function validateStep(stepKey) {
+
+		const store =
+			AppBootstrap.get("FlowStore");
+
+		// 找出此 step 所有 validation nodes
+		const validations =
+			nodes.filter(n =>
+				n.stepKey === stepKey &&
+				n.type === "validation"
+			);
+
+		// =========================
+		// 執行 validation
+		// =========================
+		for (const n of validations) {
+
+			const field =
+				n.target ||
+				n.deps?.[0];
+
+			if (!field)
+				continue;
+
+			// 觸發 validation
+			await exec(stepKey, field);
+		}
+
+		// =========================
+		// 檢查 error
+		// =========================
+		const stepErrors =
+			store.getErrors(stepKey) || {};
+
+		for (const key in stepErrors) {
+
+			if (stepErrors[key]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+	// =========================
+	// ⭐ NEW
+	// unregister step graph
+	// =========================
+	function unregisterStep(stepKey) {
+
+		// =========================
+		// remove nodes
+		// =========================
+		nodes = nodes.filter(n => n.stepKey !== stepKey);
+
+		// =========================
+		// rebuild depIndex
+		// =========================
+		depIndex.clear();
+
+		for (const n of nodes) {
+
+			for (const dep of (n.deps || [])) {
+
+				if (!depIndex.has(dep)) {
+					depIndex.set(dep, []);
+				}
+
+				depIndex.get(dep).push(n);
+			}
+		}
+
+		// =========================
+		// remove nodeMap
+		// =========================
+		for (const [k, v] of nodeMap.entries()) {
+
+			if (v.stepKey === stepKey) {
+				nodeMap.delete(k);
+			}
+		}
+
+		// =========================
+		// remove versions
+		// =========================
+		for (const k of versionMap.keys()) {
+
+			if (k.startsWith(stepKey + ".")) {
+				versionMap.delete(k);
+			}
+		}
+	 
+		// =========================
+		// clear runtime cache
+		// =========================
+		clearStep(stepKey);
+
+		queue = queue.filter(
+			q => q.stepKey !== stepKey
+		);
+	}
+	return {
+		register,
+		notify,
+		batchNotify,
+		clearStep,
+		unregisterStep,
+		has,
+		validateStep
+	};
+
+})();
+
+
+
+
+
+function makeKey(field, col) {
+	if (!col || col === "undefined" || col === "null") {
+		return field;
+	}
+	return `${field}.${col}`;
+}
+
+function getKey(el) {
+	const rawCol = el.dataset.col;
+	const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+	return makeKey(el.dataset.field, col);
+}
+
+
+function parseRule(ruleStr) {
+
+	if (!ruleStr) {
+		return { validators: [], async: null, mapping: null };
+	}
+
+	const parts = ruleStr.split("|");
+
+	const validators = [];
+	let async = null;
+	let mapping = null;
+
+	for (const p of parts) {
+
+		// =========================
+		// async:/api
+		// =========================
+		if (p.startsWith("async:")) {
+			async = p.replace("async:", "").trim();
+			continue;
+		}
+
+		// =========================
+		// map:a=b,c=d
+		// =========================
+		if (p.startsWith("map:")) {
+
+			mapping = {};
+
+			const raw = p.replace("map:", "").split(",");
+
+			for (const item of raw) {
+
+				const [target, source] = item.split("=");
+
+				if (!target || !source) continue;
+
+				mapping[target.trim()] = source.trim();
+			}
+
+			continue;
+		}
+
+		// =========================
+		// sync validators
+		// =========================
+		validators.push(p);
+	}
+
+	return { validators, async, mapping };
+}
+function registerValidationRules(el, stepKey) {
+	const store = AppBootstrap.get("FlowStore");
+	const rawCol = el.dataset.col;
+	const col = rawCol && rawCol.trim() ? rawCol.trim() : null;
+	const key = makeKey(el.dataset.field, col);
+
+	const parsed = parseRule(el.dataset.rule);
+
+	// =========================
+	// sync validators
+	// =========================
+	parsed.validators.forEach((r, i) => {
+
+		const [name, arg] = r.split(":");
+		const fn = ValidationRules[name];
+		if (!fn) return;
+
+		const nodeId = `${stepKey}.${key}.${name}.${i}`;
+
+		if (GraphV2.has(nodeId)) return;
+
+		GraphV2.register({
+			type: "validation",
+			stepKey,
+			deps: [key], 
+			target: key,
+			id: `${stepKey}.${key}.${name}.${i}`,
+
+			run: ({ data }) => fn(data[key], { arg })
+		});
+	});
+
+	// =========================
+	// async
+	// =========================
+	if (parsed.async) {
+		const nodeId = `${stepKey}.${key}.async`;
+
+		if (GraphV2.has(nodeId)) return;
+		// =========================
+		// 1️⃣ validation node（只做 request）
+		// =========================
+		GraphV2.register({
+			type: "validation",
+			stepKey,
+			deps: [key], 
+			target: key,
+			id: `${stepKey}.${key}.async`,
+
+			run: async ({ data, signal }) => {
+				const val = data[key];
+
+				if (isEmpty(val)) {
+
+					// ⭐ 清掉 async cache（很重要）
+					store.safeSet(stepKey, `__async.${key}`, null);
+
+					return true;
+				}
+
+				const result = await ValidationRules.async(val, {
+					url: parsed.async,
+					stepKey,
+					field: key,
+					fields: parsed.mapping,
+					data,
+					signal
+				});
+				if (result?.valid !== false) {
+					store.safeSet(
+						stepKey,
+						`__async.${key}`,
+						result
+					);
+				}
+				// ❌ 這裡只 return，不做 notify
+				return result;
+			}
+		});
+
+		// =========================
+		// 2️⃣ effect node（專門處理 mapping）
+		// =========================
+		if (parsed.mapping) {
+
+			GraphV2.register({
+				type: "effect",
+				stepKey,
+				deps: [key],
+				target: key,
+				id: `${stepKey}.${key}.async.mapping`,
+
+				run: async ({ data, signal }) => {
+
+					const val = data[key];
+
+					// =========================
+					// clear mapping when empty
+					// =========================
+					if (isEmpty(val)) {
+
+						const patch = {};
+
+						for (const targetField of Object.keys(parsed.mapping)) {
+							patch[targetField] = "";
+						}
+
+						return { patch };
+					}
+
+					const result =
+						store.get(
+							stepKey,
+							`__async.${key}`
+						);
+
+					if (!result?.valid || !result?.data)
+						return;
+
+					const patch = {};
+
+					for (const [targetField] of Object.entries(parsed.mapping)) {
+						patch[targetField] =
+							result.data[targetField] ?? "";
+					}
+
+					return { patch };
+				}
+			});
+		}
+	}
+}
+
+
+
