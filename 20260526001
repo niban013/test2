@@ -1,0 +1,75 @@
+public class DraftRequest
+{
+    public IFormFile File { get; set; }
+    public string Payload { get; set; }
+} 
+[HttpPost]
+public async Task<IActionResult> Draft([FromForm] DraftRequest req)
+{
+    // 1. parse business data
+    var model = JsonConvert.DeserializeObject<SupplierSaveViewModel>(req.Payload);
+
+    // 2. 這裡你可以拿到 business data（FormNo / Step / Context）
+    var formNo = model.FormInfo?.formno;
+
+    // 3. 組 FlmFileInfo（你要的點在這）
+    var uploadInfo = new FlmFileInfo
+    {
+        File = req.File,
+        FileName = req.File.FileName,
+
+        // ✔ Draft API 產生/補齊
+        FormNo = formNo,
+        ItemId = Guid.NewGuid().ToString(),
+        ItemName = "Step2File",
+
+        CUser = CurrentUser.EmployeeId,
+        CDate = DateTime.Now.ToString("yyyyMMddHHmmss"),
+        Mime = req.File.ContentType
+    };
+
+    // 4. upload file
+    var fileId = await _fileService.UploadFileAsync(uploadInfo);
+
+    // 5. 塞回 Step2
+    model.Step2 ??= new Step2Data();
+    model.Step2["fileId"] = fileId;
+
+    // 6. DB save
+    return Ok(new { fileId });
+}
+
+const payload = collectPayload(currentStep);
+
+const store = AppBootstrap.get("FlowStore");
+const formno = store.get('formno', 'FormInfo');
+
+const fullPayload = {
+    FormInfo: formno,
+    ...payload,
+    mode,
+    StepContext: {
+        Current: currentStep,
+        ValidateSteps: finalValidateSteps
+    },
+    hasError: !validationResult
+};
+
+const formData = new FormData();
+
+// ✔ Step2 file
+const step2File = document.querySelector("#fileInput")?.files?.[0];
+
+if (step2File) {
+    formData.append("File", step2File);
+}
+
+// ✔ business JSON
+formData.append("Payload", JSON.stringify(fullPayload));
+
+const res = await fetch(url, {
+    method: "POST",
+    body: formData
+});
+
+const result = await res.json();
