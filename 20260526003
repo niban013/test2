@@ -1,0 +1,45 @@
+else if (child.EnumType == FieldType.Label && child.Col == "cnt")
+{  
+    var fileCount = Convert.ToInt32(child.ColValue);
+    <div class="file-cnt-container" data-field="@child.ColId">
+        <i class="bi @(fileCount > 0 ? "bi-file-earmark-text text-success" : "bi-file-earmark text-secondary")"></i>
+        <span class="badge @(fileCount > 0 ? "bg-success" : "bg-secondary") align-middle ms-1 file-cnt-display" data-cnt="@fileCount">
+            @child.ColValue
+        </span>
+    </div>
+}
+
+// 假設這是你畫面的送出按鈕事件
+$('#btnSubmit, .submit-btn').on('click', function(e) {
+    let isAllValid = true;
+    let errorMessages = [];
+
+    // 巡覽畫面上所有加工出來的檔案數量 Badge
+    $('.file-cnt-display').each(function() {
+        const cnt = parseInt($(this).attr('data-cnt') || $(this).text().trim(), 10);
+        
+        // 取得同一個 <tr> 內，該檔案項目的名稱（用來顯示更好懂的錯誤提示）
+        const $row = $(this).closest('tr');
+        // 假設你的項目名稱在同列的某個 td 中，或者是透過 data 屬性帶入
+        const colName = $row.find('.col-name-cell').text().trim() || "相關附件";
+
+        // 【業務邏輯檢查】：如果是必填項目，但加工出來的 cnt 卻等於 0
+        if (cnt === 0) {
+            isAllValid = false;
+            errorMessages.push(`【${colName}】尚未上傳任何檔案！`);
+            
+            // 可選：如果你希望它亮紅框，可以直接加在容器上
+            $(this).closest('.file-cnt-container').addClass('is-invalid');
+        }
+    });
+
+    // 如果驗證失敗，阻斷表單送出
+    if (!isAllValid) {
+        e.preventDefault();
+        
+        // 彈出提示，可以換成你專案習慣的 SweetAlert 或 視窗
+        alert("儲存失敗，請修正以下項目：\n" + errorMessages.join("\n"));
+        
+        return false;
+    }
+});
