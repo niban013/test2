@@ -1,0 +1,38 @@
+public override void Process(
+    TagHelperContext context,
+    TagHelperOutput output)
+{
+    var sb = new StringBuilder();
+
+    sb.Append("<div class='row'>");
+
+    foreach (var field in Fields.OrderBy(x => x.Order))
+    {
+        var runtimeField = DynamicFieldPipeline.Build(field);
+
+        sb.Append("<div class='col-md-6");
+
+        // hidden 不佔版面但仍保留 DOM
+        if (runtimeField.HasBehavior("hidden"))
+        {
+            sb.Append(" d-none");
+        }
+
+        sb.Append("'>");
+
+        sb.Append(
+            FieldRenderer.RenderField(
+                runtimeField,
+                StepKey,
+                HasLabel
+            )
+        );
+
+        sb.Append("</div>");
+    }
+
+    sb.Append("</div>");
+
+    output.TagName = null;
+    output.Content.SetHtmlContent(sb.ToString());
+}
